@@ -2,13 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import {
-  ArrowUpRight,
-  CalendarDays,
-  LayoutGrid,
-  Loader2,
-  LogOut,
-} from "lucide-react";
+import { Loader2, LogOut } from "lucide-react";
 import { updateProfile, signOutAction } from "@/lib/actions";
 import { fileToAvatarDataUrl } from "@/lib/profile/image";
 import { isVerifiedStaff } from "@/lib/staff/employment";
@@ -24,7 +18,6 @@ import {
   SettingsSection,
   SettingsToggleRow,
   settingsInputClass,
-  settingsTextareaClass,
 } from "@/components/settings/settings-section";
 
 function initials(name: string) {
@@ -41,7 +34,6 @@ export function SettingsForm({
   integrations,
 }: {
   user: SessionUser;
-  /** Rendered after Profile (e.g. Google Calendar). */
   integrations?: React.ReactNode;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -89,7 +81,6 @@ export function SettingsForm({
       const dataUrl = await fileToAvatarDataUrl(file);
       setAvatarUrl(dataUrl);
       setAvatarDirty(true);
-      setStatus({ type: "ok", message: "Photo ready — save to apply." });
     } catch (err) {
       setStatus({
         type: "error",
@@ -105,7 +96,6 @@ export function SettingsForm({
   function removePhoto() {
     setAvatarUrl(undefined);
     setAvatarDirty(true);
-    setStatus({ type: "ok", message: "Photo will be removed on save." });
   }
 
   function handleSave(event?: React.FormEvent) {
@@ -118,7 +108,6 @@ export function SettingsForm({
         title,
         department,
         phone,
-        // Keep existing bio on server if any — field removed from UI (rarely used).
         bio: user.bio,
         avatarUrl: avatarDirty ? (avatarUrl ?? null) : undefined,
         notifyEmail,
@@ -139,113 +128,88 @@ export function SettingsForm({
   const verified = isVerifiedStaff(user);
 
   return (
-    <form onSubmit={handleSave} className="space-y-8 pb-28">
-      {/* ── Profile ── */}
-      <SettingsSection
-        id="profile"
-        title="Profile"
-        description="How you appear on the board and bookings."
-      >
-        <SettingsRow>
-          <div className="flex items-center gap-4 sm:gap-5">
+    <form onSubmit={handleSave} className="space-y-6 pb-24">
+      {/* Identity — hero, no card chrome */}
+      <div className="flex items-center gap-4 px-0.5">
+        <button
+          type="button"
+          disabled={uploading || pending}
+          onClick={() => fileRef.current?.click()}
+          className="group relative shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20 focus-visible:ring-offset-2"
+          aria-label="Change photo"
+        >
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatarUrl}
+              alt=""
+              referrerPolicy="no-referrer"
+              className="size-14 rounded-full object-cover ring-1 ring-black/[0.06]"
+            />
+          ) : (
+            <span className="flex size-14 items-center justify-center rounded-full bg-neutral-900 text-[15px] font-medium tracking-tight text-white">
+              {initials(displayName)}
+            </span>
+          )}
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-black/0 text-[10px] font-medium uppercase tracking-wide text-white opacity-0 transition-all group-hover:bg-black/40 group-hover:opacity-100">
+            {uploading ? <Loader2 className="size-3.5 animate-spin" /> : "Edit"}
+          </span>
+          {verified ? (
+            <span className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-white ring-2 ring-white">
+              <VerifiedBadge size="xs" />
+            </span>
+          ) : null}
+        </button>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <h2 className="truncate text-[15px] font-semibold tracking-[-0.02em] text-neutral-950">
+              {displayName}
+            </h2>
+            {verified ? <VerifiedBadge size="sm" /> : null}
+          </div>
+          <p className="mt-0.5 truncate text-[12.5px] text-neutral-400">
+            {user.email}
+          </p>
+          <p className="mt-1 text-[11.5px] font-medium text-neutral-400">
+            {roleLabel}
+          </p>
+        </div>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          className="hidden"
+          onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
+        />
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <button
+            type="button"
+            disabled={uploading || pending}
+            onClick={() => fileRef.current?.click()}
+            className="text-[12px] font-medium text-neutral-600 transition-colors hover:text-neutral-950 disabled:opacity-50"
+          >
+            Photo
+          </button>
+          {avatarUrl ? (
             <button
               type="button"
               disabled={uploading || pending}
-              onClick={() => fileRef.current?.click()}
-              className="group relative shrink-0 rounded-full outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-neutral-400"
-              aria-label="Change photo"
+              onClick={removePhoto}
+              className="text-[12px] font-medium text-neutral-400 transition-colors hover:text-red-600 disabled:opacity-50"
             >
-              {avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={avatarUrl}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  className="size-16 rounded-full object-cover ring-1 ring-black/[0.06] sm:size-[4.5rem]"
-                />
-              ) : (
-                <span className="flex size-16 items-center justify-center rounded-full bg-neutral-900 text-[1.125rem] font-semibold tracking-tight text-white sm:size-[4.5rem] sm:text-[1.25rem]">
-                  {initials(displayName)}
-                </span>
-              )}
-              <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 text-[11px] font-medium text-white opacity-0 transition-all group-hover:bg-black/45 group-hover:opacity-100">
-                {uploading ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  "Edit"
-                )}
-              </span>
-              {verified ? (
-                <span className="absolute -bottom-0.5 -right-0.5 flex size-5 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-white">
-                  <VerifiedBadge size="sm" />
-                </span>
-              ) : null}
+              Remove
             </button>
+          ) : null}
+        </div>
+      </div>
 
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                <p className="truncate text-[17px] font-semibold tracking-[-0.02em] text-neutral-950 sm:text-[18px]">
-                  {displayName}
-                </p>
-                {verified ? <VerifiedBadge size="sm" /> : null}
-              </div>
-              <p className="mt-0.5 truncate text-[13px] text-neutral-500">
-                {user.email}
-              </p>
-              <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                <span
-                  className={cn(
-                    "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
-                    isAdmin
-                      ? "bg-violet-50 text-violet-700"
-                      : "bg-emerald-50 text-emerald-700",
-                  )}
-                >
-                  {roleLabel}
-                </span>
-                {verified ? (
-                  <span className="text-[11.5px] font-medium text-[#1d9bf0]">
-                    Verified staff
-                  </span>
-                ) : null}
-              </div>
-
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                className="hidden"
-                onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
-              />
-              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <button
-                  type="button"
-                  disabled={uploading || pending}
-                  onClick={() => fileRef.current?.click()}
-                  className="text-[12.5px] font-medium text-neutral-700 underline-offset-2 hover:underline disabled:opacity-50"
-                >
-                  Change photo
-                </button>
-                {avatarUrl ? (
-                  <button
-                    type="button"
-                    disabled={uploading || pending}
-                    onClick={removePhoto}
-                    className="text-[12.5px] font-medium text-neutral-400 underline-offset-2 hover:text-red-600 hover:underline disabled:opacity-50"
-                  >
-                    Remove
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </SettingsRow>
-
-        <SettingsDivider />
-
+      {/* Profile fields */}
+      <SettingsSection id="profile" title="Profile">
         <SettingsRow>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <SettingsField label="Display name" htmlFor="name" className="sm:col-span-2">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <SettingsField label="Name" htmlFor="name" className="sm:col-span-2">
               <input
                 id="name"
                 value={name}
@@ -256,40 +220,33 @@ export function SettingsForm({
                 autoComplete="name"
               />
             </SettingsField>
-
             <SettingsField label="Title" htmlFor="title">
               <input
                 id="title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className={settingsInputClass}
-                placeholder="e.g. Science teacher"
+                placeholder="Science teacher"
                 autoComplete="organization-title"
               />
             </SettingsField>
-
             <SettingsField label="Department" htmlFor="department">
               <input
                 id="department"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 className={settingsInputClass}
-                placeholder="e.g. Science"
+                placeholder="Science"
               />
             </SettingsField>
-
-            <SettingsField
-              label="Phone"
-              htmlFor="phone"
-              className="sm:col-span-2"
-            >
+            <SettingsField label="Phone" htmlFor="phone" className="sm:col-span-2">
               <input
                 id="phone"
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className={settingsInputClass}
-                placeholder="Optional — not shown on the board"
+                placeholder="Optional"
                 autoComplete="tel"
               />
             </SettingsField>
@@ -299,15 +256,10 @@ export function SettingsForm({
 
       {integrations}
 
-      {/* ── Notifications ── */}
-      <SettingsSection
-        id="notifications"
-        title="Email preferences"
-        description="Optional alerts to your school Google account."
-      >
+      <SettingsSection id="notifications" title="Email">
         <SettingsToggleRow
-          title="Booking updates"
-          description="Upcoming reminders and cancellations"
+          title="Bookings"
+          description="Reminders and cancellations"
           control={
             <Switch
               checked={notifyEmail}
@@ -318,8 +270,8 @@ export function SettingsForm({
         />
         <SettingsDivider />
         <SettingsToggleRow
-          title="Issue updates"
-          description="Status changes on reports you filed"
+          title="Issues"
+          description="Updates on your reports"
           control={
             <Switch
               checked={notifyIssues}
@@ -330,12 +282,7 @@ export function SettingsForm({
         />
       </SettingsSection>
 
-      {/* ── Account ── */}
-      <SettingsSection
-        id="account"
-        title="Account"
-        description="Managed by school Google and IT."
-      >
+      <SettingsSection id="account" title="Account">
         <SettingsMetaRow label="Email" value={user.email} />
         <SettingsDivider />
         <SettingsMetaRow label="Role" value={roleLabel} />
@@ -343,113 +290,88 @@ export function SettingsForm({
         <SettingsMetaRow
           label="Verified"
           value={verified ? "Yes" : "No"}
-          trailing={verified ? <VerifiedBadge size="sm" /> : undefined}
+          trailing={verified ? <VerifiedBadge size="xs" /> : undefined}
         />
-        <SettingsDivider />
-        <div className="px-4 py-3 sm:px-5">
-          <p className="text-[12px] leading-relaxed text-neutral-400">
-            {isAdmin
-              ? "You can manage staff verification in Admin → Staff. Email domain stays @rbe.sk.ca."
-              : "Ask IT or an admin if your name, role, or verified badge needs to change."}
-          </p>
-        </div>
       </SettingsSection>
 
-      {/* ── Shortcuts ── */}
-      <SettingsSection id="shortcuts" title="Shortcuts">
-        <div className="divide-y divide-neutral-100">
-          <Link
-            href="/my-bookings"
-            className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-neutral-50/80 sm:px-5"
-          >
-            <span className="flex size-9 items-center justify-center rounded-xl bg-neutral-100 text-neutral-700">
-              <CalendarDays className="size-4" strokeWidth={1.75} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-medium text-neutral-900">
-                My bookings
-              </span>
-              <span className="block text-[12.5px] text-neutral-500">
-                Upcoming cart reservations
-              </span>
-            </span>
-            <ArrowUpRight className="size-4 shrink-0 text-neutral-300" />
-          </Link>
-          {isAdmin ? (
+      {/* Minimal links — no icon blocks */}
+      <SettingsSection id="more" title="More">
+        <Link
+          href="/my-bookings"
+          className="flex items-center justify-between gap-3 px-4 py-3 text-[13.5px] transition-colors hover:bg-neutral-50/80 sm:px-5"
+        >
+          <span className="font-medium tracking-[-0.01em] text-neutral-900">
+            My bookings
+          </span>
+          <span className="text-[12px] text-neutral-400">View</span>
+        </Link>
+        {isAdmin ? (
+          <>
+            <SettingsDivider />
             <Link
               href="/admin"
-              className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-neutral-50/80 sm:px-5"
+              className="flex items-center justify-between gap-3 px-4 py-3 text-[13.5px] transition-colors hover:bg-neutral-50/80 sm:px-5"
             >
-              <span className="flex size-9 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
-                <LayoutGrid className="size-4" strokeWidth={1.75} />
+              <span className="font-medium tracking-[-0.01em] text-neutral-900">
+                Admin
               </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[14px] font-medium text-neutral-900">
-                  Admin console
-                </span>
-                <span className="block text-[12.5px] text-neutral-500">
-                  Carts, staff, restrictions, reports
-                </span>
-              </span>
-              <ArrowUpRight className="size-4 shrink-0 text-neutral-300" />
+              <span className="text-[12px] text-neutral-400">Open</span>
             </Link>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => void signOutAction()}
-            className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-red-50/50 sm:px-5"
-          >
-            <span className="flex size-9 items-center justify-center rounded-xl bg-neutral-100 text-neutral-600">
-              <LogOut className="size-4" strokeWidth={1.75} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-medium text-neutral-900">
-                Sign out
-              </span>
-              <span className="block text-[12.5px] text-neutral-500">
-                End this session on this device
-              </span>
-            </span>
-          </button>
-        </div>
+          </>
+        ) : null}
+        <SettingsDivider />
+        <button
+          type="button"
+          onClick={() => void signOutAction()}
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-[13.5px] transition-colors hover:bg-neutral-50/80 sm:px-5"
+        >
+          <span className="inline-flex items-center gap-2 font-medium tracking-[-0.01em] text-neutral-900">
+            <LogOut className="size-3.5 text-neutral-400" strokeWidth={1.75} />
+            Sign out
+          </span>
+        </button>
       </SettingsSection>
 
-      {/* Sticky save */}
+      <p className="px-1 text-center text-[11.5px] leading-relaxed text-neutral-400">
+        {isAdmin
+          ? "Staff verification is managed in Admin → Staff."
+          : "Role and verification are managed by school IT."}
+      </p>
+
+      {/* Floating save — pill, only when needed */}
       <div
         className={cn(
-          "pointer-events-none fixed inset-x-0 bottom-0 z-30 transition-[opacity,transform] duration-200",
+          "pointer-events-none fixed inset-x-0 bottom-5 z-30 flex justify-center px-4 transition-all duration-200",
           dirty || status
             ? "translate-y-0 opacity-100"
-            : "pointer-events-none translate-y-2 opacity-0",
+            : "translate-y-3 opacity-0",
         )}
         aria-hidden={!dirty && !status}
       >
-        <div className="border-t border-neutral-200/80 bg-white/92 backdrop-blur-xl">
-          <div className="pointer-events-auto mx-auto flex w-full max-w-xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-            <p
-              role="status"
-              className={cn(
-                "min-h-[1.25rem] truncate text-[13px]",
-                status?.type === "error"
-                  ? "text-red-600"
-                  : status?.type === "ok"
-                    ? "text-neutral-600"
-                    : "text-neutral-500",
-              )}
-            >
-              {status?.message ?? (dirty ? "Unsaved changes" : "")}
-            </p>
-            <button
-              type="submit"
-              disabled={pending || uploading || !name.trim() || !dirty}
-              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-full bg-neutral-950 px-5 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-30"
-            >
-              {pending ? (
-                <Loader2 className="size-3.5 animate-spin" strokeWidth={2} />
-              ) : null}
-              {pending ? "Saving…" : "Save changes"}
-            </button>
-          </div>
+        <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-black/[0.08] bg-white/95 py-1.5 pl-4 pr-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
+          <p
+            role="status"
+            className={cn(
+              "max-w-[10rem] truncate text-[12.5px] sm:max-w-[14rem]",
+              status?.type === "error"
+                ? "text-red-600"
+                : status?.type === "ok"
+                  ? "text-neutral-500"
+                  : "text-neutral-500",
+            )}
+          >
+            {status?.message ?? (dirty ? "Unsaved" : "")}
+          </p>
+          <button
+            type="submit"
+            disabled={pending || uploading || !name.trim() || !dirty}
+            className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-neutral-900 px-3.5 text-[12.5px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-30"
+          >
+            {pending ? (
+              <Loader2 className="size-3 animate-spin" strokeWidth={2} />
+            ) : null}
+            {pending ? "Saving" : "Save"}
+          </button>
         </div>
       </div>
     </form>

@@ -67,14 +67,11 @@ export function GoogleCalendarCard({ user }: { user: SessionUser }) {
       if (fromRedirect && hasToken) {
         setGoogleCalendarConnected(true);
         setPrefs(getGoogleCalendarPrefs());
-        setStatus({
-          type: "ok",
-          message: "Connected. New bookings can appear on your calendar.",
-        });
+        setStatus({ type: "ok", message: "Connected" });
       } else if (fromRedirect && !hasToken) {
         setStatus({
           type: "error",
-          message: "Calendar access wasn’t granted. Try Connect again.",
+          message: "Access wasn’t granted. Try again.",
         });
       } else if (prefs.connected && !hasToken) {
         setTokenReady(false);
@@ -107,7 +104,7 @@ export function GoogleCalendarCard({ user }: { user: SessionUser }) {
     clearGoogleCalendarPrefs();
     setPrefs(getGoogleCalendarPrefs());
     setTokenReady(null);
-    setStatus({ type: "ok", message: "Disconnected from Google Calendar." });
+    setStatus({ type: "ok", message: "Disconnected" });
   }
 
   function handleAutoSync(next: boolean) {
@@ -130,15 +127,14 @@ export function GoogleCalendarCard({ user }: { user: SessionUser }) {
       if (result.failed > 0 && result.created === 0) {
         setStatus({
           type: "error",
-          message:
-            result.lastError ?? "Couldn’t sync. Reconnect or ask school IT.",
+          message: result.lastError ?? "Couldn’t sync",
         });
       } else if (result.created === 0) {
-        setStatus({ type: "ok", message: "Calendar is already up to date." });
+        setStatus({ type: "ok", message: "Up to date" });
       } else {
         setStatus({
           type: "ok",
-          message: `Synced ${result.created} booking${result.created === 1 ? "" : "s"}.`,
+          message: `Synced ${result.created}`,
         });
       }
     } finally {
@@ -159,91 +155,74 @@ export function GoogleCalendarCard({ user }: { user: SessionUser }) {
 
   return (
     <div>
-      <SettingsRow className="sm:py-4">
-        <div className="flex items-center gap-3.5">
+      <SettingsRow className="py-3.5 sm:py-3.5">
+        <div className="flex items-center gap-3">
           <div className="relative shrink-0">
-            <div className="flex size-11 items-center justify-center overflow-hidden rounded-xl border border-neutral-200/90 bg-white">
-              <GoogleCalendarLogo size={40} className="size-[88%]" />
+            <div className="flex size-9 items-center justify-center overflow-hidden rounded-[10px] border border-black/[0.06] bg-white">
+              <GoogleCalendarLogo size={32} className="size-[85%]" />
             </div>
             {connected && tokenReady !== false ? (
-              <span
-                className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-white bg-emerald-500"
-                title="Connected"
-              />
+              <span className="absolute -bottom-px -right-px size-2 rounded-full border-[1.5px] border-white bg-emerald-500" />
             ) : null}
           </div>
 
           <div className="min-w-0 flex-1">
-            <p className="text-[14.5px] font-semibold tracking-tight text-neutral-950">
+            <p className="text-[13.5px] font-medium tracking-[-0.01em] text-neutral-900">
               Google Calendar
             </p>
-            <p className="mt-0.5 text-[12.5px] text-neutral-500">{statusLine}</p>
+            <p className="mt-px text-[12px] text-neutral-400">{statusLine}</p>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1">
-            {connected ? (
-              <>
+          {connected ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  disabled={syncing || myUpcoming.length === 0}
-                  onClick={() => void handleSyncAll()}
-                  className="hidden h-8 items-center rounded-full border border-neutral-200 bg-white px-3 text-[12.5px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-40 sm:inline-flex"
+                  className="inline-flex size-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-800"
+                  aria-label="Options"
                 >
-                  {syncing ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : unsyncedCount > 0 ? (
-                    `Sync ${unsyncedCount}`
-                  ) : (
-                    "Sync"
-                  )}
+                  <MoreHorizontal className="size-4" strokeWidth={1.75} />
                 </button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="inline-flex size-8 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-                      aria-label="Calendar options"
-                    >
-                      <MoreHorizontal className="size-4" strokeWidth={1.75} />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-44">
-                    <DropdownMenuItem
-                      disabled={syncing || myUpcoming.length === 0}
-                      onSelect={() => void handleSyncAll()}
-                    >
-                      Sync upcoming
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={pending}
-                      onSelect={() => handleConnect()}
-                    >
-                      Reconnect
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="text-red-600 focus:text-red-600"
-                      onSelect={() => handleDisconnect()}
-                    >
-                      Disconnect
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
-            ) : (
-              <button
-                type="button"
-                disabled={pending}
-                onClick={handleConnect}
-                className="inline-flex h-8 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-full bg-neutral-950 px-3.5 text-[12.5px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {pending ? (
-                  <Loader2 className="size-3.5 animate-spin" strokeWidth={2} />
-                ) : null}
-                {pending ? "…" : "Connect"}
-              </button>
-            )}
-          </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuItem
+                  disabled={syncing || myUpcoming.length === 0}
+                  onSelect={() => void handleSyncAll()}
+                >
+                  {syncing
+                    ? "Syncing…"
+                    : unsyncedCount > 0
+                      ? `Sync ${unsyncedCount}`
+                      : "Sync"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={pending}
+                  onSelect={() => handleConnect()}
+                >
+                  Reconnect
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-red-600 focus:text-red-600"
+                  onSelect={() => handleDisconnect()}
+                >
+                  Disconnect
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={handleConnect}
+              className="inline-flex h-7 items-center justify-center gap-1.5 rounded-lg bg-neutral-900 px-2.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {pending ? (
+                <Loader2 className="size-3 animate-spin" strokeWidth={2} />
+              ) : null}
+              Connect
+            </button>
+          )}
         </div>
       </SettingsRow>
 
@@ -251,13 +230,13 @@ export function GoogleCalendarCard({ user }: { user: SessionUser }) {
         <>
           <SettingsDivider />
           <SettingsToggleRow
-            title="Auto-sync bookings"
-            description="Create events when you book · remove when you cancel"
+            title="Auto-sync"
+            description="Events on book and cancel"
             control={
               <Switch
                 checked={prefs.autoSync}
                 onCheckedChange={handleAutoSync}
-                aria-label="Auto-sync bookings"
+                aria-label="Auto-sync"
               />
             }
           />
@@ -267,28 +246,15 @@ export function GoogleCalendarCard({ user }: { user: SessionUser }) {
       {status ? (
         <>
           <SettingsDivider />
-          <div className="px-4 py-2.5 sm:px-5">
+          <div className="px-4 py-2 sm:px-5">
             <p
               role="status"
               className={cn(
-                "text-[12.5px] leading-snug",
-                status.type === "error" ? "text-red-600" : "text-neutral-500",
+                "text-[12px]",
+                status.type === "error" ? "text-red-600" : "text-neutral-400",
               )}
             >
               {status.message}
-            </p>
-          </div>
-        </>
-      ) : !connected ? (
-        <>
-          <SettingsDivider />
-          <div className="px-4 py-2.5 sm:px-5">
-            <p className="text-[12px] leading-relaxed text-neutral-400">
-              Optional. If Connect is blocked by school Google, use{" "}
-              <span className="font-medium text-neutral-500">
-                Add to Calendar
-              </span>{" "}
-              on any booking instead.
             </p>
           </div>
         </>
