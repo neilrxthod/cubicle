@@ -55,23 +55,23 @@ export function AuthLayout({
             {children}
           </div>
 
-          <footer className="shrink-0 border-t border-black/[0.05] pt-4">
-            <nav
-              aria-label="Legal"
-              className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-neutral-400"
-            >
-              {LEGAL_LINKS.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="transition-colors hover:text-neutral-700"
-                >
-                  {link.label}
-                </Link>
+          <footer className="shrink-0 pt-1">
+            <p className="text-[11px] leading-relaxed text-neutral-400">
+              {LEGAL_LINKS.map((link, i) => (
+                <span key={link.href}>
+                  {i > 0 ? (
+                    <span className="mx-1.5 text-neutral-300">·</span>
+                  ) : null}
+                  <Link
+                    href={link.href}
+                    className="transition-colors hover:text-neutral-600"
+                  >
+                    {link.shortLabel}
+                  </Link>
+                </span>
               ))}
-            </nav>
-            <p className="mt-2 text-[11px] text-neutral-400">
-              © {new Date().getFullYear()} Cubicle. Authorized staff only.
+              <span className="mx-1.5 text-neutral-300">·</span>
+              <span>© {new Date().getFullYear()} Cubicle</span>
             </p>
           </footer>
         </div>
