@@ -17,8 +17,8 @@ import {
 } from "@/lib/auth/school-domain";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
-import Link from "next/link";
 import { AuthLayout } from "./auth-layout";
+import { LegalConsent } from "./legal-consent";
 import {
   AuthPageHeader,
   SocialAccountPicker,
@@ -60,6 +60,8 @@ export default function LoginForm() {
     null,
   );
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
+  const [legalInvalid, setLegalInvalid] = useState(false);
   const [error, setError] = useState("");
 
   const supabaseReady = isSupabaseConfigured();
@@ -81,6 +83,12 @@ export default function LoginForm() {
 
   async function signInWithGoogle() {
     setError("");
+    if (!acceptedLegal) {
+      setLegalInvalid(true);
+      setError("Accept the Terms and policies to continue.");
+      return;
+    }
+    setLegalInvalid(false);
     setGoogleLoading(true);
 
     if (!supabaseReady) {
@@ -137,6 +145,12 @@ export default function LoginForm() {
     setError("");
 
     if (next === "google") {
+      if (!acceptedLegal) {
+        setLegalInvalid(true);
+        setError("Accept the Terms and policies to continue.");
+        return;
+      }
+      setLegalInvalid(false);
       if (supabaseReady) {
         void signInWithGoogle();
         return;
@@ -228,7 +242,7 @@ export default function LoginForm() {
           </motion.p>
         ) : null}
 
-        {/* Access + legal — single clean stack */}
+        {/* Access + legal (ReUI c-label-2 checkbox pattern) */}
         <motion.div
           variants={authItemVariants}
           className="mt-8 space-y-4 border-t border-black/[0.06] pt-6"
@@ -242,37 +256,14 @@ export default function LoginForm() {
             blocked. Ask IT if you need access.
           </p>
 
-          <p className="text-[12px] leading-relaxed text-neutral-400">
-            By continuing, you agree to our{" "}
-            <Link
-              href="/legal/terms"
-              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-            >
-              Terms
-            </Link>
-            ,{" "}
-            <Link
-              href="/legal/privacy"
-              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-            >
-              Privacy Policy
-            </Link>
-            , and{" "}
-            <Link
-              href="/legal/acceptable-use"
-              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-            >
-              Acceptable Use
-            </Link>
-            .{" "}
-            <Link
-              href="/legal/security"
-              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-            >
-              Security &amp; data safety
-            </Link>
-            .
-          </p>
+          <LegalConsent
+            checked={acceptedLegal}
+            onCheckedChange={(value) => {
+              setAcceptedLegal(value);
+              if (value) setLegalInvalid(false);
+            }}
+            invalid={legalInvalid}
+          />
         </motion.div>
       </motion.div>
     </AuthLayout>

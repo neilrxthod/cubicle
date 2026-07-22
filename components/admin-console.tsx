@@ -793,7 +793,8 @@ function BookingsTable({ bookings, carts }: { bookings: Booking[]; carts: Cart[]
               <tr className="border-b border-border/70 bg-neutral-50/80">
                 <th className="w-11 px-4 py-3">
                   <Checkbox
-                    checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                    checked={allSelected}
+                    indeterminate={someSelected && !allSelected}
                     onCheckedChange={(checked) => {
                       if (checked) setSelectedIds(new Set(filtered.map((b) => b.id)))
                       else setSelectedIds(new Set())
