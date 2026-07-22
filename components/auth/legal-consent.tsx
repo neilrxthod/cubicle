@@ -12,10 +12,10 @@ type LegalConsentProps = {
 };
 
 const linkClass =
-  "font-medium text-neutral-800 underline decoration-neutral-300 underline-offset-[3px] transition-colors hover:text-neutral-950 hover:decoration-neutral-500";
+  "text-neutral-800 underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-500";
 
 /**
- * Compact legal acceptance — ReUI c-label-2 idea, balanced for auth.
+ * Minimal legal acceptance row.
  */
 export function LegalConsent({
   checked,
@@ -24,25 +24,23 @@ export function LegalConsent({
   className,
 }: LegalConsentProps) {
   return (
-    <div
-      className={cn(
-        "flex items-start gap-2.5 rounded-xl border px-3 py-3 transition-colors",
-        invalid
-          ? "border-red-200 bg-red-50/50"
-          : "border-neutral-200/80 bg-neutral-50/60",
-        className,
-      )}
-    >
+    <div className={cn("flex items-start gap-2.5", className)}>
       <Checkbox
         id="auth-legal-consent"
         checked={checked}
         onCheckedChange={(value) => onCheckedChange(value === true)}
         aria-invalid={invalid || undefined}
-        className="mt-0.5 shrink-0"
+        className={cn(
+          "mt-0.5 shrink-0",
+          invalid && "border-red-400 aria-invalid:border-red-400",
+        )}
       />
       <label
         htmlFor="auth-legal-consent"
-        className="cursor-pointer select-none text-[12.5px] leading-[1.55] text-neutral-600"
+        className={cn(
+          "cursor-pointer select-none text-[12px] leading-[1.5] text-neutral-500",
+          invalid && "text-red-600",
+        )}
       >
         I agree to the{" "}
         <Link href="/legal/terms" className={linkClass} onClick={(e) => e.stopPropagation()}>
@@ -60,12 +58,10 @@ export function LegalConsent({
         >
           Acceptable Use
         </Link>
-        {" "}
-        &{" "}
+        {" & "}
         <Link href="/legal/security" className={linkClass} onClick={(e) => e.stopPropagation()}>
           Security
         </Link>
-        .
       </label>
     </div>
   );

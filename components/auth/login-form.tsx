@@ -17,11 +17,12 @@ import {
 } from "@/lib/auth/school-domain";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 import { AuthLayout } from "./auth-layout";
 import { LegalConsent } from "./legal-consent";
 import {
+  GoogleIcon,
   SocialAccountPicker,
-  SocialSignInButton,
   type AuthProvider,
 } from "./auth-ui";
 
@@ -31,19 +32,19 @@ const roleAccent: Record<DemoAccount["role"], string> = {
 };
 
 const LOGIN_ERRORS: Record<string, string> = {
-  not_allowed: `Your @${SCHOOL_EMAIL_DOMAIN} account is not on the IT allowlist. Contact IT.`,
+  not_allowed: `Not on the IT allowlist. Contact IT.`,
   invalid_domain: `Only @${SCHOOL_EMAIL_DOMAIN} accounts can sign in.`,
-  auth_failed: "Google sign-in failed. Please try again.",
-  missing_code: "Sign-in was cancelled or incomplete.",
-  no_email: "Google did not return an email for this account.",
-  allowlist_error: "Could not verify school access. Try again.",
-  session_bridge: "Could not start your session. Try again.",
-  access_denied: "Google sign-in was denied.",
+  auth_failed: "Sign-in failed. Try again.",
+  missing_code: "Sign-in was cancelled.",
+  no_email: "No email returned from Google.",
+  allowlist_error: "Could not verify access.",
+  session_bridge: "Could not start session.",
+  access_denied: "Sign-in denied.",
 };
 
 function messageForError(code: string | null): string {
   if (!code) return "";
-  return LOGIN_ERRORS[code] ?? "Sign-in failed. Please try again.";
+  return LOGIN_ERRORS[code] ?? "Sign-in failed.";
 }
 
 function isDemoLoginEnabled() {
@@ -67,9 +68,7 @@ export default function LoginForm() {
 
   useEffect(() => {
     const existing = getSession();
-    if (existing) {
-      router.replace(getDashboardPath(existing.role));
-    }
+    if (existing) router.replace(getDashboardPath(existing.role));
   }, [router]);
 
   useEffect(() => {
@@ -88,7 +87,7 @@ export default function LoginForm() {
     setGoogleLoading(true);
 
     if (!supabaseReady) {
-      setError("Google sign-in is not configured. Check Vercel env vars.");
+      setError("Google sign-in is not configured.");
       setGoogleLoading(false);
       return;
     }
@@ -105,13 +104,12 @@ export default function LoginForm() {
           },
         },
       });
-
       if (oauthError) {
         setError(oauthError.message);
         setGoogleLoading(false);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Google sign-in failed.");
+      setError(err instanceof Error ? err.message : "Sign-in failed.");
       setGoogleLoading(false);
     }
   }
@@ -119,7 +117,7 @@ export default function LoginForm() {
   async function signInWithAccount(account: DemoAccount) {
     setError("");
     setLoadingRole(account.role);
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await new Promise((r) => setTimeout(r, 400));
     const user = authenticate(account.email, account.password);
     if (!user) {
       setError("Sign-in failed.");
@@ -130,31 +128,23 @@ export default function LoginForm() {
     router.push(getDashboardPath(user.role));
   }
 
-  function openProvider(next: AuthProvider) {
+  function handleGoogleClick() {
     setError("");
-    if (next === "google") {
-      if (!acceptedLegal) {
-        setLegalInvalid(true);
-        setError("Accept the terms to continue.");
-        return;
-      }
-      setLegalInvalid(false);
-      if (supabaseReady) {
-        void signInWithGoogle();
-        return;
-      }
-      if (demoEnabled) {
-        setProvider(next);
-        return;
-      }
-      setError("Google sign-in is not configured. Check Vercel env vars.");
+    if (!acceptedLegal) {
+      setLegalInvalid(true);
+      setError("Accept the terms to continue.");
+      return;
+    }
+    setLegalInvalid(false);
+    if (supabaseReady) {
+      void signInWithGoogle();
       return;
     }
     if (demoEnabled) {
-      setProvider(next);
+      setProvider("google");
       return;
     }
-    setError("Only Google sign-in is available.");
+    setError("Google sign-in is not configured.");
   }
 
   const accountOptions = DEMO_ACCOUNTS.map((account) => ({
@@ -174,16 +164,12 @@ export default function LoginForm() {
         animate="visible"
         className="w-full"
       >
-        {/* Title block — tight hierarchy */}
-        <motion.div variants={authItemVariants} className="mb-7">
-          <h1 className="text-[1.75rem] font-semibold tracking-[-0.04em] text-neutral-950">
+        <motion.div variants={authItemVariants} className="mb-8">
+          <h1 className="text-[1.875rem] font-semibold tracking-[-0.045em] text-neutral-950">
             Sign in
           </h1>
-          <p className="mt-2 text-[14px] leading-snug text-neutral-500">
-            School Google only ·{" "}
-            <span className="font-medium text-neutral-800">
-              @{SCHOOL_EMAIL_DOMAIN}
-            </span>
+          <p className="mt-2 text-[13.5px] text-neutral-500">
+            @{SCHOOL_EMAIL_DOMAIN} · allowlist only
           </p>
         </motion.div>
 
@@ -191,10 +177,10 @@ export default function LoginForm() {
           {provider && demoEnabled ? (
             <motion.div
               key="picker"
-              initial={{ opacity: 0, y: 6 }}
+              initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
             >
               <SocialAccountPicker
                 provider={provider}
@@ -209,20 +195,35 @@ export default function LoginForm() {
           ) : (
             <motion.div
               key="form"
-              initial={{ opacity: 0, y: 6 }}
+              initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-              className="space-y-5"
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="space-y-6"
             >
-              {/* 1. Primary action */}
-              <SocialSignInButton
-                provider="google"
-                onClick={() => openProvider("google")}
-                isLoading={googleLoading}
-              />
+              <button
+                type="button"
+                onClick={handleGoogleClick}
+                disabled={googleLoading}
+                className={cn(
+                  "flex h-11 w-full items-center justify-center gap-2.5 rounded-full",
+                  "bg-neutral-950 text-[14px] font-medium tracking-[-0.01em] text-white",
+                  "transition-[opacity,transform] duration-150",
+                  "hover:opacity-90 active:scale-[0.99]",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950/20 focus-visible:ring-offset-2",
+                  "disabled:pointer-events-none disabled:opacity-50",
+                )}
+              >
+                {googleLoading ? (
+                  <span className="size-4 animate-spin rounded-full border-2 border-white/25 border-t-white" />
+                ) : (
+                  <span className="flex size-[18px] items-center justify-center rounded-full bg-white">
+                    <GoogleIcon width={12} height={12} />
+                  </span>
+                )}
+                {googleLoading ? "Connecting…" : "Continue with Google"}
+              </button>
 
-              {/* 2. Legal acceptance */}
               <LegalConsent
                 checked={acceptedLegal}
                 onCheckedChange={(value) => {
@@ -235,15 +236,10 @@ export default function LoginForm() {
                 invalid={legalInvalid}
               />
 
-              {/* 3. Access rule — one quiet line */}
-              <p className="text-center text-[12px] leading-relaxed text-neutral-400">
-                Allowlist required · Gmail and other domains blocked
-              </p>
-
               {error ? (
                 <p
                   role="alert"
-                  className="rounded-lg bg-red-50 px-3 py-2.5 text-center text-[12.5px] leading-relaxed text-red-600"
+                  className="text-center text-[12px] text-red-600"
                 >
                   {error}
                 </p>

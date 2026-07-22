@@ -55,29 +55,23 @@ export function AuthLayout({
             {children}
           </div>
 
-          <footer className="shrink-0 border-t border-black/[0.05] pt-4">
-            <nav
-              aria-label="Legal"
-              className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-neutral-400"
-            >
-              {LEGAL_LINKS.map((link, i) => (
-                <span key={link.href} className="inline-flex items-center gap-2.5">
-                  {i > 0 ? (
-                    <span aria-hidden className="text-neutral-300">
-                      ·
-                    </span>
-                  ) : null}
-                  <Link
-                    href={link.href}
-                    className="transition-colors hover:text-neutral-700"
-                  >
-                    {link.shortLabel}
-                  </Link>
-                </span>
-              ))}
-            </nav>
-            <p className="mt-2 text-[11px] text-neutral-400">
-              © {new Date().getFullYear()} Cubicle
+          <footer className="shrink-0 pt-2">
+            <p className="text-[11px] leading-relaxed text-neutral-400">
+              <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+                {LEGAL_LINKS.map((link, i) => (
+                  <span key={link.href} className="inline-flex items-center gap-2">
+                    {i > 0 ? <span className="text-neutral-300">·</span> : null}
+                    <Link
+                      href={link.href}
+                      className="transition-colors hover:text-neutral-600"
+                    >
+                      {link.shortLabel}
+                    </Link>
+                  </span>
+                ))}
+                <span className="text-neutral-300">·</span>
+                <span>© {new Date().getFullYear()} Cubicle</span>
+              </span>
             </p>
           </footer>
         </div>
