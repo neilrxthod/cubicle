@@ -71,12 +71,20 @@ export function RequirePlatformAuth({
           return;
         }
 
+        const { extractOAuthAvatarUrl } = await import(
+          "@/lib/auth/google-avatar"
+        );
+        const avatarUrl =
+          (typeof profile.avatar_url === "string" && profile.avatar_url) ||
+          extractOAuthAvatarUrl(user) ||
+          undefined;
+
         setSession({
           id: profile.id,
           email: profile.email,
           name: profile.name,
           role: profile.role as UserRole,
-          avatarUrl: profile.avatar_url ?? undefined,
+          avatarUrl,
           title: profile.title ?? undefined,
           department: profile.department ?? undefined,
           phone: profile.phone ?? undefined,

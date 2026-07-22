@@ -4,6 +4,7 @@ import {
   deleteUnauthorizedUser,
   getAllowedEmail,
 } from "@/lib/auth/allowlist";
+import { extractOAuthAvatarUrl } from "@/lib/auth/google-avatar";
 import { getDashboardPath } from "@/lib/auth/session";
 import type { UserRole } from "@/lib/auth/types";
 
@@ -11,8 +12,8 @@ import type { UserRole } from "@/lib/auth/types";
  * Google OAuth returns here with ?code=...
  * 1. Exchange code for a Supabase session
  * 2. Allowlist check — reject if email is not pre-approved
- * 3. Sync profile role from allowlist
- * 4. Hand off to /auth/complete to set the app session cookie/localStorage bridge
+ * 3. Sync profile (role, name, Google photo)
+ * 4. Hand off to /auth/complete (loads session client-side — no avatar in query string)
  */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -58,7 +59,6 @@ export async function GET(request: Request) {
   }
 
   if (!allowed) {
-    // Not on the school list — kick them out and remove the auth user.
     const userId = user.id;
     await supabase.auth.signOut();
     await deleteUnauthorizedUser(userId);
@@ -74,40 +74,35 @@ export async function GET(request: Request) {
     (user.user_metadata?.name as string | undefined) ||
     user.email.split("@")[0];
 
-  // Keep profile role/name in sync with the allowlist.
+  const avatarUrl = extractOAuthAvatarUrl(user);
+
+  // Prefer Google photo when present; never wipe an existing custom photo with null.
+  const { data: existing } = await supabase
+    .from("profiles")
+    .select("avatar_url")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const nextAvatar =
+    avatarUrl ||
+    (typeof existing?.avatar_url === "string" ? existing.avatar_url : null);
+
   await supabase.from("profiles").upsert(
     {
       id: user.id,
       email: user.email,
       name,
       role,
-      avatar_url:
-        (user.user_metadata?.avatar_url as string | undefined) ||
-        (user.user_metadata?.picture as string | undefined) ||
-        null,
+      avatar_url: nextAvatar,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" },
   );
 
   const dashboard =
-    next && next.startsWith("/")
-      ? next
-      : getDashboardPath(role);
+    next && next.startsWith("/") ? next : getDashboardPath(role);
 
-  // Bridge: client page stores SessionUser for existing RequirePlatformAuth,
-  // then routes to the dashboard.
   const complete = new URL("/auth/complete", origin);
-  complete.searchParams.set("email", user.email);
-  complete.searchParams.set("name", name);
-  complete.searchParams.set("role", role);
-  complete.searchParams.set("id", user.id);
-  if (user.user_metadata?.avatar_url || user.user_metadata?.picture) {
-    complete.searchParams.set(
-      "avatarUrl",
-      (user.user_metadata.avatar_url || user.user_metadata.picture) as string,
-    );
-  }
   complete.searchParams.set("next", dashboard);
 
   return NextResponse.redirect(complete.toString());

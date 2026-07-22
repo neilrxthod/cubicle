@@ -39,6 +39,7 @@ function Avatar({
       <img
         src={user.avatarUrl}
         alt=""
+        referrerPolicy="no-referrer"
         className={cn(dim, "shrink-0 rounded-full object-cover")}
       />
     );

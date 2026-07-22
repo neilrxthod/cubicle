@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authenticate, DEMO_ACCOUNTS } from "@/lib/auth/credentials";
 import type { DemoAccount } from "@/lib/auth/types";
-import { AUTH_ROUTES } from "@/lib/auth/constants";
 import {
   getDashboardPath,
   getSession,
@@ -16,7 +15,6 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
 import { AuthLayout } from "./auth-layout";
 import {
-  AuthFooter,
   AuthPageHeader,
   SocialAccountPicker,
   SocialSignInButton,
@@ -44,6 +42,11 @@ function messageForError(code: string | null): string {
   return LOGIN_ERRORS[code] ?? "Sign-in failed. Please try again.";
 }
 
+/** Demo teacher/admin picker only when explicitly enabled (local). Never on production. */
+function isDemoLoginEnabled() {
+  return process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === "true";
+}
+
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -55,6 +58,7 @@ export default function LoginForm() {
   const [error, setError] = useState("");
 
   const supabaseReady = isSupabaseConfigured();
+  const demoEnabled = isDemoLoginEnabled();
 
   useEffect(() => {
     const existing = getSession();
@@ -76,7 +80,7 @@ export default function LoginForm() {
 
     if (!supabaseReady) {
       setError(
-        "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local.",
+        "Google sign-in is not configured on this server. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel Environment Variables, then redeploy.",
       );
       setGoogleLoading(false);
       return;
@@ -89,7 +93,6 @@ export default function LoginForm() {
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: {
-            // Force account chooser so staff can pick the school account
             prompt: "select_account",
           },
         },
@@ -99,7 +102,6 @@ export default function LoginForm() {
         setError(oauthError.message);
         setGoogleLoading(false);
       }
-      // On success the browser redirects to Google — keep loading state.
     } catch (err) {
       setError(err instanceof Error ? err.message : "Google sign-in failed.");
       setGoogleLoading(false);
@@ -126,13 +128,28 @@ export default function LoginForm() {
 
   function openProvider(next: AuthProvider) {
     setError("");
-    // Real Google OAuth when Supabase is configured.
-    if (next === "google" && supabaseReady) {
-      void signInWithGoogle();
+
+    if (next === "google") {
+      if (supabaseReady) {
+        void signInWithGoogle();
+        return;
+      }
+      if (demoEnabled) {
+        setProvider(next);
+        return;
+      }
+      setError(
+        "Google sign-in is not configured. Add Supabase keys in Vercel Environment Variables and redeploy.",
+      );
       return;
     }
-    // Fallback: local demo accounts (Apple or Google without Supabase).
-    setProvider(next);
+
+    // Apple / other — demo only when explicitly enabled
+    if (demoEnabled) {
+      setProvider(next);
+      return;
+    }
+    setError("Only Google sign-in is available.");
   }
 
   function closePicker() {
@@ -161,16 +178,12 @@ export default function LoginForm() {
         <motion.div variants={authItemVariants} className="mb-8">
           <AuthPageHeader
             title="Sign in"
-            description={
-              supabaseReady
-                ? "Use your approved school Google account. Only allowlisted emails can enter."
-                : "Use your school Google or Apple account."
-            }
+            description="Use your approved school Google account (@rbe.sk.ca). Only allowlisted emails can enter."
           />
         </motion.div>
 
         <AnimatePresence mode="wait">
-          {provider ? (
+          {provider && demoEnabled ? (
             <motion.div
               key="picker"
               initial={{ opacity: 0, y: 6 }}
@@ -198,12 +211,6 @@ export default function LoginForm() {
                 onClick={() => openProvider("google")}
                 isLoading={googleLoading}
               />
-              {!supabaseReady ? (
-                <SocialSignInButton
-                  provider="apple"
-                  onClick={() => openProvider("apple")}
-                />
-              ) : null}
             </motion.div>
           )}
         </AnimatePresence>
@@ -218,24 +225,13 @@ export default function LoginForm() {
           </motion.p>
         ) : null}
 
-        {supabaseReady ? (
-          <motion.p
-            variants={authItemVariants}
-            className="mt-6 text-center text-[12.5px] leading-relaxed text-neutral-500"
-          >
-            Access is limited to emails added by IT on the school allowlist.
-            If you cannot sign in, ask your administrator to add your Google
-            email.
-          </motion.p>
-        ) : (
-          <motion.div variants={authItemVariants} className="mt-8">
-            <AuthFooter
-              prompt="No account?"
-              linkLabel="Create account"
-              href={AUTH_ROUTES.signup}
-            />
-          </motion.div>
-        )}
+        <motion.p
+          variants={authItemVariants}
+          className="mt-6 text-center text-[12.5px] leading-relaxed text-neutral-500"
+        >
+          Access is limited to emails added by IT on the school allowlist. If
+          you cannot sign in, ask your administrator to add your Google email.
+        </motion.p>
       </motion.div>
     </AuthLayout>
   );

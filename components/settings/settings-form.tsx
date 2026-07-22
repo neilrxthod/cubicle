@@ -113,6 +113,7 @@ export function SettingsForm({ user }: { user: SessionUser }) {
               <img
                 src={avatarUrl}
                 alt=""
+                referrerPolicy="no-referrer"
                 className="size-20 rounded-full object-cover ring-2 ring-neutral-100"
               />
             ) : (
