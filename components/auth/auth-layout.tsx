@@ -1,6 +1,8 @@
 import Image from "next/image";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { AUTH_IMAGE } from "@/lib/auth/constants";
+import { LEGAL_LINKS } from "@/lib/legal/constants";
 import { CubicleWordmark } from "./wordmark";
 
 type AuthLayoutProps = {
@@ -53,8 +55,19 @@ export function AuthLayout({
             {children}
           </div>
 
-          <footer className="shrink-0 text-[11px] text-neutral-400 sm:text-[12px]">
-            &copy; {new Date().getFullYear()} Cubicle
+          <footer className="shrink-0 space-y-2 text-[11px] text-neutral-400 sm:text-[12px]">
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {LEGAL_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="transition-colors hover:text-neutral-700"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+            <p>&copy; {new Date().getFullYear()} Cubicle. Authorized staff only.</p>
           </footer>
         </div>
       </div>

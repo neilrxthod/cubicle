@@ -17,6 +17,7 @@ import {
 } from "@/lib/auth/school-domain";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 import { AuthLayout } from "./auth-layout";
 import {
   AuthPageHeader,
@@ -237,6 +238,41 @@ export default function LoginForm() {
         >
           {`Only @${SCHOOL_EMAIL_DOMAIN} addresses on the IT allowlist can enter.
           Gmail and other domains are blocked. Ask IT if you need access.`}
+        </motion.p>
+
+        <motion.p
+          variants={authItemVariants}
+          className="mt-4 text-center text-[11.5px] leading-relaxed text-neutral-400"
+        >
+          By continuing, you agree to our{" "}
+          <Link
+            href="/legal/terms"
+            className="font-medium text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
+          >
+            Terms
+          </Link>
+          ,{" "}
+          <Link
+            href="/legal/privacy"
+            className="font-medium text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
+          >
+            Privacy Policy
+          </Link>
+          , and{" "}
+          <Link
+            href="/legal/acceptable-use"
+            className="font-medium text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
+          >
+            Acceptable Use
+          </Link>
+          .{" "}
+          <Link
+            href="/legal/security"
+            className="font-medium text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
+          >
+            Security &amp; data safety
+          </Link>
+          .
         </motion.p>
       </motion.div>
     </AuthLayout>
