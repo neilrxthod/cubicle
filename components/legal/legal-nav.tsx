@@ -5,16 +5,26 @@ import { usePathname } from "next/navigation";
 import { LEGAL_LINKS } from "@/lib/legal/constants";
 import { cn } from "@/lib/utils";
 
-const NAV = [
+type NavItem = {
+  href: string;
+  label: string;
+  exact?: boolean;
+};
+
+const NAV: NavItem[] = [
   { href: "/legal", label: "Overview", exact: true },
   ...LEGAL_LINKS.map((link) => ({
     href: link.href,
-    label: link.shortLabel ?? link.label,
-    exact: false,
+    label: link.shortLabel,
+    exact: false as const,
   })),
-] as const;
+];
 
-export function LegalNav({ orientation = "horizontal" }: { orientation?: "horizontal" | "vertical" }) {
+export function LegalNav({
+  orientation = "horizontal",
+}: {
+  orientation?: "horizontal" | "vertical";
+}) {
   const pathname = usePathname();
 
   return (
@@ -37,9 +47,7 @@ export function LegalNav({ orientation = "horizontal" }: { orientation?: "horizo
             href={item.href}
             className={cn(
               "rounded-md text-[13px] transition-colors",
-              orientation === "vertical"
-                ? "px-3 py-2"
-                : "px-2.5 py-1.5",
+              orientation === "vertical" ? "px-3 py-2" : "px-2.5 py-1.5",
               active
                 ? "bg-neutral-100 font-medium text-neutral-950"
                 : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900",
