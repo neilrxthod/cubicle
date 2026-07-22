@@ -1,65 +1,95 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { Suspense, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
+import { format } from "date-fns";
+import { DashboardFrame } from "@/components/app/dashboard-frame";
+import { PageShell } from "@/components/app/page-shell";
+import { RequirePlatformAuth } from "@/components/app/require-platform-auth";
+import { DailyBoard } from "@/components/daily-board";
+import { StatBar } from "@/components/stat-bar";
+import { SwapRequestsList } from "@/components/swap-requests-list";
+import { usePlatformStore } from "@/lib/data/platform-store";
+import type { SessionUser } from "@/lib/types";
+
+export default function HomePage() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <RequirePlatformAuth>
+      {(user) => (
+        <Suspense
+          fallback={
+            <div className="flex h-svh items-center justify-center bg-[#f6f6f7]">
+              <div className="size-5 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
+            </div>
+          }
+        >
+          <HomeBoard user={user} />
+        </Suspense>
+      )}
+    </RequirePlatformAuth>
+  );
+}
+
+function HomeBoard({ user }: { user: SessionUser }) {
+  const state = usePlatformStore();
+  const searchParams = useSearchParams();
+  const date = searchParams.get("date") ?? format(new Date(), "yyyy-MM-dd");
+
+  const stats = useMemo(() => {
+    const todayBookings = state.bookings.filter(
+      (booking) => booking.date === date,
+    );
+    const mine = todayBookings.filter(
+      (booking) => booking.teacherId === user.id,
+    );
+    const activeCarts = state.carts.filter(
+      (cart) => cart.status === "active",
+    ).length;
+    const openIssues = state.issues.filter(
+      (issue) => issue.status === "open",
+    ).length;
+    const freeSlots = activeCarts * 5 - todayBookings.length;
+
+    return [
+      { label: "Active carts", value: activeCarts },
+      { label: "Bookings", value: todayBookings.length },
+      { label: "Yours", value: mine.length },
+      { label: "Issues", value: openIssues },
+      { label: "Free slots", value: Math.max(freeSlots, 0) },
+    ];
+  }, [state, date, user.id]);
+
+  const incomingSwaps = state.swapRequests.filter((request) => {
+    if (request.status !== "pending") return false;
+    const booking = state.bookings.find(
+      (entry) => entry.id === request.bookingId,
+    );
+    return booking?.teacherId === user.id;
+  });
+
+  return (
+    <DashboardFrame user={user}>
+      <PageShell
+        title="Home"
+        description="Live cart availability by period."
+      >
+        <div className="flex flex-col gap-4 sm:gap-5">
+          <StatBar stats={stats} />
+          <SwapRequestsList
+            requests={incomingSwaps}
+            bookings={state.bookings}
+            carts={state.carts}
+          />
+          <DailyBoard
+            session={user}
+            carts={state.carts}
+            bookings={state.bookings}
+            slotRestrictions={state.slotRestrictions}
+            bookingPolicy={state.bookingPolicy}
+            date={date}
+          />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </PageShell>
+    </DashboardFrame>
   );
 }
