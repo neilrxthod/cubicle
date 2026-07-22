@@ -17,8 +17,8 @@ import {
 } from "@/lib/auth/school-domain";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
-import Link from "next/link";
 import { AuthLayout } from "./auth-layout";
+import { LegalConsent } from "./legal-consent";
 import {
   AuthPageHeader,
   SocialAccountPicker,
@@ -30,6 +30,9 @@ const roleAccent: Record<DemoAccount["role"], string> = {
   teacher: "bg-emerald-600",
   admin: "bg-violet-600",
 };
+
+const LEGAL_REQUIRED =
+  "You must accept the Terms and policies before signing in.";
 
 const LOGIN_ERRORS: Record<string, string> = {
   not_allowed: `Your @${SCHOOL_EMAIL_DOMAIN} account is not on the school allowlist. Contact IT to be added.`,
@@ -47,7 +50,6 @@ function messageForError(code: string | null): string {
   return LOGIN_ERRORS[code] ?? "Sign-in failed. Please try again.";
 }
 
-/** Demo teacher/admin picker only when explicitly enabled (local). Never on production. */
 function isDemoLoginEnabled() {
   return process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === "true";
 }
@@ -60,6 +62,8 @@ export default function LoginForm() {
     null,
   );
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
+  const [legalInvalid, setLegalInvalid] = useState(false);
   const [error, setError] = useState("");
 
   const supabaseReady = isSupabaseConfigured();
@@ -74,13 +78,26 @@ export default function LoginForm() {
 
   useEffect(() => {
     const code = searchParams.get("error");
-    if (code) {
-      setError(messageForError(code));
-    }
+    if (code) setError(messageForError(code));
   }, [searchParams]);
+
+  /** No sign-in of any kind without legal acceptance. */
+  function requireLegal(): boolean {
+    if (acceptedLegal) {
+      setLegalInvalid(false);
+      return true;
+    }
+    setLegalInvalid(true);
+    setError(LEGAL_REQUIRED);
+    setGoogleLoading(false);
+    setLoadingRole(null);
+    return false;
+  }
 
   async function signInWithGoogle() {
     setError("");
+    if (!requireLegal()) return;
+
     setGoogleLoading(true);
 
     if (!supabaseReady) {
@@ -98,7 +115,6 @@ export default function LoginForm() {
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: {
-            // Prefer school Workspace accounts in the Google account picker
             hd: GOOGLE_HOSTED_DOMAIN,
             prompt: "select_account",
           },
@@ -117,12 +133,12 @@ export default function LoginForm() {
 
   async function signInWithAccount(account: DemoAccount) {
     setError("");
-    setLoadingRole(account.role);
+    if (!requireLegal()) return;
 
+    setLoadingRole(account.role);
     await new Promise((resolve) => setTimeout(resolve, 550));
 
     const user = authenticate(account.email, account.password);
-
     if (!user) {
       setError("Sign-in failed.");
       setLoadingRole(null);
@@ -137,6 +153,8 @@ export default function LoginForm() {
     setError("");
 
     if (next === "google") {
+      if (!requireLegal()) return;
+
       if (supabaseReady) {
         void signInWithGoogle();
         return;
@@ -151,8 +169,8 @@ export default function LoginForm() {
       return;
     }
 
-    // Apple / other — demo only when explicitly enabled
     if (demoEnabled) {
+      if (!requireLegal()) return;
       setProvider(next);
       return;
     }
@@ -203,22 +221,35 @@ export default function LoginForm() {
             </motion.div>
           ) : (
             <motion.div
-              key="buttons"
+              key="form"
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              className="space-y-5"
             >
               <SocialSignInButton
                 provider="google"
                 onClick={() => openProvider("google")}
                 isLoading={googleLoading}
               />
+
+              <LegalConsent
+                checked={acceptedLegal}
+                onCheckedChange={(value) => {
+                  setAcceptedLegal(value);
+                  if (value) {
+                    setLegalInvalid(false);
+                    if (error === LEGAL_REQUIRED) setError("");
+                  }
+                }}
+                invalid={legalInvalid}
+              />
             </motion.div>
           )}
         </AnimatePresence>
 
-        {error ? (
+        {error && !legalInvalid ? (
           <motion.p
             variants={authItemVariants}
             role="alert"
@@ -228,11 +259,17 @@ export default function LoginForm() {
           </motion.p>
         ) : null}
 
-        {/* Access + legal — single clean stack */}
-        <motion.div
-          variants={authItemVariants}
-          className="mt-8 space-y-4 border-t border-black/[0.06] pt-6"
-        >
+        {error && legalInvalid ? (
+          <motion.p
+            variants={authItemVariants}
+            role="alert"
+            className="mt-3 text-[13px] font-medium leading-relaxed text-red-600"
+          >
+            {error}
+          </motion.p>
+        ) : null}
+
+        <motion.div variants={authItemVariants} className="mt-8">
           <p className="text-[13px] leading-relaxed text-neutral-500">
             Only{" "}
             <span className="font-medium text-neutral-800">
@@ -240,38 +277,6 @@ export default function LoginForm() {
             </span>{" "}
             addresses on the IT allowlist can enter. Gmail and other domains are
             blocked. Ask IT if you need access.
-          </p>
-
-          <p className="text-[12px] leading-relaxed text-neutral-400">
-            By continuing, you agree to our{" "}
-            <Link
-              href="/legal/terms"
-              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-            >
-              Terms
-            </Link>
-            ,{" "}
-            <Link
-              href="/legal/privacy"
-              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-            >
-              Privacy Policy
-            </Link>
-            , and{" "}
-            <Link
-              href="/legal/acceptable-use"
-              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-            >
-              Acceptable Use
-            </Link>
-            .{" "}
-            <Link
-              href="/legal/security"
-              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-            >
-              Security &amp; data safety
-            </Link>
-            .
           </p>
         </motion.div>
       </motion.div>
