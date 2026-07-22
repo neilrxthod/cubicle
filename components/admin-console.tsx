@@ -982,7 +982,7 @@ function BookingsTable({ bookings, carts }: { bookings: Booking[]; carts: Cart[]
         <DialogContent className="flex max-h-[85vh] w-[95vw] flex-col overflow-hidden rounded-2xl border-border/60 p-0 shadow-2xl sm:max-w-xl">
           <div className="border-b border-border/70 px-6 py-5">
             <DialogHeader className="text-left">
-              <DialogTitle className="text-[17px] font-semibold tracking-tight">Reassign cart</DialogTitle>
+              <DialogTitle>Reassign cart</DialogTitle>
             </DialogHeader>
             {reassigningBooking ? (
               <p className="mt-2 text-[13px] text-muted-foreground">
@@ -2776,7 +2776,7 @@ function ManageDayDialog({
           {subCategory === "overview" ? (
             <div className="flex-1 overflow-y-auto p-5">
               <div className="max-w-md">
-                <DialogTitle className="text-[18px] font-semibold tracking-tight text-foreground">General Settings</DialogTitle>
+                <DialogTitle>General settings</DialogTitle>
 
                 <div className="mt-6 flex flex-col gap-2.5">
                   <div className="flex items-center justify-between rounded-lg border border-border/80 bg-background px-4 py-3">
@@ -2824,7 +2824,7 @@ function ManageDayDialog({
               {/* Left Column - Scope Settings */}
               <div className="flex-1 p-5 flex flex-col gap-4 overflow-y-auto border-b sm:border-b-0 sm:border-r border-border/40">
                 <div className="shrink-0">
-                  <DialogTitle className="text-[18px] font-semibold tracking-tight text-foreground">Batch Rules</DialogTitle>
+                  <DialogTitle>Batch rules</DialogTitle>
                 </div>
 
                 <div className="space-y-4 mt-2 flex-1 flex flex-col">

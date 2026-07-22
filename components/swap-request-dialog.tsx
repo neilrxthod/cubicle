@@ -2,7 +2,13 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { requestSwap } from "@/lib/actions"
 import { toast } from "@/hooks/use-toast"
 import type { Booking } from "@/lib/types"
@@ -21,29 +27,27 @@ export function SwapRequestDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-136 overflow-hidden rounded-2xl border border-border bg-white p-0">
-        <DialogHeader className="gap-3 border-b border-border px-6 py-6 sm:px-7">
-          <DialogTitle className="text-[1.45rem] font-semibold leading-tight tracking-[-0.02em] text-foreground">
-            Request Swap
-          </DialogTitle>
+      <DialogContent className="gap-0 overflow-hidden rounded-2xl border-border/60 bg-white p-0 shadow-xl sm:max-w-md">
+        <DialogHeader className="space-y-3 border-b border-border/60 px-5 py-5 text-left sm:px-6">
+          <DialogTitle>Request swap</DialogTitle>
           <DialogDescription className="sr-only">
             Request a swap for this cart booking.
           </DialogDescription>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            <span className="rounded-full border border-border bg-white px-2.5 py-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="type-label rounded-full border border-border bg-muted/20 px-2.5 py-1">
               {booking.teacherName}
             </span>
-            <span className="rounded-full border border-border bg-white px-2.5 py-1">
+            <span className="type-label rounded-full border border-border bg-muted/20 px-2.5 py-1">
               {booking.period}
             </span>
-            <span className="rounded-full border border-border bg-white px-2.5 py-1">
+            <span className="type-label rounded-full border border-border bg-muted/20 px-2.5 py-1">
               {format(parseISO(booking.date), "EEE, MMM d")}
             </span>
           </div>
         </DialogHeader>
 
         <form
-          className="flex flex-col gap-5 px-6 py-6 sm:px-7"
+          className="flex flex-col gap-5 px-5 py-5 sm:px-6"
           action={(formData) => {
             setError(null)
             formData.set("bookingId", booking.id)
@@ -53,52 +57,45 @@ export function SwapRequestDialog({
                 setError(res.error)
                 return
               }
-              toast({ 
-                title: "Request sent", 
-                description: `A swap request has been sent to ${booking.teacherName}.` 
+              toast({
+                title: "Request sent",
+                description: `Swap request sent to ${booking.teacherName}.`,
               })
               router.refresh()
               onClose()
             })
           }}
         >
-          <div className="flex flex-col gap-2">
-            <label
-              htmlFor="reason"
-              className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
-            >
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="reason" className="type-label">
               Reason for swap
             </label>
             <textarea
               id="reason"
               name="reason"
-              placeholder="e.g. I have a special project today and really need this cart."
+              placeholder="e.g. I need this cart for a lab today."
               required
               rows={4}
-              className="w-full rounded-md border border-border bg-white p-3 text-[14px] text-foreground placeholder:text-muted-foreground/65 outline-none transition focus:border-black focus:ring-2 focus:ring-black/5"
+              className="w-full rounded-xl border border-border bg-white p-3 text-[14px] tracking-[-0.011em] text-foreground placeholder:text-muted-foreground outline-none transition focus:border-neutral-400"
             />
           </div>
 
-          {error && (
-            <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {error}
-            </p>
-          )}
+          {error ? <p className="type-body text-red-600">{error}</p> : null}
 
-          <div className="mt-1 flex items-center justify-end gap-2.5">
+          <div className="flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="h-10 rounded-md border border-border bg-white px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-black/40 hover:text-foreground"
+              className="h-9 rounded-full px-4 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={pending}
-              className="h-10 rounded-md border border-black bg-black px-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-black/90 disabled:opacity-60"
+              className="h-9 rounded-full bg-foreground px-5 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {pending ? "Sending..." : "Send Request"}
+              {pending ? "Sending…" : "Send request"}
             </button>
           </div>
         </form>

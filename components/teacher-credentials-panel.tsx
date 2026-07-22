@@ -507,7 +507,7 @@ export function TeacherCredentialsPanel({ teachers }: { teachers: User[] }) {
       <Dialog open={dialogState !== null} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="overflow-hidden rounded-3xl border border-border/80 bg-background p-0 shadow-xl sm:max-w-xl">
           <DialogHeader className="border-b border-border/60 bg-muted/20 px-6 py-4">
-            <DialogTitle className="text-[18px] font-semibold tracking-[-0.02em] text-foreground">
+            <DialogTitle>
               {dialogState?.mode === "create" ? "Create teacher login" : "Edit teacher login"}
             </DialogTitle>
           </DialogHeader>

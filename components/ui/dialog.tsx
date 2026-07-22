@@ -111,7 +111,11 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-lg leading-none font-semibold', className)}
+      className={cn(
+        // Matches app StatBar / page titles: light weight, tight tracking
+        'text-[1.375rem] font-light leading-tight tracking-tight text-foreground sm:text-[1.5rem]',
+        className,
+      )}
       {...props}
     />
   )
@@ -124,7 +128,7 @@ function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn('text-muted-foreground text-sm', className)}
+      className={cn('type-body', className)}
       {...props}
     />
   )
