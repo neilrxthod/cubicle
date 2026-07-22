@@ -55,8 +55,11 @@ export function AuthLayout({
             {children}
           </div>
 
-          <footer className="shrink-0 space-y-2 text-[11px] text-neutral-400 sm:text-[12px]">
-            <div className="flex flex-wrap gap-x-3 gap-y-1">
+          <footer className="shrink-0 border-t border-black/[0.05] pt-4">
+            <nav
+              aria-label="Legal"
+              className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-neutral-400"
+            >
               {LEGAL_LINKS.map((link) => (
                 <Link
                   key={link.href}
@@ -66,8 +69,10 @@ export function AuthLayout({
                   {link.label}
                 </Link>
               ))}
-            </div>
-            <p>&copy; {new Date().getFullYear()} Cubicle. Authorized staff only.</p>
+            </nav>
+            <p className="mt-2 text-[11px] text-neutral-400">
+              © {new Date().getFullYear()} Cubicle. Authorized staff only.
+            </p>
           </footer>
         </div>
       </div>

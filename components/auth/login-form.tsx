@@ -183,10 +183,7 @@ export default function LoginForm() {
         className="w-full"
       >
         <motion.div variants={authItemVariants} className="mb-8">
-          <AuthPageHeader
-            title="Sign in"
-            description={`School Google only (@${SCHOOL_EMAIL_DOMAIN}). Your email must also be on the IT allowlist — personal Gmail is never accepted.`}
-          />
+          <AuthPageHeader title="Sign in" />
         </motion.div>
 
         <AnimatePresence mode="wait">
@@ -211,7 +208,6 @@ export default function LoginForm() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-              className="space-y-3"
             >
               <SocialSignInButton
                 provider="google"
@@ -226,54 +222,58 @@ export default function LoginForm() {
           <motion.p
             variants={authItemVariants}
             role="alert"
-            className="mt-4 text-center text-[13.5px] text-red-600"
+            className="mt-4 text-[13px] leading-relaxed text-red-600"
           >
             {error}
           </motion.p>
         ) : null}
 
-        <motion.p
+        {/* Access + legal — single clean stack */}
+        <motion.div
           variants={authItemVariants}
-          className="mt-6 text-center text-[12.5px] leading-relaxed text-neutral-500"
+          className="mt-8 space-y-4 border-t border-black/[0.06] pt-6"
         >
-          {`Only @${SCHOOL_EMAIL_DOMAIN} addresses on the IT allowlist can enter.
-          Gmail and other domains are blocked. Ask IT if you need access.`}
-        </motion.p>
+          <p className="text-[13px] leading-relaxed text-neutral-500">
+            Only{" "}
+            <span className="font-medium text-neutral-800">
+              @{SCHOOL_EMAIL_DOMAIN}
+            </span>{" "}
+            addresses on the IT allowlist can enter. Gmail and other domains are
+            blocked. Ask IT if you need access.
+          </p>
 
-        <motion.p
-          variants={authItemVariants}
-          className="mt-4 text-center text-[11.5px] leading-relaxed text-neutral-400"
-        >
-          By continuing, you agree to our{" "}
-          <Link
-            href="/legal/terms"
-            className="font-medium text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-          >
-            Terms
-          </Link>
-          ,{" "}
-          <Link
-            href="/legal/privacy"
-            className="font-medium text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-          >
-            Privacy Policy
-          </Link>
-          , and{" "}
-          <Link
-            href="/legal/acceptable-use"
-            className="font-medium text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-          >
-            Acceptable Use
-          </Link>
-          .{" "}
-          <Link
-            href="/legal/security"
-            className="font-medium text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-          >
-            Security &amp; data safety
-          </Link>
-          .
-        </motion.p>
+          <p className="text-[12px] leading-relaxed text-neutral-400">
+            By continuing, you agree to our{" "}
+            <Link
+              href="/legal/terms"
+              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
+            >
+              Terms
+            </Link>
+            ,{" "}
+            <Link
+              href="/legal/privacy"
+              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
+            >
+              Privacy Policy
+            </Link>
+            , and{" "}
+            <Link
+              href="/legal/acceptable-use"
+              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
+            >
+              Acceptable Use
+            </Link>
+            .{" "}
+            <Link
+              href="/legal/security"
+              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
+            >
+              Security &amp; data safety
+            </Link>
+            .
+          </p>
+        </motion.div>
       </motion.div>
     </AuthLayout>
   );
