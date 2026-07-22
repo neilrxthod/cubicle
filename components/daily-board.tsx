@@ -219,18 +219,30 @@ export function DailyBoard({
             ))}
           </div>
 
-          {carts.map((cart) => (
+          {carts.map((cart) => {
+            const isMaintenanceRow = cart.status === "maintenance"
+            return (
             <div
               key={cart.id}
-              className="grid border-b border-neutral-100 bg-white last:border-b-0"
+              className={cn(
+                "grid border-b last:border-b-0",
+                isMaintenanceRow
+                  ? "border-amber-200/70 bg-gradient-to-r from-amber-50/90 via-amber-50/40 to-white"
+                  : "border-neutral-100 bg-white",
+              )}
               style={{ gridTemplateColumns: "minmax(9rem, 1fr) repeat(5, minmax(0, 1fr))" }}
             >
-              <div className="flex items-center justify-between gap-2 border-r border-neutral-100 px-3 py-2.5">
+              <div
+                className={cn(
+                  "flex items-center justify-between gap-2 border-r px-3 py-2.5",
+                  isMaintenanceRow ? "border-amber-200/70" : "border-neutral-100",
+                )}
+              >
                 <div className="min-w-0">
                   <span className="type-body-strong block truncate">{cart.name}</span>
-                  {cart.status === "maintenance" ? (
-                    <span className="block text-[10px] font-medium uppercase tracking-wider text-amber-700">
-                      offline
+                  {isMaintenanceRow ? (
+                    <span className="type-label mt-0.5 block text-amber-700">
+                      Maintenance
                     </span>
                   ) : null}
                 </div>
@@ -238,7 +250,12 @@ export function DailyBoard({
                   type="button"
                   aria-label={`Report issue on ${cart.name}`}
                   onClick={() => setIssueDialog(cart)}
-                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-950"
+                  className={cn(
+                    "flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
+                    isMaintenanceRow
+                      ? "text-amber-600 hover:bg-amber-100/80 hover:text-amber-800"
+                      : "text-neutral-400 hover:bg-neutral-100 hover:text-neutral-950",
+                  )}
                 >
                   <AlertTriangle className="size-3.5" strokeWidth={1.5} />
                 </button>
@@ -255,12 +272,15 @@ export function DailyBoard({
                   return (
                     <div
                       key={period}
+                      title="Cart under maintenance — unavailable"
                       className={cn(
-                        "flex min-h-11 items-center justify-center border-l border-neutral-100 text-neutral-400",
-                        "bg-[repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.04)_5px,rgba(0,0,0,0.04)_6px)]",
+                        "flex min-h-11 items-center justify-center",
+                        "border-l border-amber-200/70",
+                        "bg-gradient-to-br from-amber-50/90 via-amber-50/45 to-white",
+                        "text-amber-600",
                       )}
                     >
-                      <Wrench className="size-3" strokeWidth={1.5} />
+                      <Wrench className="size-3.5" strokeWidth={1.5} />
                     </div>
                   )
                 }
@@ -337,7 +357,8 @@ export function DailyBoard({
                 )
               })}
             </div>
-          ))}
+            )
+          })}
           </div>
         </div>
       </div>
