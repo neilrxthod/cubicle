@@ -12,10 +12,10 @@ type LegalConsentProps = {
 };
 
 const linkClass =
-  "text-neutral-800 underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-500";
+  "font-medium text-neutral-900 underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-500";
 
 /**
- * Minimal legal acceptance row.
+ * Required legal acceptance before Google sign-in.
  */
 export function LegalConsent({
   checked,
@@ -24,45 +24,71 @@ export function LegalConsent({
   className,
 }: LegalConsentProps) {
   return (
-    <div className={cn("flex items-start gap-2.5", className)}>
-      <Checkbox
-        id="auth-legal-consent"
-        checked={checked}
-        onCheckedChange={(value) => onCheckedChange(value === true)}
-        aria-invalid={invalid || undefined}
+    <div className={cn("space-y-1.5", className)}>
+      <div
         className={cn(
-          "mt-0.5 shrink-0",
-          invalid && "border-red-400 aria-invalid:border-red-400",
-        )}
-      />
-      <label
-        htmlFor="auth-legal-consent"
-        className={cn(
-          "cursor-pointer select-none text-[12px] leading-[1.5] text-neutral-500",
-          invalid && "text-red-600",
+          "flex items-start gap-2.5 rounded-lg px-0.5 py-0.5",
+          invalid && "rounded-lg ring-1 ring-red-200",
         )}
       >
-        I agree to the{" "}
-        <Link href="/legal/terms" className={linkClass} onClick={(e) => e.stopPropagation()}>
-          Terms
-        </Link>
-        ,{" "}
-        <Link href="/legal/privacy" className={linkClass} onClick={(e) => e.stopPropagation()}>
-          Privacy
-        </Link>
-        ,{" "}
-        <Link
-          href="/legal/acceptable-use"
-          className={linkClass}
-          onClick={(e) => e.stopPropagation()}
+        <Checkbox
+          id="auth-legal-consent"
+          checked={checked}
+          onCheckedChange={(value) => onCheckedChange(value === true)}
+          aria-invalid={invalid || undefined}
+          aria-required
+          className={cn(
+            "mt-0.5 shrink-0",
+            invalid && "border-red-500 data-checked:border-neutral-950",
+          )}
+        />
+        <label
+          htmlFor="auth-legal-consent"
+          className={cn(
+            "cursor-pointer select-none text-[12.5px] leading-[1.5] text-neutral-600",
+            invalid && "text-red-700",
+          )}
         >
-          Acceptable Use
-        </Link>
-        {" & "}
-        <Link href="/legal/security" className={linkClass} onClick={(e) => e.stopPropagation()}>
-          Security
-        </Link>
-      </label>
+          I agree to the{" "}
+          <Link
+            href="/legal/terms"
+            className={linkClass}
+            onClick={(e) => e.stopPropagation()}
+          >
+            Terms
+          </Link>
+          ,{" "}
+          <Link
+            href="/legal/privacy"
+            className={linkClass}
+            onClick={(e) => e.stopPropagation()}
+          >
+            Privacy
+          </Link>
+          ,{" "}
+          <Link
+            href="/legal/acceptable-use"
+            className={linkClass}
+            onClick={(e) => e.stopPropagation()}
+          >
+            Acceptable Use
+          </Link>
+          {" & "}
+          <Link
+            href="/legal/security"
+            className={linkClass}
+            onClick={(e) => e.stopPropagation()}
+          >
+            Security
+          </Link>
+          <span className="text-neutral-400"> (required)</span>
+        </label>
+      </div>
+      {invalid ? (
+        <p role="alert" className="pl-7 text-[12px] font-medium text-red-600">
+          You must accept to sign in.
+        </p>
+      ) : null}
     </div>
   );
 }

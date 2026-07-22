@@ -42,6 +42,9 @@ const LOGIN_ERRORS: Record<string, string> = {
   access_denied: "Sign-in denied.",
 };
 
+const LEGAL_REQUIRED_MSG =
+  "You must accept the Terms and policies before signing in.";
+
 function messageForError(code: string | null): string {
   if (!code) return "";
   return LOGIN_ERRORS[code] ?? "Sign-in failed.";
@@ -76,14 +79,23 @@ export default function LoginForm() {
     if (code) setError(messageForError(code));
   }, [searchParams]);
 
+  /** Hard gate: no OAuth / no session without legal acceptance. */
+  function requireLegalAcceptance(): boolean {
+    if (acceptedLegal) {
+      setLegalInvalid(false);
+      return true;
+    }
+    setLegalInvalid(true);
+    setError(LEGAL_REQUIRED_MSG);
+    setGoogleLoading(false);
+    setLoadingRole(null);
+    return false;
+  }
+
   async function signInWithGoogle() {
     setError("");
-    if (!acceptedLegal) {
-      setLegalInvalid(true);
-      setError("Accept the terms to continue.");
-      return;
-    }
-    setLegalInvalid(false);
+    if (!requireLegalAcceptance()) return;
+
     setGoogleLoading(true);
 
     if (!supabaseReady) {
@@ -116,6 +128,8 @@ export default function LoginForm() {
 
   async function signInWithAccount(account: DemoAccount) {
     setError("");
+    if (!requireLegalAcceptance()) return;
+
     setLoadingRole(account.role);
     await new Promise((r) => setTimeout(r, 400));
     const user = authenticate(account.email, account.password);
@@ -130,12 +144,8 @@ export default function LoginForm() {
 
   function handleGoogleClick() {
     setError("");
-    if (!acceptedLegal) {
-      setLegalInvalid(true);
-      setError("Accept the terms to continue.");
-      return;
-    }
-    setLegalInvalid(false);
+    if (!requireLegalAcceptance()) return;
+
     if (supabaseReady) {
       void signInWithGoogle();
       return;
@@ -199,12 +209,26 @@ export default function LoginForm() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="space-y-6"
+              className="space-y-5"
             >
+              {/* Legal first — must accept before continue */}
+              <LegalConsent
+                checked={acceptedLegal}
+                onCheckedChange={(value) => {
+                  setAcceptedLegal(value);
+                  if (value) {
+                    setLegalInvalid(false);
+                    if (error === LEGAL_REQUIRED_MSG) setError("");
+                  }
+                }}
+                invalid={legalInvalid}
+              />
+
               <button
                 type="button"
                 onClick={handleGoogleClick}
                 disabled={googleLoading}
+                aria-disabled={!acceptedLegal}
                 className={cn(
                   "flex h-11 w-full items-center justify-center gap-2.5 rounded-full",
                   "bg-neutral-950 text-[14px] font-medium tracking-[-0.01em] text-white",
@@ -212,6 +236,7 @@ export default function LoginForm() {
                   "hover:opacity-90 active:scale-[0.99]",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950/20 focus-visible:ring-offset-2",
                   "disabled:pointer-events-none disabled:opacity-50",
+                  !acceptedLegal && !googleLoading && "opacity-70",
                 )}
               >
                 {googleLoading ? (
@@ -224,22 +249,19 @@ export default function LoginForm() {
                 {googleLoading ? "Connecting…" : "Continue with Google"}
               </button>
 
-              <LegalConsent
-                checked={acceptedLegal}
-                onCheckedChange={(value) => {
-                  setAcceptedLegal(value);
-                  if (value) {
-                    setLegalInvalid(false);
-                    if (error === "Accept the terms to continue.") setError("");
-                  }
-                }}
-                invalid={legalInvalid}
-              />
-
-              {error ? (
+              {error && !legalInvalid ? (
                 <p
                   role="alert"
                   className="text-center text-[12px] text-red-600"
+                >
+                  {error}
+                </p>
+              ) : null}
+
+              {error && legalInvalid ? (
+                <p
+                  role="alert"
+                  className="text-center text-[12px] font-medium text-red-600"
                 >
                   {error}
                 </p>
