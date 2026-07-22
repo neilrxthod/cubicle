@@ -3,15 +3,25 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import {
+  clearSession,
   getSessionSnapshot,
   setSession,
   subscribeToSession,
 } from "@/lib/auth/session";
+import { isSchoolEmail } from "@/lib/auth/school-domain";
 import { toPlatformSession } from "@/lib/auth/map-session";
 import { PlatformBootstrap } from "@/components/app/platform-bootstrap";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { Role, SessionUser } from "@/lib/types";
 import type { UserRole } from "@/lib/auth/types";
+
+function LoadingScreen() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#fafafa]">
+      <div className="size-6 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
+    </div>
+  );
+}
 
 export function RequirePlatformAuth({
   role,
@@ -53,20 +63,25 @@ export function RequirePlatformAuth({
 
         if (cancelled) return;
 
-        if (!user?.email) {
+        if (!user?.email || !isSchoolEmail(user.email)) {
+          if (user && !isSchoolEmail(user.email ?? "")) {
+            await supabase.auth.signOut();
+          }
           setRestoring(false);
           return;
         }
 
         const { data: profile } = await supabase
           .from("profiles")
-          .select("id, email, name, role, avatar_url, title, department, phone, bio, notify_email, notify_issues")
+          .select(
+            "id, email, name, role, avatar_url, title, department, phone, bio, notify_email, notify_issues",
+          )
           .eq("id", user.id)
           .maybeSingle();
 
         if (cancelled) return;
 
-        if (!profile) {
+        if (!profile || !isSchoolEmail(profile.email)) {
           setRestoring(false);
           return;
         }
@@ -104,6 +119,15 @@ export function RequirePlatformAuth({
     };
   }, []);
 
+  // Enforce school domain on any client session (blocks stale demo sessions).
+  useEffect(() => {
+    if (restoring || !session) return;
+    if (isSupabaseConfigured() && !isSchoolEmail(session.email)) {
+      clearSession();
+      router.replace("/login?error=invalid_domain");
+    }
+  }, [session, restoring, router]);
+
   useEffect(() => {
     if (restoring) return;
     if (session === null) {
@@ -116,24 +140,18 @@ export function RequirePlatformAuth({
   }, [session, role, router, restoring]);
 
   if (restoring || !session) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#fafafa]">
-        <div className="size-6 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
-      </div>
-    );
+    return <LoadingScreen />;
+  }
+
+  if (isSupabaseConfigured() && !isSchoolEmail(session.email)) {
+    return <LoadingScreen />;
   }
 
   if (role && session.role !== role) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#fafafa]">
-        <div className="size-6 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   return (
-    <PlatformBootstrap>
-      {children(toPlatformSession(session))}
-    </PlatformBootstrap>
+    <PlatformBootstrap>{children(toPlatformSession(session))}</PlatformBootstrap>
   );
 }

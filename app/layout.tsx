@@ -6,11 +6,25 @@ import { cn } from "@/lib/utils";
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://mycubicle.app"),
   title: {
     default: "Cubicle",
     template: "%s · Cubicle",
   },
-  description: "Book laptop carts by period. School resource scheduling for teachers and IT.",
+  description:
+    "School laptop cart scheduling for authorized staff. Google sign-in for @rbe.sk.ca allowlisted accounts only.",
+  robots: {
+    index: false,
+    follow: false,
+  },
+  openGraph: {
+    title: "Cubicle",
+    description:
+      "Book laptop carts by period. Authorized school staff only.",
+    url: "https://mycubicle.app",
+    siteName: "Cubicle",
+    type: "website",
+  },
 };
 
 export default function RootLayout({

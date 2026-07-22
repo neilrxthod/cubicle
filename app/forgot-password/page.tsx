@@ -1,5 +1,6 @@
-import { ForgotPasswordClient } from "@/components/auth/auth-clients";
+import { redirect } from "next/navigation";
 
+/** Password reset is unused — staff authenticate with Google. */
 export default function ForgotPasswordPage() {
-  return <ForgotPasswordClient />;
+  redirect("/login");
 }

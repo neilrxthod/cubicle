@@ -1,5 +1,6 @@
-import { SignupClient } from "@/components/auth/auth-clients";
+import { redirect } from "next/navigation";
 
+/** Public signup is disabled — school Google + IT allowlist only. */
 export default function SignupPage() {
-  return <SignupClient />;
+  redirect("/login");
 }

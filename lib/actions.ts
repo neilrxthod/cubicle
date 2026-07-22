@@ -895,6 +895,16 @@ export async function signOutAction() {
 
   clearSession();
 
+  // Force fresh platform hydrate on next sign-in (avoid stale user data).
+  try {
+    const { markPlatformRemoteHydrated } = await import(
+      "@/lib/data/platform-store"
+    );
+    markPlatformRemoteHydrated(false);
+  } catch {
+    // ignore
+  }
+
   if (useRemote()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");

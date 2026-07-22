@@ -308,7 +308,7 @@ export function SettingsForm({ user }: { user: SessionUser }) {
             </p>
           </div>
 
-          <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-150 border-neutral-100">
+          <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-100">
             <label className="flex cursor-pointer items-center justify-between gap-4 px-4 py-3.5">
               <div className="min-w-0">
                 <p className="text-[14px] font-medium text-neutral-900">

@@ -1,0 +1,3 @@
+# Cubicle is a private school staff application — do not index.
+User-agent: *
+Disallow: /
