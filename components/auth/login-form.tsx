@@ -18,6 +18,7 @@ import {
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { AuthError } from "./auth-error";
 import { AuthLayout } from "./auth-layout";
 import { LegalConsent } from "./legal-consent";
 import {
@@ -64,6 +65,7 @@ export default function LoginForm() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [legalInvalid, setLegalInvalid] = useState(false);
+  const [legalShakeKey, setLegalShakeKey] = useState(0);
   const [error, setError] = useState("");
 
   const supabaseReady = isSupabaseConfigured();
@@ -86,6 +88,7 @@ export default function LoginForm() {
       return true;
     }
     setLegalInvalid(true);
+    setLegalShakeKey((k) => k + 1);
     setError(LEGAL_REQUIRED_MSG);
     setGoogleLoading(false);
     setLoadingRole(null);
@@ -211,7 +214,6 @@ export default function LoginForm() {
               transition={{ duration: 0.15 }}
               className="space-y-5"
             >
-              {/* Legal first — must accept before continue */}
               <LegalConsent
                 checked={acceptedLegal}
                 onCheckedChange={(value) => {
@@ -222,6 +224,7 @@ export default function LoginForm() {
                   }
                 }}
                 invalid={legalInvalid}
+                shakeKey={legalShakeKey}
               />
 
               <button
@@ -249,23 +252,8 @@ export default function LoginForm() {
                 {googleLoading ? "Connecting…" : "Continue with Google"}
               </button>
 
-              {error && !legalInvalid ? (
-                <p
-                  role="alert"
-                  className="text-center text-[12px] text-red-600"
-                >
-                  {error}
-                </p>
-              ) : null}
-
-              {error && legalInvalid ? (
-                <p
-                  role="alert"
-                  className="text-center text-[12px] font-medium text-red-600"
-                >
-                  {error}
-                </p>
-              ) : null}
+              {/* General errors (allowlist, OAuth, config) — not the legal inline hint */}
+              <AuthError message={!legalInvalid ? error : null} />
             </motion.div>
           )}
         </AnimatePresence>
