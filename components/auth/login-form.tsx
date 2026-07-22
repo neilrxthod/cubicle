@@ -17,12 +17,12 @@ import {
 } from "@/lib/auth/school-domain";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils";
+import Link from "next/link";
 import { AuthLayout } from "./auth-layout";
-import { LegalConsent } from "./legal-consent";
 import {
-  GoogleIcon,
+  AuthPageHeader,
   SocialAccountPicker,
+  SocialSignInButton,
   type AuthProvider,
 } from "./auth-ui";
 
@@ -32,24 +32,22 @@ const roleAccent: Record<DemoAccount["role"], string> = {
 };
 
 const LOGIN_ERRORS: Record<string, string> = {
-  not_allowed: `Not on the IT allowlist. Contact IT.`,
-  invalid_domain: `Only @${SCHOOL_EMAIL_DOMAIN} accounts can sign in.`,
-  auth_failed: "Sign-in failed. Try again.",
-  missing_code: "Sign-in was cancelled.",
-  no_email: "No email returned from Google.",
-  allowlist_error: "Could not verify access.",
-  session_bridge: "Could not start session.",
-  access_denied: "Sign-in denied.",
+  not_allowed: `Your @${SCHOOL_EMAIL_DOMAIN} account is not on the school allowlist. Contact IT to be added.`,
+  invalid_domain: `Only @${SCHOOL_EMAIL_DOMAIN} Google accounts can sign in. Gmail and other domains are blocked.`,
+  auth_failed: "Google sign-in failed. Please try again.",
+  missing_code: "Sign-in was cancelled or incomplete. Please try again.",
+  no_email: "Google did not return an email address for this account.",
+  allowlist_error: "Could not verify school access. Try again or contact IT.",
+  session_bridge: "Signed in, but we could not start your session. Try again.",
+  access_denied: "Google sign-in was denied.",
 };
-
-const LEGAL_REQUIRED_MSG =
-  "You must accept the Terms and policies before signing in.";
 
 function messageForError(code: string | null): string {
   if (!code) return "";
-  return LOGIN_ERRORS[code] ?? "Sign-in failed.";
+  return LOGIN_ERRORS[code] ?? "Sign-in failed. Please try again.";
 }
 
+/** Demo teacher/admin picker only when explicitly enabled (local). Never on production. */
 function isDemoLoginEnabled() {
   return process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === "true";
 }
@@ -62,8 +60,6 @@ export default function LoginForm() {
     null,
   );
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [acceptedLegal, setAcceptedLegal] = useState(false);
-  const [legalInvalid, setLegalInvalid] = useState(false);
   const [error, setError] = useState("");
 
   const supabaseReady = isSupabaseConfigured();
@@ -71,35 +67,26 @@ export default function LoginForm() {
 
   useEffect(() => {
     const existing = getSession();
-    if (existing) router.replace(getDashboardPath(existing.role));
+    if (existing) {
+      router.replace(getDashboardPath(existing.role));
+    }
   }, [router]);
 
   useEffect(() => {
     const code = searchParams.get("error");
-    if (code) setError(messageForError(code));
-  }, [searchParams]);
-
-  /** Hard gate: no OAuth / no session without legal acceptance. */
-  function requireLegalAcceptance(): boolean {
-    if (acceptedLegal) {
-      setLegalInvalid(false);
-      return true;
+    if (code) {
+      setError(messageForError(code));
     }
-    setLegalInvalid(true);
-    setError(LEGAL_REQUIRED_MSG);
-    setGoogleLoading(false);
-    setLoadingRole(null);
-    return false;
-  }
+  }, [searchParams]);
 
   async function signInWithGoogle() {
     setError("");
-    if (!requireLegalAcceptance()) return;
-
     setGoogleLoading(true);
 
     if (!supabaseReady) {
-      setError("Google sign-in is not configured.");
+      setError(
+        "Google sign-in is not configured on this server. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel Environment Variables, then redeploy.",
+      );
       setGoogleLoading(false);
       return;
     }
@@ -111,50 +98,71 @@ export default function LoginForm() {
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: {
+            // Prefer school Workspace accounts in the Google account picker
             hd: GOOGLE_HOSTED_DOMAIN,
             prompt: "select_account",
           },
         },
       });
+
       if (oauthError) {
         setError(oauthError.message);
         setGoogleLoading(false);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign-in failed.");
+      setError(err instanceof Error ? err.message : "Google sign-in failed.");
       setGoogleLoading(false);
     }
   }
 
   async function signInWithAccount(account: DemoAccount) {
     setError("");
-    if (!requireLegalAcceptance()) return;
-
     setLoadingRole(account.role);
-    await new Promise((r) => setTimeout(r, 400));
+
+    await new Promise((resolve) => setTimeout(resolve, 550));
+
     const user = authenticate(account.email, account.password);
+
     if (!user) {
       setError("Sign-in failed.");
       setLoadingRole(null);
       return;
     }
+
     setSession(user);
     router.push(getDashboardPath(user.role));
   }
 
-  function handleGoogleClick() {
+  function openProvider(next: AuthProvider) {
     setError("");
-    if (!requireLegalAcceptance()) return;
 
-    if (supabaseReady) {
-      void signInWithGoogle();
+    if (next === "google") {
+      if (supabaseReady) {
+        void signInWithGoogle();
+        return;
+      }
+      if (demoEnabled) {
+        setProvider(next);
+        return;
+      }
+      setError(
+        "Google sign-in is not configured. Add Supabase keys in Vercel Environment Variables and redeploy.",
+      );
       return;
     }
+
+    // Apple / other — demo only when explicitly enabled
     if (demoEnabled) {
-      setProvider("google");
+      setProvider(next);
       return;
     }
-    setError("Google sign-in is not configured.");
+    setError("Only Google sign-in is available.");
+  }
+
+  function closePicker() {
+    setProvider(null);
+    setError("");
+    setLoadingRole(null);
   }
 
   const accountOptions = DEMO_ACCOUNTS.map((account) => ({
@@ -175,100 +183,97 @@ export default function LoginForm() {
         className="w-full"
       >
         <motion.div variants={authItemVariants} className="mb-8">
-          <h1 className="text-[1.875rem] font-semibold tracking-[-0.045em] text-neutral-950">
-            Sign in
-          </h1>
-          <p className="mt-2 text-[13.5px] text-neutral-500">
-            @{SCHOOL_EMAIL_DOMAIN} · allowlist only
-          </p>
+          <AuthPageHeader title="Sign in" />
         </motion.div>
 
         <AnimatePresence mode="wait">
           {provider && demoEnabled ? (
             <motion.div
               key="picker"
-              initial={{ opacity: 0, y: 4 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
             >
               <SocialAccountPicker
                 provider={provider}
                 accounts={accountOptions}
-                onCancel={() => {
-                  setProvider(null);
-                  setError("");
-                  setLoadingRole(null);
-                }}
+                onCancel={closePicker}
               />
             </motion.div>
           ) : (
             <motion.div
-              key="form"
-              initial={{ opacity: 0, y: 4 }}
+              key="buttons"
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="space-y-5"
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
             >
-              {/* Legal first — must accept before continue */}
-              <LegalConsent
-                checked={acceptedLegal}
-                onCheckedChange={(value) => {
-                  setAcceptedLegal(value);
-                  if (value) {
-                    setLegalInvalid(false);
-                    if (error === LEGAL_REQUIRED_MSG) setError("");
-                  }
-                }}
-                invalid={legalInvalid}
+              <SocialSignInButton
+                provider="google"
+                onClick={() => openProvider("google")}
+                isLoading={googleLoading}
               />
-
-              <button
-                type="button"
-                onClick={handleGoogleClick}
-                disabled={googleLoading}
-                aria-disabled={!acceptedLegal}
-                className={cn(
-                  "flex h-11 w-full items-center justify-center gap-2.5 rounded-full",
-                  "bg-neutral-950 text-[14px] font-medium tracking-[-0.01em] text-white",
-                  "transition-[opacity,transform] duration-150",
-                  "hover:opacity-90 active:scale-[0.99]",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950/20 focus-visible:ring-offset-2",
-                  "disabled:pointer-events-none disabled:opacity-50",
-                  !acceptedLegal && !googleLoading && "opacity-70",
-                )}
-              >
-                {googleLoading ? (
-                  <span className="size-4 animate-spin rounded-full border-2 border-white/25 border-t-white" />
-                ) : (
-                  <span className="flex size-[18px] items-center justify-center rounded-full bg-white">
-                    <GoogleIcon width={12} height={12} />
-                  </span>
-                )}
-                {googleLoading ? "Connecting…" : "Continue with Google"}
-              </button>
-
-              {error && !legalInvalid ? (
-                <p
-                  role="alert"
-                  className="text-center text-[12px] text-red-600"
-                >
-                  {error}
-                </p>
-              ) : null}
-
-              {error && legalInvalid ? (
-                <p
-                  role="alert"
-                  className="text-center text-[12px] font-medium text-red-600"
-                >
-                  {error}
-                </p>
-              ) : null}
             </motion.div>
           )}
         </AnimatePresence>
+
+        {error ? (
+          <motion.p
+            variants={authItemVariants}
+            role="alert"
+            className="mt-4 text-[13px] leading-relaxed text-red-600"
+          >
+            {error}
+          </motion.p>
+        ) : null}
+
+        {/* Access + legal — single clean stack */}
+        <motion.div
+          variants={authItemVariants}
+          className="mt-8 space-y-4 border-t border-black/[0.06] pt-6"
+        >
+          <p className="text-[13px] leading-relaxed text-neutral-500">
+            Only{" "}
+            <span className="font-medium text-neutral-800">
+              @{SCHOOL_EMAIL_DOMAIN}
+            </span>{" "}
+            addresses on the IT allowlist can enter. Gmail and other domains are
+            blocked. Ask IT if you need access.
+          </p>
+
+          <p className="text-[12px] leading-relaxed text-neutral-400">
+            By continuing, you agree to our{" "}
+            <Link
+              href="/legal/terms"
+              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
+            >
+              Terms
+            </Link>
+            ,{" "}
+            <Link
+              href="/legal/privacy"
+              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
+            >
+              Privacy Policy
+            </Link>
+            , and{" "}
+            <Link
+              href="/legal/acceptable-use"
+              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
+            >
+              Acceptable Use
+            </Link>
+            .{" "}
+            <Link
+              href="/legal/security"
+              className="text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
+            >
+              Security &amp; data safety
+            </Link>
+            .
+          </p>
+        </motion.div>
       </motion.div>
     </AuthLayout>
   );
