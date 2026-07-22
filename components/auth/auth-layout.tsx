@@ -2,7 +2,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { AUTH_IMAGE } from "@/lib/auth/constants";
-import { LEGAL_LINKS } from "@/lib/legal/constants";
 import { CubicleWordmark } from "./wordmark";
 
 type AuthLayoutProps = {
@@ -55,23 +54,16 @@ export function AuthLayout({
             {children}
           </div>
 
-          <footer className="shrink-0 pt-1">
-            <p className="text-[11px] leading-relaxed text-neutral-400">
-              {LEGAL_LINKS.map((link, i) => (
-                <span key={link.href}>
-                  {i > 0 ? (
-                    <span className="mx-1.5 text-neutral-300">·</span>
-                  ) : null}
-                  <Link
-                    href={link.href}
-                    className="transition-colors hover:text-neutral-600"
-                  >
-                    {link.shortLabel}
-                  </Link>
-                </span>
-              ))}
+          <footer className="shrink-0 pt-2">
+            <p className="text-[11px] text-neutral-400">
+              <Link
+                href="/legal"
+                className="transition-colors hover:text-neutral-600"
+              >
+                Legal
+              </Link>
               <span className="mx-1.5 text-neutral-300">·</span>
-              <span>© {new Date().getFullYear()} Cubicle</span>
+              © {new Date().getFullYear()} Cubicle
             </p>
           </footer>
         </div>
