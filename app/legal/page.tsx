@@ -15,30 +15,40 @@ export const metadata: Metadata = {
 export default function LegalIndexPage() {
   return (
     <LegalShell
-      title="Legal & compliance"
-      description={`${LEGAL_PRODUCT} publishes terms, privacy, security, and acceptable-use documents for authorized school staff and administrators.`}
+      title="Legal"
+      description="Policies for authorized school staff using Cubicle."
       effectiveDate={LEGAL_EFFECTIVE_DATE}
+      variant="index"
     >
-      <div className="grid gap-3">
+      <ul className="divide-y divide-neutral-100 border-y border-neutral-100">
         {LEGAL_LINKS.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="group flex items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50/80 px-4 py-3 transition-colors hover:border-neutral-300 hover:bg-white"
-          >
-            <span className="text-[14.5px] font-medium text-neutral-950">
-              {link.label}
-            </span>
-            <span className="text-[13px] text-neutral-400 transition-colors group-hover:text-neutral-700">
-              View →
-            </span>
-          </Link>
+          <li key={link.href}>
+            <Link
+              href={link.href}
+              className="group flex items-baseline justify-between gap-6 py-5 transition-colors"
+            >
+              <div className="min-w-0">
+                <p className="text-[15px] font-medium tracking-[-0.01em] text-neutral-950 group-hover:text-neutral-700">
+                  {link.label}
+                </p>
+                <p className="mt-1 text-[13.5px] leading-relaxed text-neutral-500">
+                  {link.description}
+                </p>
+              </div>
+              <span
+                aria-hidden
+                className="shrink-0 text-[14px] text-neutral-300 transition-colors group-hover:text-neutral-500"
+              >
+                →
+              </span>
+            </Link>
+          </li>
         ))}
-      </div>
-      <p className="mt-6 text-[13.5px] leading-relaxed text-neutral-500">
-        These materials support professional school deployment. Have your
-        division IT and privacy contacts review them before formal policy
-        adoption.
+      </ul>
+
+      <p className="mt-8 text-[13px] leading-relaxed text-neutral-400">
+        Effective {LEGAL_EFFECTIVE_DATE}. Review with division IT and privacy
+        contacts before formal board adoption.
       </p>
     </LegalShell>
   );
