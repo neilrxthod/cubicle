@@ -42,6 +42,13 @@ export function BookDialog({
               const res = await createBooking(formData)
               if (res && "error" in res && res.error) {
                 setError(res.error)
+                // Board may have changed (e.g. lost a race to another teacher).
+                toast({
+                  title: "Could not book",
+                  description: res.error,
+                  variant: "destructive",
+                })
+                router.refresh()
                 return
               }
               toast({ title: "Booking confirmed", description: `${cart.name} · ${period}` })

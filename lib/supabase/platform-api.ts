@@ -105,6 +105,22 @@ export async function fetchPlatformState(): Promise<PlatformState> {
   };
 }
 
+/** Map Postgres/Supabase errors to teacher-friendly messages. */
+function mapBookingDbError(message: string | undefined): string | undefined {
+  if (!message) return undefined;
+  const lower = message.toLowerCase();
+  // unique (cart_id, date, period) — race: two teachers book same slot
+  if (
+    lower.includes("duplicate key") ||
+    lower.includes("unique constraint") ||
+    lower.includes("bookings_cart_id_date_period") ||
+    (lower.includes("unique") && lower.includes("violat"))
+  ) {
+    return "That cart was just booked for this period. Pick another slot.";
+  }
+  return message;
+}
+
 export async function dbCreateBooking(input: {
   cartId: string;
   date: string;
@@ -126,7 +142,7 @@ export async function dbCreateBooking(input: {
     subject: input.subject ?? null,
     notes: input.notes ?? null,
   });
-  return { error: error?.message };
+  return { error: mapBookingDbError(error?.message) };
 }
 
 export async function dbDeleteBooking(bookingId: string): Promise<{ error?: string }> {
@@ -150,7 +166,7 @@ export async function dbReassignBooking(
     .from("bookings")
     .update({ cart_id: cartId })
     .eq("id", bookingId);
-  return { error: error?.message };
+  return { error: mapBookingDbError(error?.message) };
 }
 
 export async function dbReportIssue(input: {

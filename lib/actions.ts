@@ -164,11 +164,26 @@ export async function createBooking(formData: FormData): Promise<Result> {
       subject: subject || undefined,
       notes: notes || undefined,
     });
+    // Always refresh so a lost race shows the other teacher's booking on the board.
+    const refreshed = await refreshRemote();
     if (error) return { ok: false, error };
-    return refreshRemote();
+    if (!refreshed.ok) return refreshed;
+    return { ok: true };
   }
 
+  // Local demo path: re-check inside mutate to reduce double-click races in one tab.
+  let localConflict = false;
   mutate((draft) => {
+    const taken = draft.bookings.some(
+      (booking) =>
+        booking.cartId === cartId &&
+        booking.date === date &&
+        booking.period === period,
+    );
+    if (taken) {
+      localConflict = true;
+      return;
+    }
     draft.bookings.unshift({
       id: makeId("bk"),
       cartId,
@@ -182,6 +197,9 @@ export async function createBooking(formData: FormData): Promise<Result> {
       createdAt: new Date().toISOString(),
     });
   });
+  if (localConflict) {
+    return { ok: false, error: "That slot is already booked." };
+  }
 
   return { ok: true };
 }
