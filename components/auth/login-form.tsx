@@ -20,7 +20,6 @@ import { createClient } from "@/lib/supabase/client";
 import { AuthLayout } from "./auth-layout";
 import { LegalConsent } from "./legal-consent";
 import {
-  AuthPageHeader,
   SocialAccountPicker,
   SocialSignInButton,
   type AuthProvider,
@@ -32,13 +31,13 @@ const roleAccent: Record<DemoAccount["role"], string> = {
 };
 
 const LOGIN_ERRORS: Record<string, string> = {
-  not_allowed: `Your @${SCHOOL_EMAIL_DOMAIN} account is not on the school allowlist. Contact IT to be added.`,
-  invalid_domain: `Only @${SCHOOL_EMAIL_DOMAIN} Google accounts can sign in. Gmail and other domains are blocked.`,
+  not_allowed: `Your @${SCHOOL_EMAIL_DOMAIN} account is not on the IT allowlist. Contact IT.`,
+  invalid_domain: `Only @${SCHOOL_EMAIL_DOMAIN} accounts can sign in.`,
   auth_failed: "Google sign-in failed. Please try again.",
-  missing_code: "Sign-in was cancelled or incomplete. Please try again.",
-  no_email: "Google did not return an email address for this account.",
-  allowlist_error: "Could not verify school access. Try again or contact IT.",
-  session_bridge: "Signed in, but we could not start your session. Try again.",
+  missing_code: "Sign-in was cancelled or incomplete.",
+  no_email: "Google did not return an email for this account.",
+  allowlist_error: "Could not verify school access. Try again.",
+  session_bridge: "Could not start your session. Try again.",
   access_denied: "Google sign-in was denied.",
 };
 
@@ -47,7 +46,6 @@ function messageForError(code: string | null): string {
   return LOGIN_ERRORS[code] ?? "Sign-in failed. Please try again.";
 }
 
-/** Demo teacher/admin picker only when explicitly enabled (local). Never on production. */
 function isDemoLoginEnabled() {
   return process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === "true";
 }
@@ -76,25 +74,21 @@ export default function LoginForm() {
 
   useEffect(() => {
     const code = searchParams.get("error");
-    if (code) {
-      setError(messageForError(code));
-    }
+    if (code) setError(messageForError(code));
   }, [searchParams]);
 
   async function signInWithGoogle() {
     setError("");
     if (!acceptedLegal) {
       setLegalInvalid(true);
-      setError("Accept the Terms and policies to continue.");
+      setError("Accept the terms to continue.");
       return;
     }
     setLegalInvalid(false);
     setGoogleLoading(true);
 
     if (!supabaseReady) {
-      setError(
-        "Google sign-in is not configured on this server. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel Environment Variables, then redeploy.",
-      );
+      setError("Google sign-in is not configured. Check Vercel env vars.");
       setGoogleLoading(false);
       return;
     }
@@ -106,7 +100,6 @@ export default function LoginForm() {
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: {
-            // Prefer school Workspace accounts in the Google account picker
             hd: GOOGLE_HOSTED_DOMAIN,
             prompt: "select_account",
           },
@@ -126,28 +119,23 @@ export default function LoginForm() {
   async function signInWithAccount(account: DemoAccount) {
     setError("");
     setLoadingRole(account.role);
-
-    await new Promise((resolve) => setTimeout(resolve, 550));
-
+    await new Promise((resolve) => setTimeout(resolve, 400));
     const user = authenticate(account.email, account.password);
-
     if (!user) {
       setError("Sign-in failed.");
       setLoadingRole(null);
       return;
     }
-
     setSession(user);
     router.push(getDashboardPath(user.role));
   }
 
   function openProvider(next: AuthProvider) {
     setError("");
-
     if (next === "google") {
       if (!acceptedLegal) {
         setLegalInvalid(true);
-        setError("Accept the Terms and policies to continue.");
+        setError("Accept the terms to continue.");
         return;
       }
       setLegalInvalid(false);
@@ -159,24 +147,14 @@ export default function LoginForm() {
         setProvider(next);
         return;
       }
-      setError(
-        "Google sign-in is not configured. Add Supabase keys in Vercel Environment Variables and redeploy.",
-      );
+      setError("Google sign-in is not configured. Check Vercel env vars.");
       return;
     }
-
-    // Apple / other — demo only when explicitly enabled
     if (demoEnabled) {
       setProvider(next);
       return;
     }
     setError("Only Google sign-in is available.");
-  }
-
-  function closePicker() {
-    setProvider(null);
-    setError("");
-    setLoadingRole(null);
   }
 
   const accountOptions = DEMO_ACCOUNTS.map((account) => ({
@@ -196,8 +174,17 @@ export default function LoginForm() {
         animate="visible"
         className="w-full"
       >
-        <motion.div variants={authItemVariants} className="mb-8">
-          <AuthPageHeader title="Sign in" />
+        {/* Title block — tight hierarchy */}
+        <motion.div variants={authItemVariants} className="mb-7">
+          <h1 className="text-[1.75rem] font-semibold tracking-[-0.04em] text-neutral-950">
+            Sign in
+          </h1>
+          <p className="mt-2 text-[14px] leading-snug text-neutral-500">
+            School Google only ·{" "}
+            <span className="font-medium text-neutral-800">
+              @{SCHOOL_EMAIL_DOMAIN}
+            </span>
+          </p>
         </motion.div>
 
         <AnimatePresence mode="wait">
@@ -212,59 +199,58 @@ export default function LoginForm() {
               <SocialAccountPicker
                 provider={provider}
                 accounts={accountOptions}
-                onCancel={closePicker}
+                onCancel={() => {
+                  setProvider(null);
+                  setError("");
+                  setLoadingRole(null);
+                }}
               />
             </motion.div>
           ) : (
             <motion.div
-              key="buttons"
+              key="form"
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              className="space-y-5"
             >
+              {/* 1. Primary action */}
               <SocialSignInButton
                 provider="google"
                 onClick={() => openProvider("google")}
                 isLoading={googleLoading}
               />
+
+              {/* 2. Legal acceptance */}
+              <LegalConsent
+                checked={acceptedLegal}
+                onCheckedChange={(value) => {
+                  setAcceptedLegal(value);
+                  if (value) {
+                    setLegalInvalid(false);
+                    if (error === "Accept the terms to continue.") setError("");
+                  }
+                }}
+                invalid={legalInvalid}
+              />
+
+              {/* 3. Access rule — one quiet line */}
+              <p className="text-center text-[12px] leading-relaxed text-neutral-400">
+                Allowlist required · Gmail and other domains blocked
+              </p>
+
+              {error ? (
+                <p
+                  role="alert"
+                  className="rounded-lg bg-red-50 px-3 py-2.5 text-center text-[12.5px] leading-relaxed text-red-600"
+                >
+                  {error}
+                </p>
+              ) : null}
             </motion.div>
           )}
         </AnimatePresence>
-
-        {error ? (
-          <motion.p
-            variants={authItemVariants}
-            role="alert"
-            className="mt-4 text-[13px] leading-relaxed text-red-600"
-          >
-            {error}
-          </motion.p>
-        ) : null}
-
-        {/* Access + legal (ReUI c-label-2 checkbox pattern) */}
-        <motion.div
-          variants={authItemVariants}
-          className="mt-8 space-y-4 border-t border-black/[0.06] pt-6"
-        >
-          <p className="text-[13px] leading-relaxed text-neutral-500">
-            Only{" "}
-            <span className="font-medium text-neutral-800">
-              @{SCHOOL_EMAIL_DOMAIN}
-            </span>{" "}
-            addresses on the IT allowlist can enter. Gmail and other domains are
-            blocked. Ask IT if you need access.
-          </p>
-
-          <LegalConsent
-            checked={acceptedLegal}
-            onCheckedChange={(value) => {
-              setAcceptedLegal(value);
-              if (value) setLegalInvalid(false);
-            }}
-            invalid={legalInvalid}
-          />
-        </motion.div>
       </motion.div>
     </AuthLayout>
   );
