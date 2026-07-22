@@ -2,6 +2,7 @@ import type {
   Booking,
   BookingPolicy,
   Cart,
+  EmploymentType,
   Issue,
   Period,
   PlatformState,
@@ -75,6 +76,9 @@ export type DbProfile = {
   avatar_url: string | null;
   notify_email: boolean;
   notify_issues: boolean;
+  employment_type?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 export type DbBookingPolicy = {
@@ -86,7 +90,16 @@ export type DbAllowedEmail = {
   email: string;
   role: string;
   name: string | null;
+  employment_type?: string | null;
+  created_at?: string | null;
 };
+
+function mapEmploymentType(value: string | null | undefined): EmploymentType {
+  if (value === "substitute" || value === "temporary" || value === "permanent") {
+    return value;
+  }
+  return "permanent";
+}
 
 export function mapCart(row: DbCart): Cart {
   return {
@@ -164,8 +177,13 @@ export function mapProfile(row: DbProfile): User {
     avatarUrl: row.avatar_url ?? undefined,
     notifyEmail: row.notify_email,
     notifyIssues: row.notify_issues,
+    employmentType: mapEmploymentType(row.employment_type),
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined,
   };
 }
+
+export { mapEmploymentType };
 
 export function mapBookingPolicy(row: DbBookingPolicy | null): BookingPolicy {
   return {

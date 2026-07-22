@@ -17,11 +17,9 @@ function SettingsView({ user }: { user: SessionUser }) {
   return (
     <DashboardFrame user={user}>
       <div className="mx-auto w-full max-w-3xl">
-        <header className="mb-6 sm:mb-8">
-          <h1 className="type-page-title">Profile</h1>
-          <p className="type-body mt-1.5">
-            Your name and photo appear on bookings and issues.
-          </p>
+        <header className="mb-5 sm:mb-6">
+          <h1 className="type-page-title">Settings</h1>
+          <p className="type-body mt-1">Your profile.</p>
         </header>
         <SettingsForm
           key={user.id + (user.avatarUrl ?? "") + user.name}

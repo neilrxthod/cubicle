@@ -122,6 +122,8 @@ function seed(): PlatformState {
         email: "teacher@cubicle.edu",
         role: "teacher",
         password: "teacher123",
+        employmentType: "permanent",
+        allowlisted: true,
       },
       {
         id: "teacher-2",
@@ -129,6 +131,8 @@ function seed(): PlatformState {
         email: "m.lopez@cubicle.edu",
         role: "teacher",
         password: "demo1234",
+        employmentType: "substitute",
+        allowlisted: true,
       },
       {
         id: "teacher-3",
@@ -136,6 +140,8 @@ function seed(): PlatformState {
         email: "j.park@cubicle.edu",
         role: "teacher",
         password: "demo1234",
+        employmentType: "temporary",
+        allowlisted: true,
       },
       {
         id: "admin-1",
@@ -143,6 +149,8 @@ function seed(): PlatformState {
         email: "admin@cubicle.edu",
         role: "admin",
         password: "admin123",
+        employmentType: "permanent",
+        allowlisted: true,
       },
     ],
     slotRestrictions: [],

@@ -30,12 +30,15 @@ import {
   dbUpdateBookingPolicy,
   dbUpdateIssueStatus,
   dbUpdateProfile,
+  dbUpdateProfileEmployment,
   dbUpsertRestrictions,
   fetchPlatformState,
   isUuid,
 } from "@/lib/supabase/platform-api";
+import { parseEmploymentType } from "@/lib/staff/employment";
 import type {
   CartStatus,
+  EmploymentType,
   Period,
   ProfileUpdate,
   RestrictionCategory,
@@ -89,6 +92,7 @@ function requireSession(): SessionUser | null {
       bio: user.bio ?? session.bio,
       notifyEmail: user.notifyEmail ?? session.notifyEmail ?? true,
       notifyIssues: user.notifyIssues ?? session.notifyIssues ?? true,
+      employmentType: user.employmentType ?? session.employmentType,
     };
   }
 
@@ -98,6 +102,7 @@ function requireSession(): SessionUser | null {
     email: session.email,
     role: session.role,
     avatarUrl: session.avatarUrl,
+    employmentType: session.employmentType,
     title: session.title,
     department: session.department,
     phone: session.phone,
@@ -120,6 +125,9 @@ export async function createBooking(formData: FormData): Promise<Result> {
 
   if (!cartId || !date || !period) {
     return { ok: false, error: "Missing booking details." };
+  }
+  if (!className) {
+    return { ok: false, error: "Class name is required." };
   }
 
   const state = getState();
@@ -160,7 +168,7 @@ export async function createBooking(formData: FormData): Promise<Result> {
       period,
       teacherId: session.id,
       teacherName: session.name,
-      className: className || "Reserved",
+      className,
       subject: subject || undefined,
       notes: notes || undefined,
     });
@@ -191,7 +199,7 @@ export async function createBooking(formData: FormData): Promise<Result> {
       period,
       teacherId: session.id,
       teacherName: session.name,
-      className: className || "Reserved",
+      className,
       subject: subject || undefined,
       notes: notes || undefined,
       createdAt: new Date().toISOString(),
@@ -748,12 +756,31 @@ export async function updateBookingPolicy(
   return { ok: true };
 }
 
+export type CredentialResult = {
+  name: string;
+  email: string;
+  /** Present only for local demo password logins. */
+  password?: string;
+  /** True when staff authenticate with school Google (no password). */
+  googleSignIn: boolean;
+  role: "teacher" | "admin";
+  employmentType: EmploymentType;
+};
+
+function parseStaffRole(value: FormDataEntryValue | null): "teacher" | "admin" {
+  return value === "admin" ? "admin" : "teacher";
+}
+
+function isValidEmailShape(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 /**
- * Add a staff member to the Google allowlist (Supabase) or local demo users.
+ * Add staff to the Google allowlist (production) or local demo users.
  */
-export async function createTeacherCredentials(formData: FormData): Promise<
-  Result<{ name: string; email: string; password: string }>
-> {
+export async function createTeacherCredentials(
+  formData: FormData,
+): Promise<Result<CredentialResult>> {
   const session = requireSession();
   if (!session || session.role !== "admin") {
     return { ok: false, error: "Admin only." };
@@ -761,21 +788,54 @@ export async function createTeacherCredentials(formData: FormData): Promise<
 
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const role = parseStaffRole(formData.get("role"));
+  const employmentType = parseEmploymentType(formData.get("employmentType"));
   const password =
     String(formData.get("password") ?? "").trim() ||
     `Cubicle${Math.floor(1000 + Math.random() * 9000)}`;
 
-  if (!name || !email) return { ok: false, error: "Name and email required." };
+  if (!name) return { ok: false, error: "Name is required." };
+  if (!email) return { ok: false, error: "Email is required." };
+  if (!isValidEmailShape(email)) {
+    return { ok: false, error: "Enter a valid email address." };
+  }
 
-  const domainError = schoolEmailError(email);
-  if (domainError) return { ok: false, error: domainError };
-
+  // School domain is enforced in production (Google allowlist). Local demo is open.
   if (useRemote()) {
-    if (getState().users.some((user) => user.email === email)) {
-      return { ok: false, error: "Email already exists." };
+    const domainError = schoolEmailError(email);
+    if (domainError) return { ok: false, error: domainError };
+
+    const existing = getState().users.find(
+      (user) =>
+        user.email.toLowerCase() === email && user.allowlisted !== false,
+    );
+    if (existing) {
+      return { ok: false, error: "That email is already on the allowlist." };
     }
-    const { error } = await dbAddAllowedEmail({ email, name, role: "teacher" });
-    if (error) return { ok: false, error };
+
+    const { error } = await dbAddAllowedEmail({
+      email,
+      name,
+      role,
+      employmentType,
+    });
+    if (error) {
+      if (
+        error.toLowerCase().includes("duplicate") ||
+        error.toLowerCase().includes("unique")
+      ) {
+        return { ok: false, error: "That email is already on the allowlist." };
+      }
+      // Column may not exist until employment-type.sql is applied.
+      if (error.toLowerCase().includes("employment_type")) {
+        return {
+          ok: false,
+          error:
+            "Database missing employment_type. Run supabase/employment-type.sql in the SQL editor.",
+        };
+      }
+      return { ok: false, error };
+    }
     const refreshed = await refreshRemote();
     if (!refreshed.ok) return refreshed;
     return {
@@ -783,26 +843,34 @@ export async function createTeacherCredentials(formData: FormData): Promise<
       data: {
         name,
         email,
-        password: "(Google sign-in — no password)",
+        googleSignIn: true,
+        role,
+        employmentType,
       },
     };
   }
 
-  if (getState().users.some((user) => user.email === email)) {
+  if (getState().users.some((user) => user.email.toLowerCase() === email)) {
     return { ok: false, error: "Email already exists." };
   }
 
   mutate((draft) => {
     draft.users.push({
-      id: makeId("teacher"),
+      id: makeId(role === "admin" ? "admin" : "teacher"),
       name,
       email,
-      role: "teacher",
+      role,
       password,
+      employmentType,
+      allowlisted: true,
+      pendingInvite: false,
     });
   });
 
-  return { ok: true, data: { name, email, password } };
+  return {
+    ok: true,
+    data: { name, email, password, googleSignIn: false, role, employmentType },
+  };
 }
 
 export async function updateTeacherCredentials(
@@ -816,23 +884,54 @@ export async function updateTeacherCredentials(
 
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const role = parseStaffRole(formData.get("role"));
+  const employmentType = parseEmploymentType(formData.get("employmentType"));
 
-  if (email) {
-    const domainError = schoolEmailError(email);
-    if (domainError) return { ok: false, error: domainError };
+  if (!name) return { ok: false, error: "Name is required." };
+  if (!email) return { ok: false, error: "Email is required." };
+  if (!isValidEmailShape(email)) {
+    return { ok: false, error: "Enter a valid email address." };
   }
 
   if (useRemote()) {
-    const user = getState().users.find((entry) => entry.id === teacherId);
-    if (!user) return { ok: false, error: "Teacher not found." };
-    const { error } = await dbUpdateAllowedEmail(user.email, {
-      name: name || undefined,
-      email: email || undefined,
-    });
-    if (error) return { ok: false, error };
+    const domainError = schoolEmailError(email);
+    if (domainError) return { ok: false, error: domainError };
 
-    // Keep profile in sync when they already signed in
-    if (isUuid(teacherId) && name) {
+    const user = getState().users.find((entry) => entry.id === teacherId);
+    if (!user) return { ok: false, error: "Staff member not found." };
+    if (user.allowlisted === false) {
+      return { ok: false, error: "This person is not on the allowlist." };
+    }
+
+    const conflict = getState().users.find(
+      (entry) =>
+        entry.id !== teacherId &&
+        entry.email.toLowerCase() === email &&
+        entry.allowlisted !== false,
+    );
+    if (conflict) {
+      return { ok: false, error: "That email is already on the allowlist." };
+    }
+
+    const { error } = await dbUpdateAllowedEmail(user.email, {
+      name,
+      email,
+      role,
+      employmentType,
+    });
+    if (error) {
+      if (error.toLowerCase().includes("employment_type")) {
+        return {
+          ok: false,
+          error:
+            "Database missing employment_type. Run supabase/employment-type.sql in the SQL editor.",
+        };
+      }
+      return { ok: false, error };
+    }
+
+    // Keep profile in sync when they already signed in (UUID id).
+    if (isUuid(teacherId)) {
       await dbUpdateProfile(teacherId, {
         name,
         title: user.title,
@@ -842,16 +941,35 @@ export async function updateTeacherCredentials(
         notifyEmail: user.notifyEmail,
         notifyIssues: user.notifyIssues,
       });
+      await dbUpdateProfileEmployment(teacherId, employmentType);
     }
     return refreshRemote();
   }
 
+  let found = false;
   mutate((draft) => {
     const user = draft.users.find((entry) => entry.id === teacherId);
     if (!user) return;
-    if (name) user.name = name;
-    if (email) user.email = email;
+    const conflict = draft.users.some(
+      (entry) =>
+        entry.id !== teacherId && entry.email.toLowerCase() === email,
+    );
+    if (conflict) return;
+    user.name = name;
+    user.email = email;
+    user.role = role;
+    user.employmentType = employmentType;
+    found = true;
   });
+
+  if (!found) {
+    const conflict = getState().users.some(
+      (entry) =>
+        entry.id !== teacherId && entry.email.toLowerCase() === email,
+    );
+    if (conflict) return { ok: false, error: "Email already exists." };
+    return { ok: false, error: "Staff member not found." };
+  }
 
   return { ok: true };
 }
@@ -866,10 +984,29 @@ export async function deleteTeacherCredentials(
 
   if (useRemote()) {
     const user = getState().users.find((entry) => entry.id === teacherId);
-    if (!user) return { ok: false, error: "Teacher not found." };
+    if (!user) return { ok: false, error: "Staff member not found." };
+    if (user.allowlisted === false) {
+      return { ok: false, error: "Already removed from the allowlist." };
+    }
+
+    // Never remove your own access.
+    if (user.email.toLowerCase() === session.email.toLowerCase()) {
+      return {
+        ok: false,
+        error: "You cannot remove your own access.",
+      };
+    }
+
     const { error } = await dbDeleteAllowedEmail(user.email);
     if (error) return { ok: false, error };
     return refreshRemote();
+  }
+
+  if (
+    getState().users.find((entry) => entry.id === teacherId)?.email.toLowerCase() ===
+    session.email.toLowerCase()
+  ) {
+    return { ok: false, error: "You cannot remove your own access." };
   }
 
   mutate((draft) => {
@@ -904,7 +1041,7 @@ export async function resetTeacherPassword(
     }
   });
 
-  if (!found) return { ok: false, error: "Teacher not found." };
+  if (!found) return { ok: false, error: "Staff member not found." };
   return { ok: true, data: { password } };
 }
 

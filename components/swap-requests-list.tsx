@@ -25,17 +25,17 @@ export function SwapRequestsList({
   if (requests.length === 0) return null
 
   return (
-    <section className="overflow-hidden rounded-xl border border-amber-200/80 bg-amber-50/40">
-      <div className="flex h-10 items-center gap-2 border-b border-amber-200/60 px-4">
-        <h2 className="text-[12px] font-semibold tracking-tight text-amber-900">
-          Swap requests
+    <section className="overflow-hidden rounded-xl border border-amber-200/70 bg-amber-50/40 shadow-[var(--shadow-surface)]">
+      <div className="flex h-10 items-center gap-2 border-b border-amber-200/50 px-4">
+        <h2 className="text-[12.5px] font-semibold tracking-tight text-amber-950">
+          Swaps
         </h2>
-        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-200/80 px-1.5 text-[11px] font-semibold tabular-nums text-amber-900">
+        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-amber-200/70 px-1.5 text-[11px] font-semibold tabular-nums text-amber-950">
           {requests.length}
         </span>
       </div>
 
-      <div className="divide-y divide-amber-200/50">
+      <div className="divide-y divide-amber-200/40">
         {requests.map((req) => {
           const booking = bookingMap.get(req.bookingId)
           if (!booking) return null
@@ -54,8 +54,8 @@ export function SwapRequestsList({
                   {format(parseISO(booking.date), "MMM d")}
                 </p>
                 {req.reason ? (
-                  <p className="mt-0.5 truncate text-[12px] italic text-neutral-500">
-                    &ldquo;{req.reason}&rdquo;
+                  <p className="mt-0.5 truncate text-[12px] text-neutral-500">
+                    {req.reason}
                   </p>
                 ) : null}
               </div>
@@ -78,7 +78,7 @@ export function SwapRequestsList({
                       router.refresh()
                     })
                   }
-                  className="h-8 rounded-full bg-amber-700 px-3 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  className="h-8 rounded-lg bg-neutral-950 px-3 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
                   Accept
                 </button>
@@ -100,7 +100,7 @@ export function SwapRequestsList({
                       router.refresh()
                     })
                   }
-                  className="h-8 rounded-full border border-neutral-200 bg-white px-3 text-[12px] font-medium text-neutral-600 transition-colors hover:text-neutral-950 disabled:opacity-50"
+                  className="h-8 rounded-lg border border-neutral-200 bg-white px-3 text-[12px] font-medium text-neutral-600 transition-colors hover:bg-neutral-50 hover:text-neutral-950 disabled:opacity-50"
                 >
                   Decline
                 </button>

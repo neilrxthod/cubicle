@@ -110,6 +110,7 @@ Google identity
 | Sign-in | Google + Supabase Auth |
 | Who may enter | `allowed_emails` |
 | Role | `allowed_emails.role` → `profiles.role` |
+| Employment / blue tick | `employment_type` (`permanent` = verified) — run `employment-type.sql` |
 | Carts, bookings, issues | Postgres tables + RLS |
 | Staff add (admin UI) | Inserts into `allowed_emails` |
 | Local demo without keys | localStorage seed (legacy) |

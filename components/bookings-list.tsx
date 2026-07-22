@@ -8,6 +8,9 @@ import type { Booking, Cart } from "@/lib/types"
 import { cancelBooking } from "@/lib/actions"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { usePlatformStore } from "@/lib/data/platform-store"
+import { isVerifiedStaff } from "@/lib/staff/employment"
+import { VerifiedBadge } from "@/components/verified-badge"
 
 export function BookingsList({
   title,
@@ -27,23 +30,27 @@ export function BookingsList({
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const cartMap = new Map(carts.map((c) => [c.id, c]))
+  const platform = usePlatformStore()
+  const verifiedIds = new Set(
+    platform.users.filter((u) => isVerifiedStaff(u)).map((u) => u.id),
+  )
 
   return (
-    <section className="overflow-hidden rounded-xl border border-neutral-200/90 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-      <div className="flex h-11 items-center justify-between gap-3 border-b border-neutral-100 px-4">
+    <section className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white shadow-[var(--shadow-surface)]">
+      <div className="flex h-10 items-center justify-between gap-3 border-b border-neutral-100 px-4">
         <h2 className="type-section-title">{title}</h2>
-        <span className="text-[13px] font-light tabular-nums tracking-tight text-muted-foreground">
+        <span className="text-[12px] font-medium tabular-nums text-neutral-400">
           {bookings.length}
         </span>
       </div>
 
       {bookings.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 px-6 py-14 text-center">
-          <p className="text-[13px] text-neutral-500">{emptyLabel}</p>
+        <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+          <p className="text-[13px] text-neutral-400">{emptyLabel}</p>
           {emptyAction ? (
             <Link
               href={emptyAction.href}
-              className="inline-flex h-8 items-center rounded-full bg-neutral-950 px-3.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+              className="inline-flex h-8 items-center rounded-lg bg-neutral-950 px-3.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
             >
               {emptyAction.label}
             </Link>
@@ -77,8 +84,11 @@ export function BookingsList({
                   {b.period}
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-[13px] text-neutral-950">
+                  <p className="flex min-w-0 items-center gap-1 truncate text-[13px] text-neutral-950">
                     <span className="font-semibold">{cart?.name ?? "Cart"}</span>
+                    {verifiedIds.has(b.teacherId) ? (
+                      <VerifiedBadge size="xs" className="shrink-0" />
+                    ) : null}
                     {classLabel ? (
                       <span className="text-neutral-500"> · {classLabel}</span>
                     ) : null}
@@ -107,11 +117,11 @@ export function BookingsList({
                           })
                           return
                         }
-                        toast({ title: "Booking canceled" })
+                        toast({ title: "Canceled" })
                         router.refresh()
                       })
                     }
-                    className="h-8 shrink-0 rounded-full bg-neutral-950 px-3 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    className="h-8 shrink-0 rounded-lg bg-neutral-950 px-3 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
                     Cancel
                   </button>

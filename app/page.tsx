@@ -18,7 +18,7 @@ export default function HomePage() {
       {(user) => (
         <Suspense
           fallback={
-            <div className="flex h-svh items-center justify-center bg-[#f6f6f7]">
+            <div className="flex h-svh items-center justify-center bg-[var(--canvas,#f4f4f5)]">
               <div className="size-5 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
             </div>
           }
@@ -51,11 +51,19 @@ function HomeBoard({ user }: { user: SessionUser }) {
     const freeSlots = activeCarts * 5 - todayBookings.length;
 
     return [
-      { label: "Active carts", value: activeCarts },
-      { label: "Bookings", value: todayBookings.length },
-      { label: "Yours", value: mine.length },
-      { label: "Issues", value: openIssues },
-      { label: "Free slots", value: Math.max(freeSlots, 0) },
+      { label: "Carts", value: activeCarts },
+      { label: "Booked", value: todayBookings.length },
+      {
+        label: "Yours",
+        value: mine.length,
+        href: "/my-bookings",
+      },
+      {
+        label: "Issues",
+        value: openIssues,
+        href: "/issues",
+      },
+      { label: "Free", value: Math.max(freeSlots, 0) },
     ];
   }, [state, date, user.id]);
 
@@ -69,11 +77,8 @@ function HomeBoard({ user }: { user: SessionUser }) {
 
   return (
     <DashboardFrame user={user}>
-      <PageShell
-        title="Home"
-        description="Live cart availability by period."
-      >
-        <div className="flex flex-col gap-4 sm:gap-5">
+      <PageShell title="Schedule" description="Carts by period.">
+        <div className="flex flex-col gap-3 sm:gap-4">
           <StatBar stats={stats} />
           <SwapRequestsList
             requests={incomingSwaps}

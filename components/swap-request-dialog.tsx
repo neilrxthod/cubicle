@@ -28,12 +28,15 @@ export function SwapRequestDialog({
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="gap-0 overflow-hidden rounded-2xl border-border/60 bg-white p-0 shadow-xl sm:max-w-md">
-        <DialogHeader className="space-y-3 border-b border-border/60 px-5 py-5 text-left sm:px-6">
+        <DialogHeader className="space-y-2 border-b border-border/60 px-5 py-5 text-left sm:px-6">
           <DialogTitle>Request swap</DialogTitle>
-          <DialogDescription className="sr-only">
-            Request a swap for this cart booking.
+          <DialogDescription>
+            Ask {booking.teacherName} for this slot.
+            {booking.className?.trim()
+              ? ` (${booking.className.trim()})`
+              : ""}
           </DialogDescription>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 pt-1">
             <span className="type-label rounded-full border border-border bg-muted/20 px-2.5 py-1">
               {booking.teacherName}
             </span>
@@ -59,7 +62,7 @@ export function SwapRequestDialog({
               }
               toast({
                 title: "Request sent",
-                description: `Swap request sent to ${booking.teacherName}.`,
+                description: booking.teacherName,
               })
               router.refresh()
               onClose()
@@ -68,14 +71,14 @@ export function SwapRequestDialog({
         >
           <div className="flex flex-col gap-1.5">
             <label htmlFor="reason" className="type-label">
-              Reason for swap
+              Reason
             </label>
             <textarea
               id="reason"
               name="reason"
-              placeholder="e.g. I need this cart for a lab today."
+              placeholder="Why you need this slot"
               required
-              rows={4}
+              rows={3}
               className="w-full rounded-xl border border-border bg-white p-3 text-[14px] tracking-[-0.011em] text-foreground placeholder:text-muted-foreground outline-none transition focus:border-neutral-400"
             />
           </div>
@@ -86,16 +89,16 @@ export function SwapRequestDialog({
             <button
               type="button"
               onClick={onClose}
-              className="h-9 rounded-full px-4 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="h-9 rounded-lg px-4 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={pending}
-              className="h-9 rounded-full bg-foreground px-5 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="h-9 rounded-lg bg-foreground px-5 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {pending ? "Sending…" : "Send request"}
+              {pending ? "Sending…" : "Send"}
             </button>
           </div>
         </form>

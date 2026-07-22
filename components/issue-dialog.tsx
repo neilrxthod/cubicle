@@ -48,7 +48,7 @@ export function IssueDialog({
         <DialogHeader className="space-y-1.5 border-b border-border/60 px-5 py-5 text-left sm:px-6">
           <DialogTitle>Report issue</DialogTitle>
           <DialogDescription>
-            High severity pauses the cart for maintenance.
+            High severity puts the cart in maintenance.
           </DialogDescription>
         </DialogHeader>
 
@@ -71,9 +71,7 @@ export function IssueDialog({
               }
               toast({
                 title: "Reported",
-                description: selectedCart
-                  ? `${selectedCart.name} · sent to admin`
-                  : "Sent to admin",
+                description: selectedCart?.name,
               });
               router.refresh();
               onClose();
@@ -130,7 +128,7 @@ export function IssueDialog({
               name="description"
               rows={4}
               required
-              placeholder="What happened?"
+              placeholder="Describe the problem"
               className="min-h-[104px] w-full resize-none rounded-xl border border-border bg-white px-3.5 py-3 text-[14px] leading-relaxed tracking-[-0.011em] text-foreground outline-none placeholder:text-muted-foreground focus:border-neutral-400"
             />
           </label>
@@ -141,16 +139,16 @@ export function IssueDialog({
             <button
               type="button"
               onClick={onClose}
-              className="h-9 rounded-full px-4 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="h-9 rounded-lg px-4 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={pending || !(cart?.id ?? cartId)}
-              className="h-9 rounded-full bg-foreground px-5 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-40"
+              className="h-9 rounded-lg bg-foreground px-5 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-40"
             >
-              {pending ? "Sending…" : "Submit"}
+              {pending ? "Sending…" : "Report"}
             </button>
           </div>
         </form>

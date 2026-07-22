@@ -3,6 +3,7 @@ import {
   mapBooking,
   mapBookingPolicy,
   mapCart,
+  mapEmploymentType,
   mapIssue,
   mapProfile,
   mapSlotRestriction,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/supabase/mappers";
 import type {
   CartStatus,
+  EmploymentType,
   Issue,
   Period,
   PlatformState,
@@ -55,7 +57,9 @@ export async function fetchPlatformState(): Promise<PlatformState> {
     supabase.from("booking_policy").select("*").eq("id", 1).maybeSingle(),
     supabase.from("profiles").select("*").order("name"),
     // Admins only (RLS) — teachers get an empty list without failing the load.
-    supabase.from("allowed_emails").select("email, role, name"),
+    supabase
+      .from("allowed_emails")
+      .select("email, role, name, employment_type, created_at"),
   ]);
 
   const firstError =
@@ -75,24 +79,49 @@ export async function fetchPlatformState(): Promise<PlatformState> {
   const allowlist = allowlistRes.error
     ? []
     : ((allowlistRes.data as DbAllowedEmail[] | null) ?? []);
+  const allowlistByEmail = new Map(
+    allowlist.map((row) => [row.email.toLowerCase(), row] as const),
+  );
   const profileEmails = new Set(profiles.map((p) => p.email.toLowerCase()));
 
-  // Include allowlisted people who have not signed in yet (for admin staff list).
+  // Profiles keep history/names; allowlist is source of access + employment type.
+  const profileUsers: User[] = profiles.map((row) => {
+    const mapped = mapProfile(row);
+    const allowed = allowlistByEmail.get(mapped.email.toLowerCase());
+    return {
+      ...mapped,
+      // Prefer allowlist role/name/employment when present (source of access truth).
+      role: (allowed?.role as Role | undefined) ?? mapped.role,
+      name: allowed?.name?.trim() || mapped.name,
+      employmentType: allowed
+        ? mapEmploymentType(allowed.employment_type)
+        : mapped.employmentType ?? "permanent",
+      allowlisted: Boolean(allowed),
+      pendingInvite: false,
+      password: "",
+    };
+  });
+
+  // Allowlisted people who have not signed in yet (admin staff list).
   const pendingUsers: User[] = allowlist
     .filter((row) => !profileEmails.has(row.email.toLowerCase()))
     .map((row) => ({
-      id: `pending:${row.email}`,
+      id: `pending:${row.email.toLowerCase()}`,
       email: row.email,
       name: row.name || row.email.split("@")[0],
       role: row.role as Role,
       password: "",
+      employmentType: mapEmploymentType(row.employment_type),
+      allowlisted: true,
+      pendingInvite: true,
+      createdAt: row.created_at ?? undefined,
     }));
 
   return {
     carts: ((cartsRes.data as DbCart[] | null) ?? []).map(mapCart),
     bookings: ((bookingsRes.data as DbBooking[] | null) ?? []).map(mapBooking),
     issues: ((issuesRes.data as DbIssue[] | null) ?? []).map(mapIssue),
-    users: [...profiles.map(mapProfile), ...pendingUsers],
+    users: [...profileUsers, ...pendingUsers],
     slotRestrictions: (
       (restrictionsRes.data as DbSlotRestriction[] | null) ?? []
     ).map(mapSlotRestriction),
@@ -396,6 +425,7 @@ export async function dbAddAllowedEmail(input: {
   email: string;
   name: string;
   role?: Role;
+  employmentType?: EmploymentType;
 }): Promise<{ error?: string }> {
   const { schoolEmailError } = await import("@/lib/auth/school-domain");
   const domainError = schoolEmailError(input.email);
@@ -406,13 +436,19 @@ export async function dbAddAllowedEmail(input: {
     email: input.email.toLowerCase().trim(),
     name: input.name,
     role: input.role ?? "teacher",
+    employment_type: input.employmentType ?? "permanent",
   });
   return { error: error?.message };
 }
 
 export async function dbUpdateAllowedEmail(
   email: string,
-  input: { name?: string; email?: string; role?: Role },
+  input: {
+    name?: string;
+    email?: string;
+    role?: Role;
+    employmentType?: EmploymentType;
+  },
 ): Promise<{ error?: string }> {
   if (input.email) {
     const { schoolEmailError } = await import("@/lib/auth/school-domain");
@@ -425,12 +461,28 @@ export async function dbUpdateAllowedEmail(
   if (input.name) payload.name = input.name;
   if (input.role) payload.role = input.role;
   if (input.email) payload.email = input.email.toLowerCase().trim();
+  if (input.employmentType) payload.employment_type = input.employmentType;
 
   const { error } = await supabase
     .from("allowed_emails")
     .update(payload)
     .eq("email", email.toLowerCase().trim());
   return { error: error?.message };
+}
+
+/** Best-effort sync of employment type onto signed-in profile rows. */
+export async function dbUpdateProfileEmployment(
+  userId: string,
+  employmentType: EmploymentType,
+): Promise<void> {
+  const supabase = client();
+  await supabase
+    .from("profiles")
+    .update({
+      employment_type: employmentType,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId);
 }
 
 export async function dbDeleteAllowedEmail(email: string): Promise<{ error?: string }> {

@@ -154,23 +154,19 @@ function IssuesView({ user }: { user: SessionUser }) {
       <PageShell
         narrow
         title="Issues"
-        description={
-          isAdmin
-            ? "Cart problems reported by teachers."
-            : "Report and track cart problems."
-        }
+        description={isAdmin ? "Open cart problems." : "Your reports."}
         action={
           <button
             type="button"
             onClick={() => setReportOpen(true)}
-            className="h-9 rounded-full bg-neutral-950 px-4 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
+            className="h-9 rounded-lg bg-neutral-950 px-4 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
           >
             Report
           </button>
         }
       >
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="inline-flex h-9 w-full items-center rounded-full border border-neutral-200/90 bg-neutral-100/90 p-0.5 sm:w-auto">
+          <div className="inline-flex h-9 w-full items-center rounded-lg border border-neutral-200/90 bg-neutral-100/80 p-0.5 sm:w-auto">
             {(
               [
                 { id: "open", label: "Open", count: counts.open },
@@ -183,7 +179,7 @@ function IssuesView({ user }: { user: SessionUser }) {
                 type="button"
                 onClick={() => setTab(item.id)}
                 className={cn(
-                  "inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-3 text-[12.5px] font-medium transition-colors sm:flex-none sm:min-w-[5.5rem]",
+                  "inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-3 text-[12.5px] font-medium transition-colors sm:flex-none sm:min-w-[5.5rem]",
                   tab === item.id
                     ? "bg-white text-neutral-950 shadow-sm"
                     : "text-neutral-500 hover:text-neutral-800",
@@ -286,7 +282,7 @@ function IssuesView({ user }: { user: SessionUser }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search..."
-              className="h-8 w-36 shrink-0 rounded-full border border-neutral-200 bg-white px-3.5 text-[12.5px] text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-neutral-300 sm:w-40"
+              className="h-8 w-36 shrink-0 rounded-full border border-neutral-200 bg-white px-3.5 text-[12.5px] text-neutral-900 outline-none ring-0 placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-0 sm:w-40"
             />
           </div>
         </div>
@@ -302,14 +298,13 @@ function IssuesView({ user }: { user: SessionUser }) {
             <span className="font-medium tabular-nums text-neutral-800">
               {counts.high || 1}
             </span>
-            {" high-priority open"}
-            {counts.high === 1 ? " issue" : " issues"}
+            {" high priority"}
           </p>
         </div>
 
         <div
           className={cn(
-            "overflow-hidden rounded-xl border border-neutral-200/90 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]",
+            "overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white shadow-[var(--shadow-surface)]",
             LIST_MIN_HEIGHT,
           )}
         >
@@ -387,7 +382,7 @@ function IssuesView({ user }: { user: SessionUser }) {
                               type="button"
                               disabled={busy}
                               onClick={() => setStatus(issue, "resolved")}
-                              className="h-8 w-[4.5rem] rounded-full text-[12.5px] font-medium text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-40 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                              className="h-8 w-[4.5rem] rounded-full bg-neutral-950 text-[12.5px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
                             >
                               {busy ? "..." : "Resolve"}
                             </button>
@@ -450,19 +445,17 @@ function EmptyState({
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-16 text-center">
       <p className="text-[15px] font-medium tracking-tight text-neutral-950">
-        {hasAny ? "Nothing matches" : "No open issues"}
+        {hasAny ? "No matches" : "No open issues"}
       </p>
-      <p className="mt-1.5 max-w-[260px] text-[13.5px] leading-relaxed text-neutral-500">
-        {hasAny
-          ? "Try another filter or clear search."
-          : "When a cart has a problem, report it here."}
+      <p className="mt-1.5 max-w-[260px] text-[13px] text-neutral-500">
+        {hasAny ? "Try another filter." : "Report a cart problem to start."}
       </p>
       <button
         type="button"
         onClick={hasAny ? onReset : onReport}
-        className="mt-5 h-9 rounded-full border border-neutral-200 bg-white px-4 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50"
+        className="mt-5 h-9 rounded-lg border border-neutral-200 bg-white px-4 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50"
       >
-        {hasAny ? "Reset filters" : "Report an issue"}
+        {hasAny ? "Clear filters" : "Report"}
       </button>
     </div>
   );

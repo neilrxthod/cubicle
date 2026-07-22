@@ -1,8 +1,8 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Shared page header for dashboard routes.
- * Typography matches StatBar / Reports & Analytics (font-light titles).
+ * Shared page header for post-auth routes.
+ * Tight hierarchy: title + quiet description + optional action.
  */
 export function PageShell({
   title,
@@ -29,11 +29,11 @@ export function PageShell({
         className,
       )}
     >
-      <header className="mb-6 flex items-start justify-between gap-4 sm:mb-8">
+      <header className="mb-5 flex items-start justify-between gap-4 sm:mb-6">
         <div className="min-w-0">
           <h1 className="type-page-title">{title}</h1>
           {description ? (
-            <p className="type-body mt-1.5 leading-snug">{description}</p>
+            <p className="type-body mt-1 max-w-2xl leading-snug">{description}</p>
           ) : null}
         </div>
         {action ? (

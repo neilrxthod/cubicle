@@ -38,6 +38,7 @@ export function toPlatformSession(user: AuthSessionUser): SessionUser {
       bio: match.bio ?? user.bio,
       notifyEmail: match.notifyEmail ?? user.notifyEmail ?? true,
       notifyIssues: match.notifyIssues ?? user.notifyIssues ?? true,
+      employmentType: match.employmentType,
     };
   }
   return {

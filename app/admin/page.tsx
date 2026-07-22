@@ -20,10 +20,7 @@ function AdminHome({ user }: { user: SessionUser }) {
 
   return (
     <DashboardFrame user={user}>
-      <PageShell
-        title="Maintenance"
-        description="Inventory, reservations, reports, credentials, and restrictions."
-      >
+      <PageShell title="Admin" description="Carts, staff, and locks.">
         <AdminConsole
           carts={state.carts}
           bookings={state.bookings}
@@ -31,6 +28,7 @@ function AdminHome({ user }: { user: SessionUser }) {
           issues={state.issues}
           slotRestrictions={state.slotRestrictions}
           bookingPolicy={state.bookingPolicy}
+          swapRequests={state.swapRequests}
         />
       </PageShell>
     </DashboardFrame>

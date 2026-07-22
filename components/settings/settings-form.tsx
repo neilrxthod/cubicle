@@ -18,7 +18,7 @@ function initials(name: string) {
 }
 
 const inputClass =
-  "h-10 w-full rounded-lg border border-neutral-200 bg-white px-3 text-[14px] text-neutral-900 outline-none transition-[border-color,box-shadow] placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-900/[0.06]";
+  "h-10 w-full rounded-lg border border-neutral-200 bg-white px-3 text-[14px] text-neutral-900 outline-none transition-[border-color] placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-0 focus:shadow-none";
 
 const labelClass = "text-[13px] font-medium text-neutral-700";
 
@@ -73,7 +73,7 @@ export function SettingsForm({ user }: { user: SessionUser }) {
       setAvatarDirty(true);
       setStatus({
         type: "ok",
-        message: "Photo ready — click Save to apply.",
+        message: "Photo ready. Save to apply.",
       });
     } catch (err) {
       setStatus({
@@ -90,7 +90,7 @@ export function SettingsForm({ user }: { user: SessionUser }) {
   function removePhoto() {
     setAvatarUrl(undefined);
     setAvatarDirty(true);
-    setStatus({ type: "ok", message: "Photo will be removed when you save." });
+    setStatus({ type: "ok", message: "Photo will be removed on save." });
   }
 
   function handleSave(event: React.FormEvent) {
@@ -124,7 +124,7 @@ export function SettingsForm({ user }: { user: SessionUser }) {
 
   return (
     <form onSubmit={handleSave} className="pb-24">
-      <div className="overflow-hidden rounded-2xl border border-neutral-200/80 bg-white">
+      <div className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white shadow-[var(--shadow-surface)]">
         {/* Identity header — who you are at a glance */}
         <div className="border-b border-neutral-100 px-5 py-6 sm:px-7 sm:py-7">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
@@ -204,24 +204,23 @@ export function SettingsForm({ user }: { user: SessionUser }) {
         {/* Profile fields — what shows on bookings */}
         <div className="space-y-5 border-b border-neutral-100 px-5 py-6 sm:px-7">
           <div>
-            <h3 className="type-section-title">How you appear</h3>
+            <h3 className="type-section-title">Profile</h3>
             <p className="mt-0.5 text-[13px] text-neutral-500">
-              Name shows on bookings and issues. Keep it current so IT and
-              colleagues know who reserved a cart.
+              Shown on bookings and issues.
             </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
               <label htmlFor="name" className={labelClass}>
-                Display name
+                Name
               </label>
               <input
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className={inputClass}
-                placeholder="Your name"
+                placeholder="Name"
                 required
                 autoComplete="name"
               />
@@ -229,14 +228,14 @@ export function SettingsForm({ user }: { user: SessionUser }) {
 
             <div className="space-y-1.5">
               <label htmlFor="title" className={labelClass}>
-                Role / title
+                Title
               </label>
               <input
                 id="title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className={inputClass}
-                placeholder="e.g. Science teacher"
+                placeholder="Science teacher"
                 autoComplete="organization-title"
               />
             </div>
@@ -250,7 +249,7 @@ export function SettingsForm({ user }: { user: SessionUser }) {
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 className={inputClass}
-                placeholder="e.g. Science"
+                placeholder="Science"
               />
             </div>
 
@@ -265,7 +264,7 @@ export function SettingsForm({ user }: { user: SessionUser }) {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className={inputClass}
-                placeholder="School or work number"
+                placeholder="Phone"
                 autoComplete="tel"
               />
             </div>
@@ -288,8 +287,8 @@ export function SettingsForm({ user }: { user: SessionUser }) {
                 maxLength={280}
                 onChange={(e) => setBio(e.target.value)}
                 rows={2}
-                className="w-full resize-none rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-[14px] text-neutral-900 outline-none transition-[border-color,box-shadow] placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-900/[0.06]"
-                placeholder="Classes you teach or preferred cart notes"
+                className="w-full resize-none rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-[14px] text-neutral-900 outline-none transition-[border-color] placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-0 focus:shadow-none"
+                placeholder="Optional note"
               />
             </div>
           </div>
@@ -298,9 +297,9 @@ export function SettingsForm({ user }: { user: SessionUser }) {
         {/* Notifications */}
         <div className="space-y-4 px-5 py-6 sm:px-7">
           <div>
-            <h3 className="type-section-title">Email updates</h3>
+            <h3 className="type-section-title">Email</h3>
             <p className="mt-0.5 text-[13px] text-neutral-500">
-              Stay informed without digging through the board.
+              Optional alerts.
             </p>
           </div>
 
@@ -308,10 +307,10 @@ export function SettingsForm({ user }: { user: SessionUser }) {
             <label className="flex cursor-pointer items-center justify-between gap-4 px-4 py-3.5">
               <div className="min-w-0">
                 <p className="text-[14px] font-medium text-neutral-900">
-                  Booking reminders
+                  Bookings
                 </p>
                 <p className="text-[12.5px] text-neutral-500">
-                  Upcoming cart bookings and cancellations
+                  Upcoming and canceled
                 </p>
               </div>
               <Switch
@@ -323,10 +322,10 @@ export function SettingsForm({ user }: { user: SessionUser }) {
             <label className="flex cursor-pointer items-center justify-between gap-4 px-4 py-3.5">
               <div className="min-w-0">
                 <p className="text-[14px] font-medium text-neutral-900">
-                  Issue updates
+                  Issues
                 </p>
                 <p className="text-[12.5px] text-neutral-500">
-                  When carts you reported are fixed or reopened
+                  Status changes on your reports
                 </p>
               </div>
               <Switch
@@ -341,8 +340,8 @@ export function SettingsForm({ user }: { user: SessionUser }) {
         {/* Quiet account note */}
         <div className="border-t border-neutral-100 bg-neutral-50/60 px-5 py-4 sm:px-7">
           <p className="text-[12.5px] leading-relaxed text-neutral-500">
-            School email and {roleLabel.toLowerCase()} access are managed by IT
-            via Google sign-in. Contact IT if your role or email needs to
+            Email and {roleLabel.toLowerCase()} access come from Google / IT.
+            Contact IT if your role or email needs to
             change.
           </p>
         </div>
@@ -370,7 +369,7 @@ export function SettingsForm({ user }: { user: SessionUser }) {
           <button
             type="submit"
             disabled={pending || uploading || !name.trim() || !dirty}
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-full bg-neutral-950 px-4 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-neutral-950 px-4 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             {pending ? (
               <Loader2 className="size-3.5 animate-spin" strokeWidth={2} />

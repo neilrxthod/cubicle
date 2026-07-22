@@ -1,5 +1,11 @@
 export type Role = "teacher" | "admin";
 
+/**
+ * School employment category.
+ * Only permanent staff receive the blue verification tick.
+ */
+export type EmploymentType = "permanent" | "substitute" | "temporary";
+
 export type Period = "P1" | "P2" | "P3" | "P4" | "P5";
 
 export type CartStatus = "active" | "maintenance";
@@ -23,10 +29,24 @@ export type SessionUser = {
   bio?: string;
   notifyEmail?: boolean;
   notifyIssues?: boolean;
+  /** permanent | substitute | temporary — permanent = blue tick */
+  employmentType?: EmploymentType;
 };
 
 export type User = SessionUser & {
+  /** Demo / local password only — empty when staff use Google sign-in. */
   password: string;
+  /**
+   * Whether this email is currently on the school allowlist.
+   * false = access revoked (profile may remain for booking history).
+   * undefined = local demo (treat as allowed).
+   */
+  allowlisted?: boolean;
+  /** Allowlisted but has not signed in with Google yet. */
+  pendingInvite?: boolean;
+  /** Profile row timestamps (when known). */
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type ProfileUpdate = {
