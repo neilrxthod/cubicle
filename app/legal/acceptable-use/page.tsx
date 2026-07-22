@@ -22,6 +22,7 @@ export default function AcceptableUsePage() {
       title="Acceptable Use Policy"
       description={`Rules for using ${LEGAL_PRODUCT} in a professional, secure, and school-appropriate manner.`}
       effectiveDate={LEGAL_EFFECTIVE_DATE}
+      currentHref="/legal/acceptable-use"
     >
       <LegalSection title="1. Purpose">
         <p>

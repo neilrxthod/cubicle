@@ -23,6 +23,7 @@ export default function TermsPage() {
       title="Terms of Service"
       description={`These Terms govern access to and use of ${LEGAL_PRODUCT} (${LEGAL_DOMAIN}), a school resource scheduling platform for authorized staff.`}
       effectiveDate={LEGAL_EFFECTIVE_DATE}
+      currentHref="/legal/terms"
     >
       <LegalSection title="1. Agreement">
         <p>

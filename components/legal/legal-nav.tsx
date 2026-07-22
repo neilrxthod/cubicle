@@ -16,7 +16,6 @@ const NAV: NavItem[] = [
   ...LEGAL_LINKS.map((link) => ({
     href: link.href,
     label: link.shortLabel,
-    exact: false as const,
   })),
 ];
 
@@ -27,30 +26,51 @@ export function LegalNav({
 }) {
   const pathname = usePathname();
 
+  if (orientation === "horizontal") {
+    return (
+      <nav
+        aria-label="Legal"
+        className="-mx-1 flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {NAV.map((item) => {
+          const active = item.exact
+            ? pathname === item.href
+            : pathname === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "shrink-0 rounded-full px-3.5 py-1.5 text-[13px] transition-colors",
+                active
+                  ? "bg-neutral-950 font-medium text-white"
+                  : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900",
+              )}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+    );
+  }
+
   return (
-    <nav
-      aria-label="Legal"
-      className={cn(
-        orientation === "vertical"
-          ? "flex flex-col gap-0.5"
-          : "flex flex-wrap items-center gap-x-1 gap-y-1",
-      )}
-    >
+    <nav aria-label="Legal" className="flex flex-col gap-0.5">
       {NAV.map((item) => {
         const active = item.exact
           ? pathname === item.href
-          : pathname === item.href || pathname.startsWith(`${item.href}/`);
+          : pathname === item.href;
 
         return (
           <Link
             key={item.href}
             href={item.href}
             className={cn(
-              "rounded-md text-[13px] transition-colors",
-              orientation === "vertical" ? "px-3 py-2" : "px-2.5 py-1.5",
+              "group relative flex items-center rounded-lg px-3 py-2 text-[13.5px] transition-colors",
               active
-                ? "bg-neutral-100 font-medium text-neutral-950"
-                : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900",
+                ? "bg-neutral-950 font-medium text-white"
+                : "text-neutral-500 hover:bg-neutral-100/80 hover:text-neutral-900",
             )}
           >
             {item.label}
