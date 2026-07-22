@@ -1,4 +1,4 @@
-import type { UserRole } from "@/lib/auth/types";
+import type { EmploymentType, UserRole } from "@/lib/auth/types";
 import {
   isSchoolEmail,
   normalizeEmail,
@@ -10,6 +10,8 @@ export type AllowedEmailRow = {
   email: string;
   role: UserRole;
   name: string | null;
+  /** permanent = blue tick; defaults permanent if column missing */
+  employmentType: EmploymentType;
 };
 
 export type AccessCheckResult =
@@ -40,6 +42,13 @@ export async function checkSchoolAccess(
   }
 }
 
+function parseEmploymentType(value: unknown): EmploymentType {
+  if (value === "substitute" || value === "temporary" || value === "permanent") {
+    return value;
+  }
+  return "permanent";
+}
+
 /**
  * Look up a Google email on the school allowlist (service role).
  * Returns null if the email is not approved.
@@ -52,15 +61,40 @@ export async function getAllowedEmail(
   if (!normalized || !isSchoolEmail(normalized)) return null;
 
   const admin = createAdminClient();
-  const { data, error } = await admin
+
+  // Prefer full select including employment_type (after employment-type.sql).
+  let data: {
+    email: string;
+    role: string;
+    name: string | null;
+    employment_type?: string | null;
+  } | null = null;
+
+  const withEmployment = await admin
     .from("allowed_emails")
-    .select("email, role, name")
+    .select("email, role, name, employment_type")
     .eq("email", normalized)
     .maybeSingle();
 
-  if (error) {
-    console.error("[allowlist] lookup failed:", error.message);
-    throw new Error("Could not verify school allowlist.");
+  if (withEmployment.error) {
+    const msg = withEmployment.error.message.toLowerCase();
+    if (msg.includes("employment_type")) {
+      const legacy = await admin
+        .from("allowed_emails")
+        .select("email, role, name")
+        .eq("email", normalized)
+        .maybeSingle();
+      if (legacy.error) {
+        console.error("[allowlist] lookup failed:", legacy.error.message);
+        throw new Error("Could not verify school allowlist.");
+      }
+      data = legacy.data;
+    } else {
+      console.error("[allowlist] lookup failed:", withEmployment.error.message);
+      throw new Error("Could not verify school allowlist.");
+    }
+  } else {
+    data = withEmployment.data;
   }
 
   if (!data) return null;
@@ -72,6 +106,7 @@ export async function getAllowedEmail(
     email: data.email,
     role: data.role as UserRole,
     name: data.name,
+    employmentType: parseEmploymentType(data.employment_type),
   };
 }
 

@@ -28,6 +28,7 @@ Run each file fully, wait for **Success**:
 | 3 | `seed-carts.sql` | 22 carts + high-issue trigger |
 | 4 | `restrict-domain.sql` | Only `@rbe.sk.ca` on allowlist |
 | 5 | `realtime.sql` | **Live multi-user board updates** |
+| 6 | `employment-type.sql` | Permanent / sub / temp + blue tick |
 
 ---
 

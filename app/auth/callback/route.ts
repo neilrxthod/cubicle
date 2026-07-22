@@ -75,6 +75,8 @@ export async function GET(request: Request) {
     (user.user_metadata?.name as string | undefined) ||
     user.email.split("@")[0];
 
+  const employmentType = allowed.employmentType ?? "permanent";
+
   const avatarUrl = extractOAuthAvatarUrl(user);
 
   const { data: existing } = await supabase
@@ -87,17 +89,34 @@ export async function GET(request: Request) {
     avatarUrl ||
     (typeof existing?.avatar_url === "string" ? existing.avatar_url : null);
 
-  await supabase.from("profiles").upsert(
+  // Upsert core profile. employment_type requires employment-type.sql applied.
+  const profilePayload: Record<string, unknown> = {
+    id: user.id,
+    email: user.email.toLowerCase(),
+    name,
+    role,
+    avatar_url: nextAvatar,
+    updated_at: new Date().toISOString(),
+  };
+
+  let { error: upsertError } = await supabase.from("profiles").upsert(
     {
-      id: user.id,
-      email: user.email.toLowerCase(),
-      name,
-      role,
-      avatar_url: nextAvatar,
-      updated_at: new Date().toISOString(),
+      ...profilePayload,
+      employment_type: employmentType,
     },
     { onConflict: "id" },
   );
+
+  // Backward-compatible if employment_type column not migrated yet.
+  if (upsertError?.message?.toLowerCase().includes("employment_type")) {
+    ({ error: upsertError } = await supabase
+      .from("profiles")
+      .upsert(profilePayload, { onConflict: "id" }));
+  }
+
+  if (upsertError) {
+    console.error("[auth/callback] profile upsert failed:", upsertError.message);
+  }
 
   const dashboard =
     next && next.startsWith("/") ? next : getDashboardPath(role);

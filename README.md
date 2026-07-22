@@ -112,8 +112,12 @@ Run SQL (Supabase SQL Editor), in order:
 2. `supabase/allowed-emails.sql`
 3. `supabase/seed-carts.sql`
 4. `supabase/restrict-domain.sql` (enforces `@rbe.sk.ca` on allowlist)
+5. `supabase/realtime.sql` (live multi-user board)
+6. `supabase/employment-type.sql` (permanent / sub / temp + blue tick)
 
-Add staff in **Table Editor → `allowed_emails`**, then:
+Production checklist: [`PRODUCTION.md`](./PRODUCTION.md)
+
+Add staff in **Table Editor → `allowed_emails`** (or Admin → Staff after first admin login), then:
 
 ```bash
 npm run dev
