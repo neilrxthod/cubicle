@@ -60,6 +60,18 @@ npm run dev
 
 Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
+### Supabase (backend)
+
+Cubicle uses [Supabase](https://supabase.com/) for **Google auth (allowlist)**, **Postgres data**, and **RLS**.
+
+1. Fill `.env.local` from `.env.local.example` (Project URL + anon + service_role)
+2. Run SQL in order: `schema.sql` → `allowed-emails.sql` → `seed-carts.sql`
+3. Add staff emails to `allowed_emails`
+4. Enable Google provider (see checklist)
+5. Restart `npm run dev`
+
+**Full checklist:** [`supabase/SETUP.md`](./supabase/SETUP.md)
+
 ### Scripts
 
 | Command | Description |

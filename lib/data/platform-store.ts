@@ -222,6 +222,21 @@ export function mutate(mutator: (draft: PlatformState) => void) {
   update(mutator);
 }
 
+/** Replace the entire in-memory platform state (used after Supabase hydrate). */
+export function replaceState(next: PlatformState) {
+  write(next);
+}
+
+let remoteHydrated = false;
+
+export function isPlatformRemoteHydrated() {
+  return remoteHydrated;
+}
+
+export function markPlatformRemoteHydrated(value = true) {
+  remoteHydrated = value;
+}
+
 export function makeId(prefix: string) {
   return uid(prefix);
 }

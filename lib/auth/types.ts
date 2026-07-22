@@ -1,6 +1,8 @@
 export type UserRole = "teacher" | "admin";
 
 export type SessionUser = {
+  /** Supabase auth user id when signed in with Google. */
+  id?: string;
   email: string;
   name: string;
   role: UserRole;

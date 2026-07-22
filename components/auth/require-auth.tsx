@@ -4,7 +4,6 @@ import { useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import type { SessionUser, UserRole } from "@/lib/auth/types";
 import {
-  clearSession,
   getDashboardPath,
   getSessionSnapshot,
   subscribeToSession,
@@ -48,10 +47,7 @@ export function RequireAuth({ role, children }: RequireAuthProps) {
 }
 
 export function useLogout() {
-  const router = useRouter();
-
   return () => {
-    clearSession();
-    router.replace("/login");
+    void import("@/lib/actions").then(({ signOutAction }) => signOutAction());
   };
 }

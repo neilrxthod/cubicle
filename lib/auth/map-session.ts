@@ -23,7 +23,7 @@ export function toPlatformSession(user: AuthSessionUser): SessionUser {
     };
   }
   return {
-    id: user.email,
+    id: user.id ?? user.email,
     name: user.name,
     email: user.email,
     role: user.role,

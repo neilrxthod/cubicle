@@ -1,8 +1,38 @@
 "use client";
 
-import { addDays, eachDayOfInterval, format, parseISO } from "date-fns";
-import { getSession } from "@/lib/auth/session";
-import { getState, makeId, mutate } from "@/lib/data/platform-store";
+import { eachDayOfInterval, format, parseISO } from "date-fns";
+import { getSession, setSession, clearSession } from "@/lib/auth/session";
+import {
+  getState,
+  makeId,
+  mutate,
+  replaceState,
+} from "@/lib/data/platform-store";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
+import {
+  dbAcceptSwap,
+  dbAddAllowedEmail,
+  dbCreateBooking,
+  dbDeclineSwap,
+  dbDeleteAllowedEmail,
+  dbDeleteBooking,
+  dbDeleteBookings,
+  dbDeleteRestriction,
+  dbDeleteRestrictionsMatching,
+  dbInsertRestriction,
+  dbReassignBooking,
+  dbReportIssue,
+  dbRequestSwap,
+  dbSetCartStatus,
+  dbSyncBookingTeacherName,
+  dbUpdateAllowedEmail,
+  dbUpdateBookingPolicy,
+  dbUpdateIssueStatus,
+  dbUpdateProfile,
+  dbUpsertRestrictions,
+  fetchPlatformState,
+  isUuid,
+} from "@/lib/supabase/platform-api";
 import type {
   CartStatus,
   Period,
@@ -15,29 +45,54 @@ type Ok<T = undefined> = { ok: true; data?: T; error?: undefined };
 type Fail = { ok: false; error: string };
 type Result<T = undefined> = Ok<T> | Fail;
 
+function useRemote() {
+  return isSupabaseConfigured();
+}
+
+async function refreshRemote(): Promise<Result> {
+  try {
+    const state = await fetchPlatformState();
+    replaceState(state);
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to refresh data.",
+    };
+  }
+}
+
+export async function hydratePlatformFromSupabase(): Promise<Result> {
+  if (!useRemote()) return { ok: true };
+  return refreshRemote();
+}
+
 function requireSession(): SessionUser | null {
   const session = getSession();
   if (!session) return null;
+
   const user = getState().users.find(
     (entry) => entry.email.toLowerCase() === session.email.toLowerCase(),
   );
+
   if (user) {
     return {
-      id: user.id,
+      id: user.id.startsWith("pending:") ? session.id ?? user.id : user.id,
       name: user.name,
       email: user.email,
       role: user.role,
-      avatarUrl: user.avatarUrl,
-      title: user.title,
-      department: user.department,
-      phone: user.phone,
-      bio: user.bio,
-      notifyEmail: user.notifyEmail ?? true,
-      notifyIssues: user.notifyIssues ?? true,
+      avatarUrl: user.avatarUrl ?? session.avatarUrl,
+      title: user.title ?? session.title,
+      department: user.department ?? session.department,
+      phone: user.phone ?? session.phone,
+      bio: user.bio ?? session.bio,
+      notifyEmail: user.notifyEmail ?? session.notifyEmail ?? true,
+      notifyIssues: user.notifyIssues ?? session.notifyIssues ?? true,
     };
   }
+
   return {
-    id: session.email,
+    id: session.id ?? session.email,
     name: session.name,
     email: session.email,
     role: session.role,
@@ -91,6 +146,27 @@ export async function createBooking(formData: FormData): Promise<Result> {
     return { ok: false, error: restricted.reason ?? "Slot is restricted." };
   }
 
+  if (useRemote()) {
+    if (!isUuid(session.id)) {
+      return {
+        ok: false,
+        error: "Your account is not linked yet. Sign out and sign in with Google again.",
+      };
+    }
+    const { error } = await dbCreateBooking({
+      cartId,
+      date,
+      period,
+      teacherId: session.id,
+      teacherName: session.name,
+      className: className || "Reserved",
+      subject: subject || undefined,
+      notes: notes || undefined,
+    });
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
   mutate((draft) => {
     draft.bookings.unshift({
       id: makeId("bk"),
@@ -119,6 +195,12 @@ export async function cancelBooking(bookingId: string): Promise<Result> {
     return { ok: false, error: "You can only cancel your own bookings." };
   }
 
+  if (useRemote()) {
+    const { error } = await dbDeleteBooking(bookingId);
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
   mutate((draft) => {
     draft.bookings = draft.bookings.filter((entry) => entry.id !== bookingId);
     draft.swapRequests = draft.swapRequests.filter(
@@ -142,6 +224,24 @@ export async function reportIssue(formData: FormData): Promise<Result> {
 
   if (!cartId || !description) {
     return { ok: false, error: "Describe the issue." };
+  }
+
+  if (useRemote()) {
+    if (!isUuid(session.id)) {
+      return {
+        ok: false,
+        error: "Your account is not linked yet. Sign out and sign in with Google again.",
+      };
+    }
+    const { error } = await dbReportIssue({
+      cartId,
+      description,
+      severity,
+      reportedById: session.id,
+      reporterName: session.name,
+    });
+    if (error) return { ok: false, error };
+    return refreshRemote();
   }
 
   mutate((draft) => {
@@ -175,16 +275,27 @@ export async function updateIssueStatus(
   const issue = state.issues.find((entry) => entry.id === issueId);
   if (!issue) return { ok: false, error: "Issue not found." };
 
-  if (
-    session.role !== "admin" &&
-    issue.reportedById !== session.id
-  ) {
-    return { ok: false, error: "Not allowed." };
-  }
-
-  // Only admins can resolve/reopen for the school; reporters can only view
   if (session.role !== "admin") {
     return { ok: false, error: "Admin only." };
+  }
+
+  if (useRemote()) {
+    const { error } = await dbUpdateIssueStatus(issueId, status);
+    if (error) return { ok: false, error };
+
+    if (status === "resolved" && issue.severity === "high") {
+      const stillOpenHigh = state.issues.some(
+        (entry) =>
+          entry.id !== issueId &&
+          entry.cartId === issue.cartId &&
+          entry.status === "open" &&
+          entry.severity === "high",
+      );
+      if (!stillOpenHigh) {
+        await dbSetCartStatus(issue.cartId, "active");
+      }
+    }
+    return refreshRemote();
   }
 
   mutate((draft) => {
@@ -219,6 +330,12 @@ export async function setCartStatus(
     return { ok: false, error: "Admin only." };
   }
 
+  if (useRemote()) {
+    const { error } = await dbSetCartStatus(cartId, status);
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
   mutate((draft) => {
     const cart = draft.carts.find((entry) => entry.id === cartId);
     if (cart) cart.status = status;
@@ -239,6 +356,23 @@ export async function requestSwap(formData: FormData): Promise<Result> {
   if (!booking) return { ok: false, error: "Booking not found." };
   if (booking.teacherId === session.id) {
     return { ok: false, error: "You already own this booking." };
+  }
+
+  if (useRemote()) {
+    if (!isUuid(session.id)) {
+      return {
+        ok: false,
+        error: "Your account is not linked yet. Sign out and sign in with Google again.",
+      };
+    }
+    const { error } = await dbRequestSwap({
+      bookingId,
+      requesterId: session.id,
+      requesterName: session.name,
+      reason: reason || undefined,
+    });
+    if (error) return { ok: false, error };
+    return refreshRemote();
   }
 
   mutate((draft) => {
@@ -272,6 +406,12 @@ export async function acceptSwap(requestId: string): Promise<Result> {
     return { ok: false, error: "Only the owner can accept." };
   }
 
+  if (useRemote()) {
+    const { error } = await dbAcceptSwap(request);
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
   mutate((draft) => {
     const target = draft.bookings.find((entry) => entry.id === request.bookingId);
     const swap = draft.swapRequests.find((entry) => entry.id === requestId);
@@ -289,6 +429,12 @@ export async function declineSwap(requestId: string): Promise<Result> {
   const session = requireSession();
   if (!session) return { ok: false, error: "Sign in required." };
 
+  if (useRemote()) {
+    const { error } = await dbDeclineSwap(requestId);
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
   mutate((draft) => {
     const swap = draft.swapRequests.find((entry) => entry.id === requestId);
     if (swap) swap.status = "declined";
@@ -303,6 +449,12 @@ export async function deleteBookings(bookingIds: string[]): Promise<Result> {
     return { ok: false, error: "Admin only." };
   }
 
+  if (useRemote()) {
+    const { error } = await dbDeleteBookings(bookingIds);
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
   const ids = new Set(bookingIds);
   mutate((draft) => {
     draft.bookings = draft.bookings.filter((entry) => !ids.has(entry.id));
@@ -310,7 +462,6 @@ export async function deleteBookings(bookingIds: string[]): Promise<Result> {
   return { ok: true };
 }
 
-/** Reassign a booking to a different cart (same date/period). */
 export async function reassignBooking(
   bookingId: string,
   cartId: string,
@@ -338,6 +489,12 @@ export async function reassignBooking(
   );
   if (conflict) return { ok: false, error: "Target cart is already booked." };
 
+  if (useRemote()) {
+    const { error } = await dbReassignBooking(bookingId, cartId);
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
   mutate((draft) => {
     const target = draft.bookings.find((entry) => entry.id === bookingId);
     if (target) target.cartId = cartId;
@@ -355,6 +512,30 @@ export async function toggleSlotRestriction(
   const session = requireSession();
   if (!session || session.role !== "admin") {
     return { ok: false, error: "Admin only." };
+  }
+
+  const existing = getState().slotRestrictions.find(
+    (entry) =>
+      entry.cartId === cartId &&
+      entry.date === date &&
+      entry.period === period,
+  );
+
+  if (useRemote()) {
+    if (existing) {
+      const { error } = await dbDeleteRestriction(cartId, date, period);
+      if (error) return { ok: false, error };
+    } else {
+      const { error } = await dbInsertRestriction({
+        cartId,
+        date,
+        period,
+        category: options?.category ?? "other",
+        reason: options?.reason,
+      });
+      if (error) return { ok: false, error };
+    }
+    return refreshRemote();
   }
 
   mutate((draft) => {
@@ -381,10 +562,6 @@ export async function toggleSlotRestriction(
   return { ok: true };
 }
 
-/**
- * Batch restrict or clear slots over a date range.
- * action: "restrict" | "available"
- */
 export async function batchRestrictSlots(
   cartIds: string[],
   startDate: string,
@@ -412,6 +589,75 @@ export async function batchRestrictSlots(
     const weekday = day.getDay();
     return weekday !== 0 && weekday !== 6;
   });
+  const dates = days.map((day) => format(day, "yyyy-MM-dd"));
+
+  if (useRemote()) {
+    const state = getState();
+
+    if (action === "available") {
+      const { error } = await dbDeleteRestrictionsMatching(
+        cartIds,
+        dates,
+        periods,
+      );
+      if (error) return { ok: false, error };
+      restrictedCount = state.slotRestrictions.filter(
+        (entry) =>
+          cartIds.includes(entry.cartId) &&
+          dates.includes(entry.date) &&
+          periods.includes(entry.period),
+      ).length;
+      const refreshed = await refreshRemote();
+      if (!refreshed.ok) return refreshed;
+      return { ok: true, data: { restrictedCount, skippedBookedCount } };
+    }
+
+    const toInsert: Array<{
+      cartId: string;
+      date: string;
+      period: Period;
+      category: RestrictionCategory;
+      reason?: string;
+    }> = [];
+
+    for (const date of dates) {
+      for (const cartId of cartIds) {
+        for (const period of periods) {
+          const booked = state.bookings.some(
+            (booking) =>
+              booking.cartId === cartId &&
+              booking.date === date &&
+              booking.period === period,
+          );
+          if (booked) {
+            skippedBookedCount += 1;
+            continue;
+          }
+          const exists = state.slotRestrictions.some(
+            (entry) =>
+              entry.cartId === cartId &&
+              entry.date === date &&
+              entry.period === period,
+          );
+          if (exists) continue;
+          toInsert.push({
+            cartId,
+            date,
+            period,
+            category: options?.category ?? "other",
+            reason: options?.reason,
+          });
+        }
+      }
+    }
+
+    const { error } = await dbUpsertRestrictions(toInsert);
+    if (error) return { ok: false, error };
+    restrictedCount = toInsert.length;
+    const refreshed = await refreshRemote();
+    if (!refreshed.ok) return refreshed;
+    return { ok: true, data: { restrictedCount, skippedBookedCount } };
+  }
 
   mutate((draft) => {
     for (const day of days) {
@@ -470,6 +716,12 @@ export async function updateBookingPolicy(
     return { ok: false, error: "Admin only." };
   }
 
+  if (useRemote()) {
+    const { error } = await dbUpdateBookingPolicy(maxAdvanceDays);
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
   mutate((draft) => {
     draft.bookingPolicy.maxAdvanceDays = maxAdvanceDays;
   });
@@ -477,6 +729,9 @@ export async function updateBookingPolicy(
   return { ok: true };
 }
 
+/**
+ * Add a staff member to the Google allowlist (Supabase) or local demo users.
+ */
 export async function createTeacherCredentials(formData: FormData): Promise<
   Result<{ name: string; email: string; password: string }>
 > {
@@ -492,6 +747,25 @@ export async function createTeacherCredentials(formData: FormData): Promise<
     `Cubicle${Math.floor(1000 + Math.random() * 9000)}`;
 
   if (!name || !email) return { ok: false, error: "Name and email required." };
+
+  if (useRemote()) {
+    if (getState().users.some((user) => user.email === email)) {
+      return { ok: false, error: "Email already exists." };
+    }
+    const { error } = await dbAddAllowedEmail({ email, name, role: "teacher" });
+    if (error) return { ok: false, error };
+    const refreshed = await refreshRemote();
+    if (!refreshed.ok) return refreshed;
+    return {
+      ok: true,
+      data: {
+        name,
+        email,
+        password: "(Google sign-in — no password)",
+      },
+    };
+  }
+
   if (getState().users.some((user) => user.email === email)) {
     return { ok: false, error: "Email already exists." };
   }
@@ -521,6 +795,30 @@ export async function updateTeacherCredentials(
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
 
+  if (useRemote()) {
+    const user = getState().users.find((entry) => entry.id === teacherId);
+    if (!user) return { ok: false, error: "Teacher not found." };
+    const { error } = await dbUpdateAllowedEmail(user.email, {
+      name: name || undefined,
+      email: email || undefined,
+    });
+    if (error) return { ok: false, error };
+
+    // Keep profile in sync when they already signed in
+    if (isUuid(teacherId) && name) {
+      await dbUpdateProfile(teacherId, {
+        name,
+        title: user.title,
+        department: user.department,
+        phone: user.phone,
+        bio: user.bio,
+        notifyEmail: user.notifyEmail,
+        notifyIssues: user.notifyIssues,
+      });
+    }
+    return refreshRemote();
+  }
+
   mutate((draft) => {
     const user = draft.users.find((entry) => entry.id === teacherId);
     if (!user) return;
@@ -539,6 +837,14 @@ export async function deleteTeacherCredentials(
     return { ok: false, error: "Admin only." };
   }
 
+  if (useRemote()) {
+    const user = getState().users.find((entry) => entry.id === teacherId);
+    if (!user) return { ok: false, error: "Teacher not found." };
+    const { error } = await dbDeleteAllowedEmail(user.email);
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
   mutate((draft) => {
     draft.users = draft.users.filter((entry) => entry.id !== teacherId);
   });
@@ -552,6 +858,13 @@ export async function resetTeacherPassword(
   const session = requireSession();
   if (!session || session.role !== "admin") {
     return { ok: false, error: "Admin only." };
+  }
+
+  if (useRemote()) {
+    return {
+      ok: false,
+      error: "Staff sign in with Google — there is no password to reset.",
+    };
   }
 
   const password = `Cubicle${Math.floor(1000 + Math.random() * 9000)}`;
@@ -569,14 +882,23 @@ export async function resetTeacherPassword(
 }
 
 export async function signOutAction() {
-  if (typeof window !== "undefined") {
-    const { clearSession } = await import("@/lib/auth/session");
-    clearSession();
-    window.location.href = "/login";
+  if (typeof window === "undefined") return;
+
+  clearSession();
+
+  if (useRemote()) {
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch {
+      // ignore — local session already cleared
+    }
   }
+
+  window.location.href = "/login";
 }
 
-/** Update the signed-in user's profile (name, photo, prefs). */
 export async function updateProfile(
   input: ProfileUpdate,
 ): Promise<Result<SessionUser>> {
@@ -591,6 +913,31 @@ export async function updateProfile(
   }
   if (input.avatarUrl && input.avatarUrl.length > 900_000) {
     return { ok: false, error: "Photo is too large. Try a smaller image." };
+  }
+
+  if (useRemote() && isUuid(session.id)) {
+    const { error, data } = await dbUpdateProfile(session.id, input);
+    if (error || !data) return { ok: false, error: error ?? "Update failed." };
+
+    await dbSyncBookingTeacherName(session.id, data.name);
+
+    const current = getSession();
+    if (current) {
+      setSession({
+        ...current,
+        name: data.name,
+        avatarUrl: data.avatarUrl,
+        title: data.title,
+        department: data.department,
+        phone: data.phone,
+        bio: data.bio,
+        notifyEmail: data.notifyEmail,
+        notifyIssues: data.notifyIssues,
+      });
+    }
+
+    await refreshRemote();
+    return { ok: true, data };
   }
 
   const existing = getState().users.find((entry) => entry.id === session.id);
@@ -614,7 +961,6 @@ export async function updateProfile(
       user.avatarUrl = input.avatarUrl;
     }
 
-    // Keep booking / issue labels in sync when the teacher renames themselves
     for (const booking of draft.bookings) {
       if (booking.teacherId === user.id) {
         booking.teacherName = user.name;
@@ -644,8 +990,6 @@ export async function updateProfile(
     notifyIssues: saved.notifyIssues ?? true,
   };
 
-  // Keep auth session in sync so the header re-renders immediately
-  const { setSession } = await import("@/lib/auth/session");
   const current = getSession();
   if (current) {
     setSession({
@@ -663,6 +1007,3 @@ export async function updateProfile(
 
   return { ok: true, data: updated };
 }
-
-// silence unused import if tree-shaken oddly
-void addDays;

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { authenticate, DEMO_ACCOUNTS } from "@/lib/auth/credentials";
 import type { DemoAccount } from "@/lib/auth/types";
 import { AUTH_ROUTES } from "@/lib/auth/constants";
@@ -12,6 +12,8 @@ import {
   setSession,
 } from "@/lib/auth/session";
 import { authContainerVariants, authItemVariants } from "@/lib/auth/motion";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { createClient } from "@/lib/supabase/client";
 import { AuthLayout } from "./auth-layout";
 import {
   AuthFooter,
@@ -26,13 +28,33 @@ const roleAccent: Record<DemoAccount["role"], string> = {
   admin: "bg-violet-600",
 };
 
+const LOGIN_ERRORS: Record<string, string> = {
+  not_allowed:
+    "This Google account is not on the school allowlist. Contact IT if you need access.",
+  auth_failed: "Google sign-in failed. Please try again.",
+  missing_code: "Sign-in was cancelled or incomplete. Please try again.",
+  no_email: "Google did not return an email address for this account.",
+  allowlist_error: "Could not verify school access. Try again or contact IT.",
+  session_bridge: "Signed in, but we could not start your session. Try again.",
+  access_denied: "Google sign-in was denied.",
+};
+
+function messageForError(code: string | null): string {
+  if (!code) return "";
+  return LOGIN_ERRORS[code] ?? "Sign-in failed. Please try again.";
+}
+
 export default function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [provider, setProvider] = useState<AuthProvider | null>(null);
   const [loadingRole, setLoadingRole] = useState<DemoAccount["role"] | null>(
     null,
   );
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const supabaseReady = isSupabaseConfigured();
 
   useEffect(() => {
     const existing = getSession();
@@ -40,6 +62,49 @@ export default function LoginForm() {
       router.replace(getDashboardPath(existing.role));
     }
   }, [router]);
+
+  useEffect(() => {
+    const code = searchParams.get("error");
+    if (code) {
+      setError(messageForError(code));
+    }
+  }, [searchParams]);
+
+  async function signInWithGoogle() {
+    setError("");
+    setGoogleLoading(true);
+
+    if (!supabaseReady) {
+      setError(
+        "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local.",
+      );
+      setGoogleLoading(false);
+      return;
+    }
+
+    try {
+      const supabase = createClient();
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            // Force account chooser so staff can pick the school account
+            prompt: "select_account",
+          },
+        },
+      });
+
+      if (oauthError) {
+        setError(oauthError.message);
+        setGoogleLoading(false);
+      }
+      // On success the browser redirects to Google — keep loading state.
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in failed.");
+      setGoogleLoading(false);
+    }
+  }
 
   async function signInWithAccount(account: DemoAccount) {
     setError("");
@@ -61,6 +126,12 @@ export default function LoginForm() {
 
   function openProvider(next: AuthProvider) {
     setError("");
+    // Real Google OAuth when Supabase is configured.
+    if (next === "google" && supabaseReady) {
+      void signInWithGoogle();
+      return;
+    }
+    // Fallback: local demo accounts (Apple or Google without Supabase).
     setProvider(next);
   }
 
@@ -90,7 +161,11 @@ export default function LoginForm() {
         <motion.div variants={authItemVariants} className="mb-8">
           <AuthPageHeader
             title="Sign in"
-            description="Use your school Google or Apple account."
+            description={
+              supabaseReady
+                ? "Use your approved school Google account. Only allowlisted emails can enter."
+                : "Use your school Google or Apple account."
+            }
           />
         </motion.div>
 
@@ -121,11 +196,14 @@ export default function LoginForm() {
               <SocialSignInButton
                 provider="google"
                 onClick={() => openProvider("google")}
+                isLoading={googleLoading}
               />
-              <SocialSignInButton
-                provider="apple"
-                onClick={() => openProvider("apple")}
-              />
+              {!supabaseReady ? (
+                <SocialSignInButton
+                  provider="apple"
+                  onClick={() => openProvider("apple")}
+                />
+              ) : null}
             </motion.div>
           )}
         </AnimatePresence>
@@ -140,13 +218,24 @@ export default function LoginForm() {
           </motion.p>
         ) : null}
 
-        <motion.div variants={authItemVariants} className="mt-8">
-          <AuthFooter
-            prompt="No account?"
-            linkLabel="Create account"
-            href={AUTH_ROUTES.signup}
-          />
-        </motion.div>
+        {supabaseReady ? (
+          <motion.p
+            variants={authItemVariants}
+            className="mt-6 text-center text-[12.5px] leading-relaxed text-neutral-500"
+          >
+            Access is limited to emails added by IT on the school allowlist.
+            If you cannot sign in, ask your administrator to add your Google
+            email.
+          </motion.p>
+        ) : (
+          <motion.div variants={authItemVariants} className="mt-8">
+            <AuthFooter
+              prompt="No account?"
+              linkLabel="Create account"
+              href={AUTH_ROUTES.signup}
+            />
+          </motion.div>
+        )}
       </motion.div>
     </AuthLayout>
   );

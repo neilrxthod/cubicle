@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { clearSession } from "@/lib/auth/session";
+import { signOutAction } from "@/lib/actions";
 import type { SessionUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -72,8 +72,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
   );
 
   function handleSignOut() {
-    clearSession();
-    router.replace("/login");
+    void signOutAction();
   }
 
   return (
