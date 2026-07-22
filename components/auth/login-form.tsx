@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authenticate, DEMO_ACCOUNTS } from "@/lib/auth/credentials";
 import type { DemoAccount } from "@/lib/auth/types";
@@ -10,19 +11,17 @@ import {
   getSession,
   setSession,
 } from "@/lib/auth/session";
-import { authContainerVariants, authItemVariants } from "@/lib/auth/motion";
 import {
   GOOGLE_HOSTED_DOMAIN,
   SCHOOL_EMAIL_DOMAIN,
 } from "@/lib/auth/school-domain";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
-import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { AuthLayout } from "./auth-layout";
 import {
-  AuthPageHeader,
+  GoogleIcon,
   SocialAccountPicker,
-  SocialSignInButton,
   type AuthProvider,
 } from "./auth-ui";
 
@@ -32,7 +31,7 @@ const roleAccent: Record<DemoAccount["role"], string> = {
 };
 
 const LOGIN_ERRORS: Record<string, string> = {
-  not_allowed: `Your @${SCHOOL_EMAIL_DOMAIN} account is not on the school allowlist. Contact IT to be added.`,
+  not_allowed: `Your @${SCHOOL_EMAIL_DOMAIN} account is not on the IT allowlist. Contact IT to be added.`,
   invalid_domain: `Only @${SCHOOL_EMAIL_DOMAIN} Google accounts can sign in. Gmail and other domains are blocked.`,
   auth_failed: "Google sign-in failed. Please try again.",
   missing_code: "Sign-in was cancelled or incomplete. Please try again.",
@@ -47,7 +46,6 @@ function messageForError(code: string | null): string {
   return LOGIN_ERRORS[code] ?? "Sign-in failed. Please try again.";
 }
 
-/** Demo teacher/admin picker only when explicitly enabled (local). Never on production. */
 function isDemoLoginEnabled() {
   return process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === "true";
 }
@@ -74,9 +72,7 @@ export default function LoginForm() {
 
   useEffect(() => {
     const code = searchParams.get("error");
-    if (code) {
-      setError(messageForError(code));
-    }
+    if (code) setError(messageForError(code));
   }, [searchParams]);
 
   async function signInWithGoogle() {
@@ -85,7 +81,7 @@ export default function LoginForm() {
 
     if (!supabaseReady) {
       setError(
-        "Google sign-in is not configured on this server. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel Environment Variables, then redeploy.",
+        "Google sign-in is not configured. Add Supabase keys in Vercel, then redeploy.",
       );
       setGoogleLoading(false);
       return;
@@ -98,7 +94,6 @@ export default function LoginForm() {
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: {
-            // Prefer school Workspace accounts in the Google account picker
             hd: GOOGLE_HOSTED_DOMAIN,
             prompt: "select_account",
           },
@@ -118,51 +113,30 @@ export default function LoginForm() {
   async function signInWithAccount(account: DemoAccount) {
     setError("");
     setLoadingRole(account.role);
-
-    await new Promise((resolve) => setTimeout(resolve, 550));
-
+    await new Promise((resolve) => setTimeout(resolve, 400));
     const user = authenticate(account.email, account.password);
-
     if (!user) {
       setError("Sign-in failed.");
       setLoadingRole(null);
       return;
     }
-
     setSession(user);
     router.push(getDashboardPath(user.role));
   }
 
-  function openProvider(next: AuthProvider) {
+  function handlePrimaryClick() {
     setError("");
-
-    if (next === "google") {
-      if (supabaseReady) {
-        void signInWithGoogle();
-        return;
-      }
-      if (demoEnabled) {
-        setProvider(next);
-        return;
-      }
-      setError(
-        "Google sign-in is not configured. Add Supabase keys in Vercel Environment Variables and redeploy.",
-      );
+    if (supabaseReady) {
+      void signInWithGoogle();
       return;
     }
-
-    // Apple / other — demo only when explicitly enabled
     if (demoEnabled) {
-      setProvider(next);
+      setProvider("google");
       return;
     }
-    setError("Only Google sign-in is available.");
-  }
-
-  function closePicker() {
-    setProvider(null);
-    setError("");
-    setLoadingRole(null);
+    setError(
+      "Google sign-in is not configured. Add Supabase keys in Vercel, then redeploy.",
+    );
   }
 
   const accountOptions = DEMO_ACCOUNTS.map((account) => ({
@@ -177,103 +151,127 @@ export default function LoginForm() {
   return (
     <AuthLayout>
       <motion.div
-        variants={authContainerVariants}
-        initial={false}
-        animate="visible"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
         className="w-full"
       >
-        <motion.div variants={authItemVariants} className="mb-8">
-          <AuthPageHeader
-            title="Sign in"
-            description={`School Google only (@${SCHOOL_EMAIL_DOMAIN}). Your email must also be on the IT allowlist — personal Gmail is never accepted.`}
+        {/* Heading */}
+        <div className="mb-8">
+          <h1 className="text-[1.75rem] font-semibold tracking-[-0.04em] text-neutral-950 sm:text-[1.875rem]">
+            Sign in
+          </h1>
+          <p className="mt-3 text-[14.5px] leading-[1.55] text-neutral-500">
+            School Google only{" "}
+            <span className="font-medium text-neutral-800">
+              (@{SCHOOL_EMAIL_DOMAIN})
+            </span>
+            . Your email must also be on the IT allowlist — personal Gmail is
+            never accepted.
+          </p>
+        </div>
+
+        {provider && demoEnabled ? (
+          <SocialAccountPicker
+            provider={provider}
+            accounts={accountOptions}
+            onCancel={() => {
+              setProvider(null);
+              setError("");
+              setLoadingRole(null);
+            }}
           />
-        </motion.div>
-
-        <AnimatePresence mode="wait">
-          {provider && demoEnabled ? (
-            <motion.div
-              key="picker"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+        ) : (
+          <div className="space-y-5">
+            {/* Primary CTA */}
+            <button
+              type="button"
+              onClick={handlePrimaryClick}
+              disabled={googleLoading}
+              className={cn(
+                "group relative flex h-[52px] w-full items-center justify-center gap-3 rounded-xl",
+                "bg-neutral-950 text-[15px] font-medium tracking-[-0.01em] text-white",
+                "shadow-[0_1px_2px_rgba(0,0,0,0.08),0_8px_24px_-8px_rgba(0,0,0,0.35)]",
+                "transition-[transform,background-color,box-shadow] duration-150",
+                "hover:bg-neutral-800 hover:shadow-[0_1px_2px_rgba(0,0,0,0.08),0_12px_28px_-8px_rgba(0,0,0,0.4)]",
+                "active:scale-[0.985]",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950/20 focus-visible:ring-offset-2",
+                "disabled:pointer-events-none disabled:opacity-55",
+              )}
             >
-              <SocialAccountPicker
-                provider={provider}
-                accounts={accountOptions}
-                onCancel={closePicker}
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="buttons"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-              className="space-y-3"
-            >
-              <SocialSignInButton
-                provider="google"
-                onClick={() => openProvider("google")}
-                isLoading={googleLoading}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+              {googleLoading ? (
+                <>
+                  <span className="size-[18px] animate-spin rounded-full border-2 border-white/25 border-t-white" />
+                  Connecting…
+                </>
+              ) : (
+                <>
+                  <span className="flex size-5 items-center justify-center rounded-md bg-white p-0.5">
+                    <GoogleIcon width={16} height={16} />
+                  </span>
+                  Continue with Google
+                </>
+              )}
+            </button>
 
-        {error ? (
-          <motion.p
-            variants={authItemVariants}
-            role="alert"
-            className="mt-4 text-center text-[13.5px] text-red-600"
-          >
-            {error}
-          </motion.p>
-        ) : null}
+            {/* Access rules */}
+            <div className="rounded-xl border border-black/[0.06] bg-neutral-50/80 px-4 py-3.5">
+              <p className="text-[12px] font-medium tracking-wide text-neutral-500 uppercase">
+                Access
+              </p>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-neutral-600">
+                Only{" "}
+                <span className="font-medium text-neutral-900">
+                  @{SCHOOL_EMAIL_DOMAIN}
+                </span>{" "}
+                addresses on the IT allowlist can enter. Gmail and other domains
+                are blocked. Ask IT if you need access.
+              </p>
+            </div>
 
-        <motion.p
-          variants={authItemVariants}
-          className="mt-6 text-center text-[12.5px] leading-relaxed text-neutral-500"
-        >
-          {`Only @${SCHOOL_EMAIL_DOMAIN} addresses on the IT allowlist can enter.
-          Gmail and other domains are blocked. Ask IT if you need access.`}
-        </motion.p>
+            {error ? (
+              <div
+                role="alert"
+                className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] leading-relaxed text-red-700"
+              >
+                {error}
+              </div>
+            ) : null}
 
-        <motion.p
-          variants={authItemVariants}
-          className="mt-4 text-center text-[11.5px] leading-relaxed text-neutral-400"
-        >
-          By continuing, you agree to our{" "}
-          <Link
-            href="/legal/terms"
-            className="font-medium text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-          >
-            Terms
-          </Link>
-          ,{" "}
-          <Link
-            href="/legal/privacy"
-            className="font-medium text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-          >
-            Privacy Policy
-          </Link>
-          , and{" "}
-          <Link
-            href="/legal/acceptable-use"
-            className="font-medium text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-          >
-            Acceptable Use
-          </Link>
-          .{" "}
-          <Link
-            href="/legal/security"
-            className="font-medium text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
-          >
-            Security &amp; data safety
-          </Link>
-          .
-        </motion.p>
+            {/* Legal */}
+            <p className="text-center text-[11.5px] leading-relaxed text-neutral-400">
+              By continuing, you agree to our{" "}
+              <Link
+                href="/legal/terms"
+                className="text-neutral-600 underline decoration-neutral-300 underline-offset-[3px] transition-colors hover:text-neutral-950 hover:decoration-neutral-500"
+              >
+                Terms
+              </Link>
+              ,{" "}
+              <Link
+                href="/legal/privacy"
+                className="text-neutral-600 underline decoration-neutral-300 underline-offset-[3px] transition-colors hover:text-neutral-950 hover:decoration-neutral-500"
+              >
+                Privacy Policy
+              </Link>
+              , and{" "}
+              <Link
+                href="/legal/acceptable-use"
+                className="text-neutral-600 underline decoration-neutral-300 underline-offset-[3px] transition-colors hover:text-neutral-950 hover:decoration-neutral-500"
+              >
+                Acceptable Use
+              </Link>
+              .{" "}
+              <Link
+                href="/legal/security"
+                className="text-neutral-600 underline decoration-neutral-300 underline-offset-[3px] transition-colors hover:text-neutral-950 hover:decoration-neutral-500"
+              >
+                Security &amp; data safety
+              </Link>
+              .
+            </p>
+          </div>
+        )}
       </motion.div>
     </AuthLayout>
   );
