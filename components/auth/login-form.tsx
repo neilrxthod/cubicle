@@ -207,18 +207,6 @@ export default function LoginForm() {
               transition={{ duration: 0.15 }}
               className="space-y-5"
             >
-              <LegalConsent
-                checked={acceptedLegal}
-                onCheckedChange={(value) => {
-                  setAcceptedLegal(value);
-                  if (value) {
-                    setLegalInvalid(false);
-                    if (error === LEGAL_REQUIRED) setError("");
-                  }
-                }}
-                invalid={legalInvalid}
-              />
-
               <button
                 type="button"
                 onClick={handleGoogleClick}
@@ -241,6 +229,18 @@ export default function LoginForm() {
                 )}
                 {googleLoading ? "Connecting…" : "Continue with Google"}
               </button>
+
+              <LegalConsent
+                checked={acceptedLegal}
+                onCheckedChange={(value) => {
+                  setAcceptedLegal(value);
+                  if (value) {
+                    setLegalInvalid(false);
+                    if (error === LEGAL_REQUIRED) setError("");
+                  }
+                }}
+                invalid={legalInvalid}
+              />
 
               {(error || legalInvalid) && (
                 <p
