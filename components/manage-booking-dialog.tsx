@@ -3,6 +3,7 @@
 import { useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
+import { ExternalLink } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -11,6 +12,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { cancelBooking } from "@/lib/actions"
+import {
+  buildGoogleCalendarTemplateUrl,
+  syncBookingCanceled,
+} from "@/lib/calendar/google-calendar"
 import { toast } from "@/hooks/use-toast"
 import type { Booking, Cart } from "@/lib/types"
 
@@ -68,6 +73,16 @@ export function ManageBookingDialog({
             ) : null}
           </dl>
 
+          <a
+            href={buildGoogleCalendarTemplateUrl({ booking, cart })}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-muted/40"
+          >
+            <ExternalLink className="size-3.5 text-muted-foreground" />
+            Add to Google Calendar
+          </a>
+
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button
               type="button"
@@ -90,6 +105,7 @@ export function ManageBookingDialog({
                     })
                     return
                   }
+                  await syncBookingCanceled(booking.id)
                   toast({ title: "Canceled" })
                   router.refresh()
                   onClose()

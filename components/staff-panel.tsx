@@ -30,6 +30,7 @@ import {
 import {
   createTeacherCredentials,
   deleteTeacherCredentials,
+  setStaffVerified,
   updateTeacherCredentials,
 } from "@/lib/actions"
 import { isSupabaseConfigured } from "@/lib/supabase/env"
@@ -49,6 +50,7 @@ import type {
 import { cn } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import { VerifiedBadge, VerifiedName } from "@/components/verified-badge"
+import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -543,7 +545,10 @@ export function StaffPanel({
                           : "hover:bg-neutral-50/80",
                       )}
                     >
-                      <Avatar user={user} />
+                      <Avatar
+                        user={user}
+                        verified={isVerifiedStaff(user)}
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 items-center gap-1.5">
                           <VerifiedName
@@ -597,12 +602,36 @@ export function StaffPanel({
               metrics={selectedMetrics}
               cartMap={cartMap}
               googleMode={googleMode}
+              verifyBusy={busyKey === `verify:${selected.id}`}
               onEdit={() => openEdit(selected)}
               onRemove={() => {
                 setDeleteError(null)
                 setDeleteTarget(selected)
               }}
               onCopyEmail={() => copyText(selected.email, "Email copied")}
+              onSetVerified={(verified) => {
+                const id = selected.id
+                setBusyKey(`verify:${id}`)
+                startTransition(async () => {
+                  const res = await setStaffVerified(id, verified)
+                  setBusyKey(null)
+                  if (!res.ok) {
+                    toast({
+                      title: "Could not update badge",
+                      description: res.error,
+                      variant: "destructive",
+                    })
+                    return
+                  }
+                  toast({
+                    title: verified
+                      ? "Verified badge granted"
+                      : "Verified badge removed",
+                    description: selected.name,
+                  })
+                  router.refresh()
+                })
+              }}
             />
           )}
         </div>
@@ -828,42 +857,58 @@ function StaffDetail({
   metrics,
   cartMap,
   googleMode,
+  verifyBusy,
   onEdit,
   onRemove,
   onCopyEmail,
+  onSetVerified,
 }: {
   user: User
   metrics: StaffMetrics
   cartMap: Map<string, Cart>
   googleMode: boolean
+  verifyBusy?: boolean
   onEdit: () => void
   onRemove: () => void
   onCopyEmail: () => void
+  onSetVerified: (verified: boolean) => void
 }) {
   const verified = isVerifiedStaff(user)
+  const canManageVerify = user.allowlisted !== false
 
   return (
     <div className="flex max-h-[min(70vh,40rem)] flex-col">
       <div className="border-b border-neutral-100 px-4 py-4">
         <div className="flex items-start gap-3">
-          <Avatar user={user} size="lg" />
+          <Avatar user={user} size="lg" verified={verified} />
           <div className="min-w-0 flex-1">
-            <VerifiedName
-              name={user.name}
-              verified={verified}
-              size="md"
-              nameClassName="text-[15px] font-semibold tracking-tight text-neutral-950"
-            />
+            <div className="flex min-w-0 items-center gap-1.5">
+              <VerifiedName
+                name={user.name}
+                verified={verified}
+                size="md"
+                nameClassName="text-[15px] font-semibold tracking-tight text-neutral-950"
+              />
+            </div>
             <p className="mt-0.5 truncate text-[12.5px] text-neutral-400">
               {user.email}
             </p>
-            <p className="mt-1.5 text-[11.5px] text-neutral-500">
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11.5px] text-neutral-500">
               <StatusDot status={metrics.status} />
-              <span className="mx-1.5 text-neutral-300">·</span>
-              {user.role === "admin" ? "Admin" : "Teacher"}
-              <span className="mx-1.5 text-neutral-300">·</span>
-              {employmentLabel(user.employmentType)}
-            </p>
+              <span className="text-neutral-300">·</span>
+              <span>{user.role === "admin" ? "Admin" : "Teacher"}</span>
+              <span className="text-neutral-300">·</span>
+              <span>{employmentLabel(user.employmentType)}</span>
+              {verified ? (
+                <>
+                  <span className="text-neutral-300">·</span>
+                  <span className="inline-flex items-center gap-1 font-medium text-[#1d9bf0]">
+                    <VerifiedBadge size="xs" title="Verified permanent staff" />
+                    Verified
+                  </span>
+                </>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -893,6 +938,65 @@ function StaffDetail({
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
+        {/* Admin: grant / revoke verified badge */}
+        <section
+          className={cn(
+            "rounded-xl border px-3 py-3",
+            verified
+              ? "border-[#1d9bf0]/20 bg-[#1d9bf0]/[0.04]"
+              : "border-neutral-100 bg-neutral-50/60",
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <span
+              className={cn(
+                "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full",
+                verified ? "bg-[#1d9bf0]/12" : "bg-neutral-200/70",
+              )}
+            >
+              <VerifiedBadge
+                size="md"
+                className={verified ? undefined : "text-neutral-400"}
+                title={
+                  verified
+                    ? "Verified permanent staff"
+                    : "Not verified"
+                }
+              />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold tracking-tight text-neutral-950">
+                    Verified badge
+                  </p>
+                  <p className="mt-0.5 text-[12px] leading-snug text-neutral-500">
+                    {verified
+                      ? "Blue tick on board, bookings, and profile."
+                      : "Grant permanent staff status and the blue tick."}
+                  </p>
+                </div>
+                <Switch
+                  checked={verified}
+                  disabled={!canManageVerify || verifyBusy}
+                  onCheckedChange={(next) => onSetVerified(next)}
+                  aria-label={
+                    verified ? "Remove verified badge" : "Grant verified badge"
+                  }
+                />
+              </div>
+              {!canManageVerify ? (
+                <p className="mt-2 text-[11.5px] text-neutral-400">
+                  Restore access first to manage verification.
+                </p>
+              ) : null}
+              {verifyBusy ? (
+                <p className="mt-2 text-[11.5px] text-neutral-400">Updating…</p>
+              ) : null}
+            </div>
+          </div>
+        </section>
+
         {/* Snapshot */}
         <div className="grid grid-cols-3 gap-2">
           <StatCell
@@ -936,7 +1040,19 @@ function StaffDetail({
                     : "Allowed"
               }
             />
-            <Fact label="Verified" value={verified ? "Yes" : "No"} />
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-neutral-400">Verified</dt>
+              <dd className="inline-flex min-w-0 items-center justify-end gap-1 text-right font-medium text-neutral-800">
+                {verified ? (
+                  <>
+                    <VerifiedBadge size="sm" />
+                    <span>Yes</span>
+                  </>
+                ) : (
+                  <span>No</span>
+                )}
+              </dd>
+            </div>
           </dl>
         </section>
 
@@ -1089,30 +1205,48 @@ function EmptyList({
 function Avatar({
   user,
   size = "md",
+  verified = false,
 }: {
   user: User
   size?: "md" | "lg"
+  verified?: boolean
 }) {
   const dim = size === "lg" ? "size-11 text-[12px]" : "size-9 text-[11px]"
-  if (user.avatarUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={user.avatarUrl}
-        alt=""
-        referrerPolicy="no-referrer"
-        className={cn(dim, "shrink-0 rounded-full object-cover")}
-      />
-    )
-  }
-  return (
+  const badgeSize = size === "lg" ? "sm" : "xs"
+  const face = user.avatarUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={user.avatarUrl}
+      alt=""
+      referrerPolicy="no-referrer"
+      className={cn(dim, "rounded-full object-cover")}
+    />
+  ) : (
     <span
       className={cn(
         dim,
-        "flex shrink-0 items-center justify-center rounded-full bg-neutral-100 font-semibold text-neutral-600",
+        "flex items-center justify-center rounded-full bg-neutral-100 font-semibold text-neutral-600",
       )}
     >
       {initials(user.name)}
+    </span>
+  )
+
+  if (!verified) {
+    return <span className="relative shrink-0">{face}</span>
+  }
+
+  return (
+    <span className="relative shrink-0">
+      {face}
+      <span
+        className={cn(
+          "absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-white",
+          size === "lg" ? "size-4" : "size-3.5",
+        )}
+      >
+        <VerifiedBadge size={badgeSize} className="size-full" />
+      </span>
     </span>
   )
 }

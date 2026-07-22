@@ -20,10 +20,13 @@ Cubicle helps schools book laptop carts by period, track availability on a daily
 |------|------------|
 | **Daily board** | Period-by-period cart availability |
 | **Bookings** | Reserve carts by date, period, class, and room |
+| **Settings** | Profile, Google Calendar connect, email prefs, role-aware shortcuts |
+| **Google Calendar** | Connect · auto-sync book/cancel · one-click Add to Calendar |
 | **Swaps** | Request and resolve booking swaps |
 | **Issues** | Report severity-tagged equipment problems |
-| **Admin** | Cart status, restrictions, staff allowlist |
+| **Admin** | Cart status, restrictions, staff allowlist + verified badges |
 | **Auth** | Google OAuth · school domain only · IT allowlist |
+| **Data durability** | Supabase Postgres — deploys never wipe bookings/staff/carts |
 | **Compliance** | Terms, Privacy, Security, Acceptable Use on-site |
 
 ---
@@ -115,7 +118,8 @@ Run SQL (Supabase SQL Editor), in order:
 5. `supabase/realtime.sql` (live multi-user board)
 6. `supabase/employment-type.sql` (permanent / sub / temp + blue tick)
 
-Production checklist: [`PRODUCTION.md`](./PRODUCTION.md)
+Production checklist: [`PRODUCTION.md`](./PRODUCTION.md)  
+Data safety (survives every push): [`supabase/DATA_DURABILITY.md`](./supabase/DATA_DURABILITY.md)
 
 Add staff in **Table Editor → `allowed_emails`** (or Admin → Staff after first admin login), then:
 

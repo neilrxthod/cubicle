@@ -159,19 +159,26 @@ export async function dbCreateBooking(input: {
   className?: string;
   subject?: string;
   notes?: string;
-}): Promise<{ error?: string }> {
+}): Promise<{ id?: string; error?: string }> {
   const supabase = client();
-  const { error } = await supabase.from("bookings").insert({
-    cart_id: input.cartId,
-    date: input.date,
-    period: input.period,
-    teacher_id: input.teacherId,
-    teacher_name: input.teacherName,
-    class_name: input.className ?? null,
-    subject: input.subject ?? null,
-    notes: input.notes ?? null,
-  });
-  return { error: mapBookingDbError(error?.message) };
+  const { data, error } = await supabase
+    .from("bookings")
+    .insert({
+      cart_id: input.cartId,
+      date: input.date,
+      period: input.period,
+      teacher_id: input.teacherId,
+      teacher_name: input.teacherName,
+      class_name: input.className ?? null,
+      subject: input.subject ?? null,
+      notes: input.notes ?? null,
+    })
+    .select("id")
+    .single();
+  return {
+    id: data?.id ? String(data.id) : undefined,
+    error: mapBookingDbError(error?.message),
+  };
 }
 
 export async function dbDeleteBooking(bookingId: string): Promise<{ error?: string }> {

@@ -1,5 +1,11 @@
 -- Full 22-cart seed for Cubicle (matches app demo names).
--- Run after schema.sql. Safe to re-run (upserts by id).
+-- Run after schema.sql.
+--
+-- SAFE TO RE-RUN ON PRODUCTION:
+-- - Inserts missing carts only for new ids.
+-- - On conflict: updates catalog fields (name, laptop_count, location)
+--   but NEVER overwrites operational status (active/maintenance) so a re-seed
+--   cannot undo live maintenance flags or admin edits.
 
 insert into public.carts (id, name, status, laptop_count, location) values
   ('cart-01', 'Oak', 'active', 30, 'Library'),
@@ -26,9 +32,9 @@ insert into public.carts (id, name, status, laptop_count, location) values
   ('cart-22', 'Yew', 'active', 24, 'Counseling suite')
 on conflict (id) do update set
   name = excluded.name,
-  status = excluded.status,
   laptop_count = excluded.laptop_count,
   location = excluded.location;
+  -- status intentionally omitted — preserve live operational state
 
 -- High-severity issues auto-flag the cart for maintenance (works for teachers under RLS)
 create or replace function public.on_issue_high_severity()

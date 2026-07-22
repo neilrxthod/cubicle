@@ -10,8 +10,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { createBooking } from "@/lib/actions"
+import { syncBookingCreated } from "@/lib/calendar/google-calendar"
+import { getGoogleCalendarPrefs } from "@/lib/calendar/preferences"
 import { toast } from "@/hooks/use-toast"
-import type { Cart, Period } from "@/lib/types"
+import type { Booking, Cart, Period } from "@/lib/types"
 import { format, parseISO } from "date-fns"
 
 const fieldClass =
@@ -84,9 +86,41 @@ export function BookDialog({
                 router.refresh()
                 return
               }
+
+              let calendarNote = ""
+              const booking: Booking | undefined =
+                res.ok && res.data?.booking
+                  ? res.data.booking
+                  : res.ok && res.data?.bookingId
+                    ? {
+                        id: res.data.bookingId,
+                        cartId: cart.id,
+                        date,
+                        period,
+                        teacherId: "",
+                        teacherName: "",
+                        className: className.trim(),
+                        subject: subject.trim() || undefined,
+                        notes: notes.trim() || undefined,
+                        createdAt: new Date().toISOString(),
+                      }
+                    : undefined
+
+              if (booking) {
+                const prefs = getGoogleCalendarPrefs()
+                if (prefs.connected && prefs.autoSync) {
+                  const sync = await syncBookingCreated({ booking, cart })
+                  if (sync.ok && !sync.skipped) {
+                    calendarNote = " · added to Google Calendar"
+                  } else if (!sync.ok && sync.needsReconnect) {
+                    calendarNote = " · calendar reconnect needed"
+                  }
+                }
+              }
+
               toast({
                 title: "Booked",
-                description: `${cart.name} · ${period}`,
+                description: `${cart.name} · ${period}${calendarNote}`,
               })
               router.refresh()
               onClose()

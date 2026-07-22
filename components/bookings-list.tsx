@@ -4,8 +4,13 @@ import { useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
+import { CalendarPlus } from "lucide-react"
 import type { Booking, Cart } from "@/lib/types"
 import { cancelBooking } from "@/lib/actions"
+import {
+  buildGoogleCalendarTemplateUrl,
+  syncBookingCanceled,
+} from "@/lib/calendar/google-calendar"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { usePlatformStore } from "@/lib/data/platform-store"
@@ -102,32 +107,43 @@ export function BookingsList({
                     </p>
                   ) : null}
                 </div>
-                {canCancel ? (
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() =>
-                      startTransition(async () => {
-                        const res = await cancelBooking(b.id)
-                        if (res && "error" in res && res.error) {
-                          toast({
-                            title: "Could not cancel",
-                            description: res.error,
-                            variant: "destructive",
-                          })
-                          return
-                        }
-                        toast({ title: "Canceled" })
-                        router.refresh()
-                      })
-                    }
-                    className="h-8 shrink-0 rounded-lg bg-neutral-950 px-3 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                  <a
+                    href={buildGoogleCalendarTemplateUrl({ booking: b, cart })}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Add to Google Calendar"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 text-[12px] font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
                   >
-                    Cancel
-                  </button>
-                ) : (
-                  <span className="hidden sm:block" aria-hidden />
-                )}
+                    <CalendarPlus className="size-3.5" strokeWidth={1.75} />
+                    <span className="hidden sm:inline">Calendar</span>
+                  </a>
+                  {canCancel ? (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() =>
+                        startTransition(async () => {
+                          const res = await cancelBooking(b.id)
+                          if (res && "error" in res && res.error) {
+                            toast({
+                              title: "Could not cancel",
+                              description: res.error,
+                              variant: "destructive",
+                            })
+                            return
+                          }
+                          await syncBookingCanceled(b.id)
+                          toast({ title: "Canceled" })
+                          router.refresh()
+                        })
+                      }
+                      className="h-8 shrink-0 rounded-lg bg-neutral-950 px-3 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  ) : null}
+                </div>
               </li>
             )
           })}

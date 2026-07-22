@@ -2,6 +2,36 @@
 
 School staff app for **mycubicle.app**. Not a public consumer product.
 
+## Data durability (non-negotiable)
+
+**Code deploys never wipe school data.**
+
+| Layer | Holds | On `git push` / Vercel redeploy |
+|-------|--------|----------------------------------|
+| **Supabase Postgres** | Bookings, carts, issues, staff, restrictions, profiles | **Unchanged** |
+| **Vercel** | Next.js UI + API only | Replaced with new build |
+| **Browser** | Session + temporary cache | Not the source of truth |
+
+Full write-up: [`supabase/DATA_DURABILITY.md`](./supabase/DATA_DURABILITY.md)
+
+### Production env (required so data stays on Postgres)
+
+```text
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+# Optional extra lock — refuses demo/local mode on this deploy
+NEXT_PUBLIC_CUBICLE_REQUIRE_REMOTE=true
+```
+
+Without Supabase keys, production hosts (`mycubicle.app`, `*.vercel.app`) **hard-stop** with “Database not connected” instead of showing empty seed data.
+
+### Never do this on a live school project
+
+- Point Vercel at a **new empty** Supabase project (looks like “all data gone”)
+- Run `drop table` / `truncate` in SQL Editor
+- Enable `NEXT_PUBLIC_ENABLE_DEMO_LOGIN` on Vercel Production
+
 ## Access model (non-negotiable)
 
 1. Only `@rbe.sk.ca` Google accounts may sign in.
@@ -73,6 +103,14 @@ on conflict (email) do update
   - `https://<project-ref>.supabase.co/auth/v1/callback`
 - If app is **External + Testing**, add every staff Google account as Test users until published.
 
+### Google Calendar API (Settings → Connect)
+
+- Enable **Google Calendar API** on the OAuth Cloud project
+- Consent scope: `https://www.googleapis.com/auth/calendar.events`
+- Prefer **Internal** OAuth app under board Workspace for staff-only use
+- Teachers connect once in **Settings**; new bookings auto-create events when auto-sync is on
+- Fallback: **Add to Calendar** links work without API access
+
 ## DNS (name.com → Vercel)
 
 Use the values shown in **Vercel → Project → Domains** (they can change):
@@ -103,7 +141,7 @@ Build must exit 0. Proxy (session refresh) should appear in the build output.
 - [ ] Admin → Inventory / Reservations / Reports / Staff / Restrictions
 - [ ] Staff: add allowlist email; permanent shows blue tick
 - [ ] Restrictions: lock / unlock slots; booked cells not cancelable there
-- [ ] Settings: name/photo save
+- [ ] Settings: profile photo/name save; Google Calendar section; shortcuts (bookings / admin / sign out)
 - [ ] Sign out works
 - [ ] `/legal/*` pages load
 - [ ] `/signup` redirects to login

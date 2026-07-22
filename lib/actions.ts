@@ -4,11 +4,13 @@ import { eachDayOfInterval, format, parseISO } from "date-fns";
 import { getSession, setSession, clearSession } from "@/lib/auth/session";
 import { schoolEmailError } from "@/lib/auth/school-domain";
 import {
+  clearPlatformBrowserCache,
   getState,
   makeId,
   mutate,
   replaceState,
 } from "@/lib/data/platform-store";
+import { localWriteBlockReason } from "@/lib/data/durability";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import {
   dbAcceptSwap,
@@ -35,8 +37,12 @@ import {
   fetchPlatformState,
   isUuid,
 } from "@/lib/supabase/platform-api";
-import { parseEmploymentType } from "@/lib/staff/employment";
+import {
+  isVerifiedStaff,
+  parseEmploymentType,
+} from "@/lib/staff/employment";
 import type {
+  Booking,
   CartStatus,
   EmploymentType,
   Period,
@@ -49,8 +55,20 @@ type Ok<T = undefined> = { ok: true; data?: T; error?: undefined };
 type Fail = { ok: false; error: string };
 type Result<T = undefined> = Ok<T> | Fail;
 
+export type CreateBookingResult = {
+  bookingId: string;
+  booking?: Booking;
+};
+
 function useRemote() {
   return isSupabaseConfigured();
+}
+
+/** Block localStorage-only mutations when production requires Postgres. */
+function assertLocalDemoAllowed(): Result {
+  const reason = localWriteBlockReason();
+  if (reason) return { ok: false, error: reason };
+  return { ok: true };
 }
 
 async function refreshRemote(): Promise<Result> {
@@ -112,7 +130,9 @@ function requireSession(): SessionUser | null {
   };
 }
 
-export async function createBooking(formData: FormData): Promise<Result> {
+export async function createBooking(
+  formData: FormData,
+): Promise<Result<CreateBookingResult>> {
   const session = requireSession();
   if (!session) return { ok: false, error: "Sign in required." };
 
@@ -162,7 +182,7 @@ export async function createBooking(formData: FormData): Promise<Result> {
         error: "Your account is not linked yet. Sign out and sign in with Google again.",
       };
     }
-    const { error } = await dbCreateBooking({
+    const { id: remoteId, error } = await dbCreateBooking({
       cartId,
       date,
       period,
@@ -176,11 +196,33 @@ export async function createBooking(formData: FormData): Promise<Result> {
     const refreshed = await refreshRemote();
     if (error) return { ok: false, error };
     if (!refreshed.ok) return refreshed;
-    return { ok: true };
+
+    const matched =
+      (remoteId && getState().bookings.find((b) => b.id === remoteId)) ||
+      getState().bookings.find(
+        (b) =>
+          b.cartId === cartId &&
+          b.date === date &&
+          b.period === period &&
+          b.teacherId === session.id,
+      );
+
+    return {
+      ok: true,
+      data: matched
+        ? { bookingId: matched.id, booking: matched }
+        : remoteId
+          ? { bookingId: remoteId }
+          : undefined,
+    };
   }
 
-  // Local demo path: re-check inside mutate to reduce double-click races in one tab.
+  // Local demo path only (never production without Supabase).
+  const demoOk = assertLocalDemoAllowed();
+  if (!demoOk.ok) return demoOk;
+
   let localConflict = false;
+  let localBookingId = "";
   mutate((draft) => {
     const taken = draft.bookings.some(
       (booking) =>
@@ -192,8 +234,9 @@ export async function createBooking(formData: FormData): Promise<Result> {
       localConflict = true;
       return;
     }
+    localBookingId = makeId("bk");
     draft.bookings.unshift({
-      id: makeId("bk"),
+      id: localBookingId,
       cartId,
       date,
       period,
@@ -209,7 +252,13 @@ export async function createBooking(formData: FormData): Promise<Result> {
     return { ok: false, error: "That slot is already booked." };
   }
 
-  return { ok: true };
+  const localBooking = getState().bookings.find((b) => b.id === localBookingId);
+  return {
+    ok: true,
+    data: localBooking
+      ? { bookingId: localBooking.id, booking: localBooking }
+      : { bookingId: localBookingId },
+  };
 }
 
 export async function cancelBooking(bookingId: string): Promise<Result> {
@@ -228,6 +277,8 @@ export async function cancelBooking(bookingId: string): Promise<Result> {
     return refreshRemote();
   }
 
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     draft.bookings = draft.bookings.filter((entry) => entry.id !== bookingId);
     draft.swapRequests = draft.swapRequests.filter(
@@ -271,6 +322,8 @@ export async function reportIssue(formData: FormData): Promise<Result> {
     return refreshRemote();
   }
 
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     draft.issues.unshift({
       id: makeId("iss"),
@@ -325,6 +378,8 @@ export async function updateIssueStatus(
     return refreshRemote();
   }
 
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     const target = draft.issues.find((entry) => entry.id === issueId);
     if (!target) return;
@@ -363,6 +418,8 @@ export async function setCartStatus(
     return refreshRemote();
   }
 
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     const cart = draft.carts.find((entry) => entry.id === cartId);
     if (cart) cart.status = status;
@@ -402,6 +459,8 @@ export async function requestSwap(formData: FormData): Promise<Result> {
     return refreshRemote();
   }
 
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     draft.swapRequests.unshift({
       id: makeId("sw"),
@@ -439,6 +498,8 @@ export async function acceptSwap(requestId: string): Promise<Result> {
     return refreshRemote();
   }
 
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     const target = draft.bookings.find((entry) => entry.id === request.bookingId);
     const swap = draft.swapRequests.find((entry) => entry.id === requestId);
@@ -462,6 +523,8 @@ export async function declineSwap(requestId: string): Promise<Result> {
     return refreshRemote();
   }
 
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     const swap = draft.swapRequests.find((entry) => entry.id === requestId);
     if (swap) swap.status = "declined";
@@ -483,6 +546,8 @@ export async function deleteBookings(bookingIds: string[]): Promise<Result> {
   }
 
   const ids = new Set(bookingIds);
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     draft.bookings = draft.bookings.filter((entry) => !ids.has(entry.id));
   });
@@ -522,6 +587,8 @@ export async function reassignBooking(
     return refreshRemote();
   }
 
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     const target = draft.bookings.find((entry) => entry.id === bookingId);
     if (target) target.cartId = cartId;
@@ -565,6 +632,8 @@ export async function toggleSlotRestriction(
     return refreshRemote();
   }
 
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     const existingIndex = draft.slotRestrictions.findIndex(
       (entry) =>
@@ -686,6 +755,8 @@ export async function batchRestrictSlots(
     return { ok: true, data: { restrictedCount, skippedBookedCount } };
   }
 
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     for (const day of days) {
       const date = format(day, "yyyy-MM-dd");
@@ -749,6 +820,8 @@ export async function updateBookingPolicy(
     return refreshRemote();
   }
 
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     draft.bookingPolicy.maxAdvanceDays = maxAdvanceDays;
   });
@@ -854,6 +927,8 @@ export async function createTeacherCredentials(
     return { ok: false, error: "Email already exists." };
   }
 
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     draft.users.push({
       id: makeId(role === "admin" ? "admin" : "teacher"),
@@ -947,6 +1022,8 @@ export async function updateTeacherCredentials(
   }
 
   let found = false;
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     const user = draft.users.find((entry) => entry.id === teacherId);
     if (!user) return;
@@ -970,6 +1047,71 @@ export async function updateTeacherCredentials(
     if (conflict) return { ok: false, error: "Email already exists." };
     return { ok: false, error: "Staff member not found." };
   }
+
+  return { ok: true };
+}
+
+/**
+ * Admin-only: grant or revoke the blue verified badge.
+ * Verified = permanent employment (and allowlisted).
+ * Revoking sets employment to temporary (keeps sign-in access).
+ */
+export async function setStaffVerified(
+  teacherId: string,
+  verified: boolean,
+): Promise<Result> {
+  const session = requireSession();
+  if (!session || session.role !== "admin") {
+    return { ok: false, error: "Admin only." };
+  }
+
+  const user = getState().users.find((entry) => entry.id === teacherId);
+  if (!user) return { ok: false, error: "Staff member not found." };
+  if (user.allowlisted === false) {
+    return {
+      ok: false,
+      error: "Restore access before granting a verified badge.",
+    };
+  }
+
+  const employmentType: EmploymentType = verified
+    ? "permanent"
+    : user.employmentType === "substitute"
+      ? "substitute"
+      : "temporary";
+
+  // Already in desired verified state — no-op success.
+  const currentlyVerified = isVerifiedStaff(user);
+  if (currentlyVerified === verified) {
+    return { ok: true };
+  }
+
+  if (useRemote()) {
+    const { error } = await dbUpdateAllowedEmail(user.email, {
+      employmentType,
+    });
+    if (error) {
+      if (error.toLowerCase().includes("employment_type")) {
+        return {
+          ok: false,
+          error:
+            "Database missing employment_type. Run supabase/employment-type.sql in the SQL Editor.",
+        };
+      }
+      return { ok: false, error };
+    }
+    if (isUuid(teacherId)) {
+      await dbUpdateProfileEmployment(teacherId, employmentType);
+    }
+    return refreshRemote();
+  }
+
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
+  mutate((draft) => {
+    const entry = draft.users.find((u) => u.id === teacherId);
+    if (entry) entry.employmentType = employmentType;
+  });
 
   return { ok: true };
 }
@@ -1009,6 +1151,8 @@ export async function deleteTeacherCredentials(
     return { ok: false, error: "You cannot remove your own access." };
   }
 
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     draft.users = draft.users.filter((entry) => entry.id !== teacherId);
   });
@@ -1033,6 +1177,8 @@ export async function resetTeacherPassword(
 
   const password = `Cubicle${Math.floor(1000 + Math.random() * 9000)}`;
   let found = false;
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     const user = draft.users.find((entry) => entry.id === teacherId);
     if (user) {
@@ -1050,14 +1196,19 @@ export async function signOutAction() {
 
   clearSession();
 
-  // Force fresh platform hydrate on next sign-in (avoid stale user data).
+  // Drop browser cache only — never touches Supabase Postgres.
+  // Next sign-in re-hydrates bookings/carts/staff from the database.
   try {
-    const { markPlatformRemoteHydrated } = await import(
-      "@/lib/data/platform-store"
-    );
-    markPlatformRemoteHydrated(false);
+    clearPlatformBrowserCache();
   } catch {
-    // ignore
+    try {
+      const { markPlatformRemoteHydrated } = await import(
+        "@/lib/data/platform-store"
+      );
+      markPlatformRemoteHydrated(false);
+    } catch {
+      // ignore
+    }
   }
 
   if (useRemote()) {
@@ -1117,6 +1268,8 @@ export async function updateProfile(
   const existing = getState().users.find((entry) => entry.id === session.id);
   if (!existing) return { ok: false, error: "User not found." };
 
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
   mutate((draft) => {
     const user = draft.users.find((entry) => entry.id === session.id);
     if (!user) return;

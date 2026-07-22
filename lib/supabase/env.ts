@@ -5,3 +5,11 @@ export function isSupabaseConfigured(): boolean {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim(),
   );
 }
+
+/**
+ * True when the app is expected to talk only to Postgres (not browser seed).
+ * Prefer importing from `@/lib/data/durability` for full production rules.
+ */
+export function hasRemoteBackend(): boolean {
+  return isSupabaseConfigured();
+}

@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { format } from "date-fns";
+import { localWriteBlockReason } from "@/lib/data/durability";
 import type {
   Booking,
   BookingPolicy,
@@ -13,6 +14,10 @@ import type {
   User,
 } from "@/lib/types";
 
+/**
+ * Browser cache only. Source of truth in production is Supabase Postgres.
+ * Re-deploying the Next.js app never clears Supabase — only this local cache.
+ */
 const STORAGE_KEY = "cubicle_platform_v3";
 const CHANGE_EVENT = "cubicle_platform_change";
 
@@ -226,13 +231,43 @@ export function getState() {
   return read();
 }
 
+/**
+ * Local-demo mutations only. No-ops when production requires Supabase so a
+ * misconfigured deploy cannot pretend to save school data in the browser.
+ */
 export function mutate(mutator: (draft: PlatformState) => void) {
+  const blocked = localWriteBlockReason();
+  if (blocked) {
+    console.error("[cubicle] local mutate blocked:", blocked);
+    return;
+  }
   update(mutator);
 }
 
-/** Replace the entire in-memory platform state (used after Supabase hydrate). */
+/**
+ * Replace client cache after a successful Supabase fetch.
+ * Does not write to Postgres — only mirrors remote state for the UI.
+ */
 export function replaceState(next: PlatformState) {
   write(next);
+}
+
+/**
+ * Drop the browser cache only (never touches Supabase).
+ * Used after sign-out so the next session hydrates fresh from Postgres.
+ */
+export function clearPlatformBrowserCache() {
+  memory = null;
+  cachedRaw = null;
+  remoteHydrated = false;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore quota / private mode
+    }
+    window.dispatchEvent(new Event(CHANGE_EVENT));
+  }
 }
 
 let remoteHydrated = false;
