@@ -381,6 +381,10 @@ export async function dbAddAllowedEmail(input: {
   name: string;
   role?: Role;
 }): Promise<{ error?: string }> {
+  const { schoolEmailError } = await import("@/lib/auth/school-domain");
+  const domainError = schoolEmailError(input.email);
+  if (domainError) return { error: domainError };
+
   const supabase = client();
   const { error } = await supabase.from("allowed_emails").insert({
     email: input.email.toLowerCase().trim(),
@@ -394,6 +398,12 @@ export async function dbUpdateAllowedEmail(
   email: string,
   input: { name?: string; email?: string; role?: Role },
 ): Promise<{ error?: string }> {
+  if (input.email) {
+    const { schoolEmailError } = await import("@/lib/auth/school-domain");
+    const domainError = schoolEmailError(input.email);
+    if (domainError) return { error: domainError };
+  }
+
   const supabase = client();
   const payload: Record<string, unknown> = {};
   if (input.name) payload.name = input.name;

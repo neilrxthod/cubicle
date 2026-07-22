@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { extractOAuthAvatarUrl } from "@/lib/auth/google-avatar";
+import { isSchoolEmail } from "@/lib/auth/school-domain";
 import { setSession } from "@/lib/auth/session";
 import type { UserRole } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/client";
@@ -31,6 +32,13 @@ function CompleteInner() {
 
         if (userError || !user?.email) {
           router.replace("/login?error=session_bridge");
+          return;
+        }
+
+        // Defense in depth: never complete sign-in for non-school domains
+        if (!isSchoolEmail(user.email)) {
+          await supabase.auth.signOut();
+          router.replace("/login?error=invalid_domain");
           return;
         }
 

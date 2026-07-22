@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import {
+  checkSchoolAccess,
   deleteUnauthorizedUser,
-  getAllowedEmail,
 } from "@/lib/auth/allowlist";
 import { extractOAuthAvatarUrl } from "@/lib/auth/google-avatar";
 import { getDashboardPath } from "@/lib/auth/session";
 import type { UserRole } from "@/lib/auth/types";
+import { createClient } from "@/lib/supabase/server";
 
 /**
- * Google OAuth returns here with ?code=...
- * 1. Exchange code for a Supabase session
- * 2. Allowlist check — reject if email is not pre-approved
- * 3. Sync profile (role, name, Google photo)
- * 4. Hand off to /auth/complete (loads session client-side — no avatar in query string)
+ * Google OAuth callback.
+ * Access rules (both required):
+ * 1. Email domain must be @rbe.sk.ca (blocks gmail.com and all others)
+ * 2. Email must be on allowed_emails
+ * Unauthorized users are signed out and deleted from Auth.
  */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -48,25 +48,26 @@ export async function GET(request: Request) {
     );
   }
 
-  let allowed;
-  try {
-    allowed = await getAllowedEmail(user.email);
-  } catch {
-    await supabase.auth.signOut();
-    return NextResponse.redirect(
-      `${origin}/login?error=${encodeURIComponent("allowlist_error")}`,
-    );
-  }
+  const access = await checkSchoolAccess(user.email);
 
-  if (!allowed) {
+  if (!access.ok) {
     const userId = user.id;
     await supabase.auth.signOut();
     await deleteUnauthorizedUser(userId);
+
+    const errorCode =
+      access.reason === "invalid_domain"
+        ? "invalid_domain"
+        : access.reason === "allowlist_error"
+          ? "allowlist_error"
+          : "not_allowed";
+
     return NextResponse.redirect(
-      `${origin}/login?error=${encodeURIComponent("not_allowed")}`,
+      `${origin}/login?error=${encodeURIComponent(errorCode)}`,
     );
   }
 
+  const allowed = access.allowed;
   const role = allowed.role as UserRole;
   const name =
     allowed.name ||
@@ -76,7 +77,6 @@ export async function GET(request: Request) {
 
   const avatarUrl = extractOAuthAvatarUrl(user);
 
-  // Prefer Google photo when present; never wipe an existing custom photo with null.
   const { data: existing } = await supabase
     .from("profiles")
     .select("avatar_url")
@@ -90,7 +90,7 @@ export async function GET(request: Request) {
   await supabase.from("profiles").upsert(
     {
       id: user.id,
-      email: user.email,
+      email: user.email.toLowerCase(),
       name,
       role,
       avatar_url: nextAvatar,

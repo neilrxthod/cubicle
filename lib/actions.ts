@@ -2,6 +2,7 @@
 
 import { eachDayOfInterval, format, parseISO } from "date-fns";
 import { getSession, setSession, clearSession } from "@/lib/auth/session";
+import { schoolEmailError } from "@/lib/auth/school-domain";
 import {
   getState,
   makeId,
@@ -748,6 +749,9 @@ export async function createTeacherCredentials(formData: FormData): Promise<
 
   if (!name || !email) return { ok: false, error: "Name and email required." };
 
+  const domainError = schoolEmailError(email);
+  if (domainError) return { ok: false, error: domainError };
+
   if (useRemote()) {
     if (getState().users.some((user) => user.email === email)) {
       return { ok: false, error: "Email already exists." };
@@ -794,6 +798,11 @@ export async function updateTeacherCredentials(
 
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
+
+  if (email) {
+    const domainError = schoolEmailError(email);
+    if (domainError) return { ok: false, error: domainError };
+  }
 
   if (useRemote()) {
     const user = getState().users.find((entry) => entry.id === teacherId);

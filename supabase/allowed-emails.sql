@@ -11,7 +11,10 @@ create table if not exists public.allowed_emails (
   role text not null default 'teacher' check (role in ('teacher', 'admin')),
   name text,
   notes text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Only Regina board school Google accounts
+  constraint allowed_emails_school_domain_check
+    check (lower(email) ~* '^[a-z0-9._%+\-]+@rbe\.sk\.ca$')
 );
 
 -- Normalize emails to lowercase on write
@@ -132,14 +135,9 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- Seed example rows — REPLACE with your real school Google emails
+-- Seed: replace with real @rbe.sk.ca staff (Gmail will be rejected by constraint)
 -- ---------------------------------------------------------------------------
-insert into public.allowed_emails (email, role, name, notes) values
-  ('teacher@yourschool.edu', 'teacher', 'Example Teacher', 'Replace with real staff email'),
-  ('admin@yourschool.edu', 'admin', 'Example Admin', 'Replace with real IT admin email')
-on conflict (email) do nothing;
-
--- Example: add more staff later
 -- insert into public.allowed_emails (email, role, name) values
---   ('sarah.chen@yourschool.edu', 'teacher', 'Sarah Chen'),
---   ('james.wilson@yourschool.edu', 'admin', 'James Wilson');
+--   ('first.last@rbe.sk.ca', 'admin', 'Your Name'),
+--   ('teacher.name@rbe.sk.ca', 'teacher', 'Teacher Name')
+-- on conflict (email) do nothing;

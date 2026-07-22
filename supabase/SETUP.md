@@ -29,16 +29,27 @@ Run each file fully, wait for **Success**:
 
 ---
 
-## 3. Allowlist real school emails
+## 3. Allowlist real school emails (@rbe.sk.ca only)
+
+Run `restrict-domain.sql` so the DB rejects non-school emails.
 
 **Table Editor → `allowed_emails`**
 
 | email | role | name |
 |--------|------|------|
-| `you@school.edu` | `admin` | Your Name |
-| `teacher@school.edu` | `teacher` | Teacher Name |
+| `you@rbe.sk.ca` | `admin` | Your Name |
+| `teacher@rbe.sk.ca` | `teacher` | Teacher Name |
 
-Only these Google accounts can enter the app.
+**Rules (both required):**
+1. Domain must be `@rbe.sk.ca` (Gmail and other domains blocked)
+2. Exact email must be on this allowlist
+
+Vercel env var names (exact spelling):
+```
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+```
 
 ---
 

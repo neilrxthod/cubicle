@@ -11,6 +11,10 @@ import {
   setSession,
 } from "@/lib/auth/session";
 import { authContainerVariants, authItemVariants } from "@/lib/auth/motion";
+import {
+  GOOGLE_HOSTED_DOMAIN,
+  SCHOOL_EMAIL_DOMAIN,
+} from "@/lib/auth/school-domain";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
 import { AuthLayout } from "./auth-layout";
@@ -27,8 +31,8 @@ const roleAccent: Record<DemoAccount["role"], string> = {
 };
 
 const LOGIN_ERRORS: Record<string, string> = {
-  not_allowed:
-    "This Google account is not on the school allowlist. Contact IT if you need access.",
+  not_allowed: `Your @${SCHOOL_EMAIL_DOMAIN} account is not on the school allowlist. Contact IT to be added.`,
+  invalid_domain: `Only @${SCHOOL_EMAIL_DOMAIN} Google accounts can sign in. Gmail and other domains are blocked.`,
   auth_failed: "Google sign-in failed. Please try again.",
   missing_code: "Sign-in was cancelled or incomplete. Please try again.",
   no_email: "Google did not return an email address for this account.",
@@ -93,6 +97,8 @@ export default function LoginForm() {
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: {
+            // Prefer school Workspace accounts in the Google account picker
+            hd: GOOGLE_HOSTED_DOMAIN,
             prompt: "select_account",
           },
         },
@@ -178,7 +184,7 @@ export default function LoginForm() {
         <motion.div variants={authItemVariants} className="mb-8">
           <AuthPageHeader
             title="Sign in"
-            description="Use your approved school Google account (@rbe.sk.ca). Only allowlisted emails can enter."
+            description={`School Google only (@${SCHOOL_EMAIL_DOMAIN}). Your email must also be on the IT allowlist — personal Gmail is never accepted.`}
           />
         </motion.div>
 
@@ -229,8 +235,8 @@ export default function LoginForm() {
           variants={authItemVariants}
           className="mt-6 text-center text-[12.5px] leading-relaxed text-neutral-500"
         >
-          Access is limited to emails added by IT on the school allowlist. If
-          you cannot sign in, ask your administrator to add your Google email.
+          {`Only @${SCHOOL_EMAIL_DOMAIN} addresses on the IT allowlist can enter.
+          Gmail and other domains are blocked. Ask IT if you need access.`}
         </motion.p>
       </motion.div>
     </AuthLayout>
