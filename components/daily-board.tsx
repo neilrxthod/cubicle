@@ -140,10 +140,10 @@ export function DailyBoard({
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-3 rounded-xl border border-neutral-200/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)] sm:flex-row sm:items-center sm:justify-between sm:p-4">
         <div className="min-w-0">
-          <h2 className="text-[1.125rem] font-semibold tracking-[-0.02em] text-neutral-950 sm:text-[1.25rem]">
+          <h2 className="text-[1.375rem] font-light tracking-tight text-foreground sm:text-[1.5rem]">
             {heading}
           </h2>
-          <p className="mt-0.5 text-[12.5px] text-neutral-500">
+          <p className="type-body mt-1">
             {session.role !== "admin"
               ? `Book within ${maxAdvanceDays} day${maxAdvanceDays === 1 ? "" : "s"} · through ${format(parseISO(lastBookableDate), "MMM d")}`
               : "Book, manage, and report cart issues"}
@@ -206,13 +206,13 @@ export function DailyBoard({
             className="grid border-b border-neutral-800 bg-neutral-950"
             style={{ gridTemplateColumns: "minmax(9rem, 1fr) repeat(5, minmax(0, 1fr))" }}
           >
-            <div className="flex items-center px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/65">
+            <div className="type-label flex items-center px-4 py-2.5 text-white/65">
               Cart
             </div>
             {PERIODS.map((p) => (
               <div
                 key={p}
-                className="flex items-center justify-center border-l border-white/10 px-2 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/65"
+                className="type-label flex items-center justify-center border-l border-white/10 px-2 py-2.5 text-white/65"
               >
                 {p}
               </div>
@@ -227,7 +227,7 @@ export function DailyBoard({
             >
               <div className="flex items-center justify-between gap-2 border-r border-neutral-100 px-3 py-2.5">
                 <div className="min-w-0">
-                  <span className="block truncate text-[13px] font-semibold text-neutral-950">{cart.name}</span>
+                  <span className="type-body-strong block truncate">{cart.name}</span>
                   {cart.status === "maintenance" ? (
                     <span className="block text-[10px] font-medium uppercase tracking-wider text-amber-700">
                       offline

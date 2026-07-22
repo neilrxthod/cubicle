@@ -1300,7 +1300,7 @@ function ReportsPanel({
       <div className="flex flex-col gap-8 border-b border-border/60 px-6 py-6 sm:px-8 sm:py-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <h2 className="text-[26px] font-semibold tracking-[-0.03em] text-foreground sm:text-[32px]">
+            <h2 className="type-page-title">
               Reporting & Analytics
             </h2>
             <p className="mt-1 flex items-center gap-2 text-[13px] text-muted-foreground">
@@ -1360,27 +1360,27 @@ function ReportsPanel({
             onClick={() => onOpenTab("carts")}
             className="flex flex-col gap-1.5 rounded-2xl border border-border/60 bg-muted/10 p-5 text-left transition hover:bg-muted/20 sm:p-6"
           >
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Fleet Health</span>
-            <span className="text-3xl font-light tracking-tight text-foreground sm:text-4xl">{equipmentHealth}%</span>
+            <span className="type-label">Fleet Health</span>
+            <span className="type-metric">{equipmentHealth}%</span>
           </button>
           <button
             type="button"
             onClick={() => onOpenTab("bookings")}
             className="flex flex-col gap-1.5 rounded-2xl border border-border/60 bg-muted/10 p-5 text-left transition hover:bg-muted/20 sm:p-6"
           >
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Bookings</span>
-            <span className="text-3xl font-light tracking-tight text-foreground sm:text-4xl">{totalBookings}</span>
+            <span className="type-label">Bookings</span>
+            <span className="type-metric">{totalBookings}</span>
           </button>
           <div className="flex flex-col gap-1.5 rounded-2xl border border-border/60 bg-muted/10 p-5 sm:p-6">
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Teachers</span>
-            <span className="text-3xl font-light tracking-tight text-foreground sm:text-4xl">{activeTeachers}</span>
+            <span className="type-label">Teachers</span>
+            <span className="type-metric">{activeTeachers}</span>
           </div>
           <Link
             href="/issues"
             className="flex flex-col gap-1.5 rounded-2xl border border-border/60 bg-muted/10 p-5 transition hover:bg-muted/20 sm:p-6"
           >
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Issues</span>
-            <span className="text-3xl font-light tracking-tight text-foreground sm:text-4xl">{openIssues.length}</span>
+            <span className="type-label">Issues</span>
+            <span className="type-metric">{openIssues.length}</span>
           </Link>
           <button
             type="button"
@@ -1392,8 +1392,8 @@ function ReportsPanel({
                 : "border-border/60 bg-muted/10 hover:bg-muted/20",
             )}
           >
-            <span className={cn("text-[11px] font-semibold uppercase tracking-widest", maintenanceCartsCount > 0 ? "text-red-600" : "text-muted-foreground")}>Maintenance</span>
-            <span className={cn("text-3xl font-light tracking-tight sm:text-4xl", maintenanceCartsCount > 0 ? "text-red-600" : "text-foreground")}>{maintenanceCartsCount}</span>
+            <span className={cn("type-label", maintenanceCartsCount > 0 && "text-red-600")}>Maintenance</span>
+            <span className={cn("type-metric", maintenanceCartsCount > 0 && "text-red-600")}>{maintenanceCartsCount}</span>
           </button>
         </div>
       </div>
@@ -1404,7 +1404,7 @@ function ReportsPanel({
             <div className="mb-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Layers3 className="size-4 text-muted-foreground" />
-                <h3 className="text-[15px] font-semibold tracking-tight text-foreground">Teacher usage</h3>
+                <h3 className="type-section-title">Teacher usage</h3>
               </div>
               <button
                 type="button"
@@ -1451,7 +1451,7 @@ function ReportsPanel({
             <div className="mb-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <BarChart3 className="size-4 text-muted-foreground" />
-                <h3 className="text-[15px] font-semibold tracking-tight text-foreground">Cart utilization</h3>
+                <h3 className="type-section-title">Cart utilization</h3>
               </div>
               <button
                 type="button"
@@ -1492,7 +1492,7 @@ function ReportsPanel({
           <div>
             <div className="mb-4 flex items-center gap-2">
               <CalendarClock className="size-4 text-muted-foreground" />
-              <h3 className="text-[15px] font-semibold tracking-tight text-foreground">Booking mix</h3>
+              <h3 className="type-section-title">Booking mix</h3>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-xl border border-border/60 p-4">

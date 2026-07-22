@@ -7,7 +7,6 @@ type Stat = {
 
 /**
  * Home metrics — same visual language as Reports & Analytics KPI cards.
- * Issues uses the red gradient / thin red border treatment from Reports maintenance.
  */
 export function StatBar({ stats }: { stats: Stat[] }) {
   return (
@@ -36,16 +35,16 @@ export function StatBar({ stats }: { stats: Stat[] }) {
           >
             <span
               className={cn(
-                "text-[11px] font-semibold tracking-widest uppercase",
-                isIssues ? "text-red-600" : "text-muted-foreground",
+                "type-label",
+                isIssues && "text-red-600",
               )}
             >
               {stat.label}
             </span>
             <span
               className={cn(
-                "text-3xl font-light tracking-tight sm:text-4xl",
-                isIssues ? "text-red-600" : "text-foreground",
+                "type-metric",
+                isIssues && "text-red-600",
               )}
             >
               {stat.value}

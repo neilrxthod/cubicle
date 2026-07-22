@@ -80,7 +80,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
     <header className="sticky top-0 z-40 border-b border-neutral-200/80 bg-white/90 backdrop-blur-md">
       <div className="relative mx-auto flex h-14 w-full max-w-300 items-center justify-between px-4 sm:h-16 sm:px-6">
         <Link href="/" className="shrink-0">
-          <span className="text-[1.0625rem] font-semibold tracking-[-0.03em] text-neutral-950">
+          <span className="text-[1.0625rem] font-light tracking-tight text-neutral-950">
             Cubicle
           </span>
         </Link>

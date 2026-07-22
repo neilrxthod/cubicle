@@ -31,10 +31,8 @@ export function BookingsList({
   return (
     <section className="overflow-hidden rounded-xl border border-neutral-200/90 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       <div className="flex h-11 items-center justify-between gap-3 border-b border-neutral-100 px-4">
-        <h2 className="text-[13px] font-semibold tracking-tight text-neutral-950">
-          {title}
-        </h2>
-        <span className="text-[12px] tabular-nums text-neutral-400">
+        <h2 className="type-section-title">{title}</h2>
+        <span className="text-[13px] font-light tabular-nums tracking-tight text-muted-foreground">
           {bookings.length}
         </span>
       </div>
@@ -68,7 +66,7 @@ export function BookingsList({
                 )}
               >
                 <div className="min-w-0">
-                  <span className="block text-[13px] font-semibold tracking-tight text-neutral-950">
+                  <span className="type-body-strong block">
                     {format(dt, "MMM d, yyyy")}
                   </span>
                   <span className="block text-[12px] text-neutral-400">

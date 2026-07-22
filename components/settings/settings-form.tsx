@@ -151,7 +151,7 @@ export function SettingsForm({ user }: { user: SessionUser }) {
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="truncate text-[1.125rem] font-semibold tracking-[-0.02em] text-neutral-950">
+                <h2 className="truncate text-[1.25rem] font-light tracking-tight text-neutral-950">
                   {name.trim() || user.name}
                 </h2>
                 <span
@@ -204,9 +204,7 @@ export function SettingsForm({ user }: { user: SessionUser }) {
         {/* Profile fields — what shows on bookings */}
         <div className="space-y-5 border-b border-neutral-100 px-5 py-6 sm:px-7">
           <div>
-            <h3 className="text-[13px] font-semibold tracking-tight text-neutral-950">
-              How you appear
-            </h3>
+            <h3 className="type-section-title">How you appear</h3>
             <p className="mt-0.5 text-[13px] text-neutral-500">
               Name shows on bookings and issues. Keep it current so IT and
               colleagues know who reserved a cart.
@@ -300,9 +298,7 @@ export function SettingsForm({ user }: { user: SessionUser }) {
         {/* Notifications */}
         <div className="space-y-4 px-5 py-6 sm:px-7">
           <div>
-            <h3 className="text-[13px] font-semibold tracking-tight text-neutral-950">
-              Email updates
-            </h3>
+            <h3 className="type-section-title">Email updates</h3>
             <p className="mt-0.5 text-[13px] text-neutral-500">
               Stay informed without digging through the board.
             </p>
