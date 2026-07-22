@@ -23,7 +23,6 @@ export default function PrivacyPage() {
       title="Privacy Policy"
       description={`This Privacy Policy explains what information ${LEGAL_PRODUCT} processes, why it is processed, and how it is protected for authorized school staff.`}
       effectiveDate={LEGAL_EFFECTIVE_DATE}
-      currentHref="/legal/privacy"
     >
       <LegalSection title="1. Scope">
         <p>

@@ -22,7 +22,6 @@ export default function SecurityPage() {
       title="Security & Data Safety"
       description={`How ${LEGAL_PRODUCT} protects credentials, school operational data, and platform integrity.`}
       effectiveDate={LEGAL_EFFECTIVE_DATE}
-      currentHref="/legal/security"
     >
       <LegalSection title="1. Security principles">
         <LegalList
