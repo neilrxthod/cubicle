@@ -7,9 +7,10 @@ import {
   markPlatformRemoteHydrated,
 } from "@/lib/data/platform-store";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { subscribePlatformRealtime } from "@/lib/supabase/realtime";
 
 /**
- * Loads carts/bookings/issues from Supabase once the user is authenticated.
+ * Loads platform data from Supabase, then keeps it live via Realtime.
  * Falls back to local seed data when Supabase is not configured.
  */
 export function PlatformBootstrap({
@@ -22,6 +23,7 @@ export function PlatformBootstrap({
   );
   const [error, setError] = useState("");
 
+  // Initial load
   useEffect(() => {
     if (!isSupabaseConfigured()) {
       setReady(true);
@@ -50,6 +52,17 @@ export function PlatformBootstrap({
       cancelled = true;
     };
   }, []);
+
+  // Live updates: any change to bookings/carts/issues/… refreshes shared store
+  useEffect(() => {
+    if (!isSupabaseConfigured() || !ready || error) return;
+
+    const unsubscribe = subscribePlatformRealtime(() => {
+      void hydratePlatformFromSupabase();
+    });
+
+    return unsubscribe;
+  }, [ready, error]);
 
   if (!ready) {
     return (

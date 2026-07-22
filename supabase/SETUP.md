@@ -26,6 +26,8 @@ Run each file fully, wait for **Success**:
 | 1 | `schema.sql` | Tables, RLS, profile trigger |
 | 2 | `allowed-emails.sql` | Google allowlist + role |
 | 3 | `seed-carts.sql` | 22 carts + high-issue trigger |
+| 4 | `restrict-domain.sql` | Only `@rbe.sk.ca` on allowlist |
+| 5 | `realtime.sql` | **Live multi-user board updates** |
 
 ---
 

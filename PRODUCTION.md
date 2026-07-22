@@ -28,6 +28,7 @@ Run (SQL Editor), in order if not already applied:
 2. `supabase/allowed-emails.sql`
 3. `supabase/seed-carts.sql`
 4. `supabase/restrict-domain.sql`
+5. `supabase/realtime.sql` — live bookings/carts/issues for all open browsers
 
 Auth URL config:
 
@@ -59,7 +60,8 @@ SSL is handled by Vercel (not name.com certificates).
 - [ ] Allowlisted `@rbe.sk.ca` signs in
 - [ ] Non-allowlisted `@rbe.sk.ca` blocked
 - [ ] Gmail blocked
-- [ ] Book cart, refresh, booking persists
+- [ ] Book cart, booking persists
+- [ ] Two browsers: Teacher A books → Teacher B board updates without refresh
 - [ ] Admin can open Maintenance
 - [ ] Settings save name/photo
 - [ ] Sign out works
