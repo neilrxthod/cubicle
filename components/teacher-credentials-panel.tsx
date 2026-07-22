@@ -578,9 +578,7 @@ export function TeacherCredentialsPanel({ teachers }: { teachers: User[] }) {
               <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
                 <Trash2 className="size-4" />
               </span>
-              <DialogTitle className="text-[20px] font-semibold leading-tight tracking-[-0.02em] text-foreground">
-                Delete credentials
-              </DialogTitle>
+              <DialogTitle>Delete credentials</DialogTitle>
             </div>
           </DialogHeader>
 
