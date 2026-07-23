@@ -865,7 +865,7 @@ export async function createTeacherCredentials(
   const employmentType = parseEmploymentType(formData.get("employmentType"));
   const password =
     String(formData.get("password") ?? "").trim() ||
-    `Cubicle${Math.floor(1000 + Math.random() * 9000)}`;
+    `Cubicle${1000 + crypto.randomInt(9000)}`;
 
   if (!name) return { ok: false, error: "Name is required." };
   if (!email) return { ok: false, error: "Email is required." };
