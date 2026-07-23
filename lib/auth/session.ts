@@ -57,7 +57,7 @@ export function getSession(): SessionUser | null {
 
 export function setSession(user: SessionUser): void {
   memoryUser = user;
-  const marker = user.id;
+  const marker = user.id || "";
   localStorage.setItem(SESSION_KEY, marker);
   cachedRaw = marker;
   cachedUser = user;
