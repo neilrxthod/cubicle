@@ -5,9 +5,10 @@ const SESSION_CHANGE_EVENT = "cubicle_session_change";
 
 let cachedRaw: string | null | undefined;
 let cachedUser: SessionUser | null = null;
+let memoryUser: SessionUser | null = null;
 
 function readSessionFromStorage(): SessionUser | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined") return memoryUser;
 
   const raw = localStorage.getItem(SESSION_KEY);
 
@@ -18,17 +19,13 @@ function readSessionFromStorage(): SessionUser | null {
   cachedRaw = raw;
 
   if (!raw) {
+    memoryUser = null;
     cachedUser = null;
     return null;
   }
 
-  try {
-    cachedUser = JSON.parse(raw) as SessionUser;
-    return cachedUser;
-  } catch {
-    cachedUser = null;
-    return null;
-  }
+  cachedUser = memoryUser;
+  return cachedUser;
 }
 
 function notifySessionChange() {
@@ -59,9 +56,10 @@ export function getSession(): SessionUser | null {
 }
 
 export function setSession(user: SessionUser): void {
-  const raw = JSON.stringify(user);
-  localStorage.setItem(SESSION_KEY, raw);
-  cachedRaw = raw;
+  memoryUser = user;
+  const marker = user.id;
+  localStorage.setItem(SESSION_KEY, marker);
+  cachedRaw = marker;
   cachedUser = user;
   notifySessionChange();
 }
@@ -70,6 +68,7 @@ export function clearSession(): void {
   localStorage.removeItem(SESSION_KEY);
   cachedRaw = null;
   cachedUser = null;
+  memoryUser = null;
   notifySessionChange();
 }
 
