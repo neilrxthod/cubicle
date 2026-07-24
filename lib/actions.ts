@@ -1175,7 +1175,7 @@ export async function resetTeacherPassword(
     };
   }
 
-  const password = `Cubicle${Math.floor(1000 + Math.random() * 9000)}`;
+  const password = `Cubicle${crypto.randomInt(1000, 10000)}`;
   let found = false;
   const __demo = assertLocalDemoAllowed();
   if (!__demo.ok) return __demo;
