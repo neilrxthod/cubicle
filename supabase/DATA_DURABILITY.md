@@ -18,7 +18,7 @@
 Vercel only hosts the Next.js app. The database is a separate Supabase project.
 
 ```
-Teachers use mycubicle.app  →  Vercel (code)  →  Supabase (data)
+Teachers use mycubicle.app / mycubicle.com  →  Vercel (code)  →  Supabase (data)
                                     ↑                    ↑
                               git push updates     stays forever
 ```
@@ -26,7 +26,7 @@ Teachers use mycubicle.app  →  Vercel (code)  →  Supabase (data)
 ## What we guarantee in the app
 
 1. **Production requires Supabase**  
-   On `mycubicle.app`, `*.vercel.app`, or `VERCEL_ENV=production`, the app **refuses** to run as a localStorage demo. Misconfigured env shows an error instead of empty fake data.
+   On `mycubicle.app` / `mycubicle.com`, `*.vercel.app`, or `VERCEL_ENV=production`, the app **refuses** to run as a localStorage demo. Misconfigured env shows an error instead of empty fake data.
 
 2. **Writes go to Postgres when configured**  
    Book / cancel / issues / staff / restrictions all use Supabase when env vars are set.

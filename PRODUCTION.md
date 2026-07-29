@@ -1,6 +1,6 @@
 # Cubicle — production readiness
 
-School staff app for **mycubicle.app**. Not a public consumer product.
+School staff app for **mycubicle.app** (live on Vercel). **mycubicle.com** is supported in code once attached in Vercel → Domains. Not a public consumer product.
 
 ## Data durability (non-negotiable)
 
@@ -24,7 +24,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 NEXT_PUBLIC_CUBICLE_REQUIRE_REMOTE=true
 ```
 
-Without Supabase keys, production hosts (`mycubicle.app`, `*.vercel.app`) **hard-stop** with “Database not connected” instead of showing empty seed data.
+Without Supabase keys, production hosts (`mycubicle.app`, `mycubicle.com`, `*.vercel.app`) **hard-stop** with “Database not connected” instead of showing empty seed data.
 
 ### Never do this on a live school project
 
@@ -81,10 +81,12 @@ on conflict (email) do update
 
 ### Supabase → Authentication → URL configuration
 
-- **Site URL:** `https://mycubicle.app`
+- **Site URL:** `https://mycubicle.app` (or `https://mycubicle.com` once that domain is primary)
 - **Redirect URLs** (all needed):
   - `https://mycubicle.app/auth/callback`
   - `https://www.mycubicle.app/auth/callback`
+  - `https://mycubicle.com/auth/callback`
+  - `https://www.mycubicle.com/auth/callback`
   - `http://localhost:3000/auth/callback` (dev only)
 
 ### Supabase → Authentication → Providers → Google
@@ -98,6 +100,8 @@ on conflict (email) do update
 - Authorized JavaScript origins:
   - `https://mycubicle.app`
   - `https://www.mycubicle.app`
+  - `https://mycubicle.com`
+  - `https://www.mycubicle.com`
   - `http://localhost:3000`
 - Authorized redirect URI (exact):
   - `https://<project-ref>.supabase.co/auth/v1/callback`
@@ -111,14 +115,23 @@ on conflict (email) do update
 - Teachers connect once in **Settings**; new bookings auto-create events when auto-sync is on
 - Fallback: **Add to Calendar** links work without API access
 
-## DNS (name.com → Vercel)
+## DNS (registrar → Vercel)
 
-Use the values shown in **Vercel → Project → Domains** (they can change):
+### Live today: mycubicle.app
 
-- Apex `A` record → Vercel IP
-- `www` `CNAME` → Vercel target
+Attached on Vercel; apex redirects to `www` and serves the Next app.
 
-SSL is issued by Vercel (no separate name.com cert).
+### Attach mycubicle.com (currently a registrar lander, not the app)
+
+1. **Vercel → Project → Settings → Domains** → add `mycubicle.com` and `www.mycubicle.com`.
+2. At the registrar, set the DNS Vercel shows (typical):
+   - Apex `A` record → Vercel IP
+   - `www` `CNAME` → Vercel target
+3. Wait for SSL + “Valid Configuration”.
+4. Add the `.com` callback URLs in Supabase + Google origins (above).
+5. Optional: set Vercel env `NEXT_PUBLIC_SITE_URL=https://mycubicle.com` and redeploy.
+
+SSL is issued by Vercel (no separate registrar cert).
 
 ## Pre-deploy verification
 

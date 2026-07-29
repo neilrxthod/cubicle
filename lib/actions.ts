@@ -12,6 +12,7 @@ import {
 } from "@/lib/data/platform-store";
 import { localWriteBlockReason } from "@/lib/data/durability";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { secureRandomInt } from "@/lib/utils";
 import {
   dbAcceptSwap,
   dbAddAllowedEmail,
@@ -865,7 +866,7 @@ export async function createTeacherCredentials(
   const employmentType = parseEmploymentType(formData.get("employmentType"));
   const password =
     String(formData.get("password") ?? "").trim() ||
-    `Cubicle${1000 + (crypto.getRandomValues(new Uint16Array(1))[0] % 9000)}`;
+    `Cubicle${secureRandomInt(1000, 10000)}`;
 
   if (!name) return { ok: false, error: "Name is required." };
   if (!email) return { ok: false, error: "Email is required." };
@@ -1175,7 +1176,7 @@ export async function resetTeacherPassword(
     };
   }
 
-  const password = `Cubicle${Math.floor(1000 + Math.random() * 9000)}`;
+  const password = `Cubicle${secureRandomInt(1000, 10000)}`;
   let found = false;
   const __demo = assertLocalDemoAllowed();
   if (!__demo.ok) return __demo;

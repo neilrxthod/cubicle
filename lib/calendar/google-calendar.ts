@@ -9,6 +9,7 @@ import {
   removeGoogleCalendarEventId,
   setGoogleCalendarEventId,
 } from "@/lib/calendar/preferences";
+import { SITE_ORIGIN } from "@/lib/site";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
@@ -80,7 +81,7 @@ export function buildEventDescription(input: CalendarEventInput): string {
       ? `Cart home: ${input.cart.location.trim()}`
       : null,
     "",
-    "Open Cubicle: https://mycubicle.app",
+    `Open Cubicle: ${SITE_ORIGIN}`,
   ];
   return lines.filter((line) => line !== null).join("\n");
 }
@@ -134,7 +135,7 @@ function eventBody(input: CalendarEventInput) {
     },
     source: {
       title: "Cubicle",
-      url: "https://mycubicle.app",
+      url: SITE_ORIGIN,
     },
     extendedProperties: {
       private: {

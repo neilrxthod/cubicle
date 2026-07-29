@@ -11,6 +11,7 @@
  * 3. A clear message when env is misconfigured so operators don't silently lose trust.
  */
 
+import { isProductionHostname } from "@/lib/site";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 /** Hosted production site (custom domain or Vercel production). */
@@ -27,12 +28,7 @@ export function isProductionDeploy(): boolean {
 
   // Browser: real school domain never runs as localStorage demo.
   if (typeof window !== "undefined") {
-    const host = window.location.hostname.toLowerCase();
-    if (
-      host === "mycubicle.app" ||
-      host === "www.mycubicle.app" ||
-      host.endsWith(".vercel.app")
-    ) {
+    if (isProductionHostname(window.location.hostname)) {
       return true;
     }
   }

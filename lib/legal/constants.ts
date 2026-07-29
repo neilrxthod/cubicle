@@ -1,6 +1,8 @@
+import { SITE_DOMAIN } from "@/lib/site";
+
 export const LEGAL_ORG = "Cubicle";
 export const LEGAL_PRODUCT = "Cubicle";
-export const LEGAL_DOMAIN = "mycubicle.app";
+export const LEGAL_DOMAIN = SITE_DOMAIN;
 export const LEGAL_SCHOOL_DOMAIN = "rbe.sk.ca";
 export const LEGAL_CONTACT_EMAIL = "it-support@rbe.sk.ca";
 export const LEGAL_EFFECTIVE_DATE = "July 22, 2026";
