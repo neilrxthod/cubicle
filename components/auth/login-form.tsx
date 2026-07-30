@@ -104,10 +104,13 @@ export default function LoginForm() {
 
     try {
       const supabase = createClient();
+      const { getOAuthRedirectTo } = await import("@/lib/auth/oauth-redirect");
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          // Must be allowlisted in Supabase Auth → URL Configuration.
+          // If missing, Supabase falls back to Site URL (often localhost).
+          redirectTo: getOAuthRedirectTo("/auth/callback"),
           queryParams: {
             hd: GOOGLE_HOSTED_DOMAIN,
             prompt: "select_account",

@@ -24,7 +24,11 @@ export async function startGoogleCalendarConnect(): Promise<{
 
     markPendingCalendarConnect();
 
-    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent("/settings?calendar=connected")}`;
+    const { getOAuthRedirectTo } = await import("@/lib/auth/oauth-redirect");
+    const redirectTo = getOAuthRedirectTo(
+      "/auth/callback",
+      "/settings?calendar=connected",
+    );
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",

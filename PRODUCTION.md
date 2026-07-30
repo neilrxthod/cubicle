@@ -81,13 +81,25 @@ on conflict (email) do update
 
 ### Supabase → Authentication → URL configuration
 
-- **Site URL:** `https://mycubicle.app` (or `https://mycubicle.com` once that domain is primary)
-- **Redirect URLs** (all needed):
-  - `https://mycubicle.app/auth/callback`
+> **Symptom if wrong:** Google login from production opens  
+> `http://localhost:3000/?code=…` → `ERR_CONNECTION_REFUSED`.  
+> Cause: **Site URL** left as localhost, or production URLs missing from Redirect URLs  
+> (Supabase then ignores `redirectTo` and falls back to Site URL).
+
+Dashboard: Project → **Authentication** → **URL Configuration**
+
+- **Site URL (production default):** `https://www.mycubicle.app`
+- **Redirect URLs** (all needed — wildcards recommended):
   - `https://www.mycubicle.app/auth/callback`
+  - `https://www.mycubicle.app/**`
+  - `https://mycubicle.app/auth/callback`
+  - `https://mycubicle.app/**`
   - `https://mycubicle.com/auth/callback`
   - `https://www.mycubicle.com/auth/callback`
+  - `https://mycubicle.com/**`
+  - `https://www.mycubicle.com/**`
   - `http://localhost:3000/auth/callback` (dev only)
+  - `http://localhost:3000/**` (dev only)
 
 ### Supabase → Authentication → Providers → Google
 

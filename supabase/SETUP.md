@@ -109,18 +109,41 @@ Copy Client ID from: Google Cloud → APIs & Services → Credentials → OAuth 
 
 1. **Authentication → Providers → Google** → Enable  
 2. Paste Client ID + Secret → Save  
-3. **Authentication → URL configuration**
-   - **Site URL:** `http://localhost:3000`
-   - **Redirect URLs:**  
-     `http://localhost:3000/auth/callback`  
-     `http://localhost:3000/**`
+3. **Authentication → URL configuration**  
+   Open: [Auth URL Configuration](https://supabase.com/dashboard/project/bpfwgfecydqxbkdhobqb/auth/url-configuration)
+
+#### Production (required for mycubicle.app — do this first)
+
+If **Site URL** is still `http://localhost:3000`, Google sign-in from production
+sends staff to localhost (`ERR_CONNECTION_REFUSED`). Fix:
+
+| Setting | Value |
+|---------|--------|
+| **Site URL** | `https://www.mycubicle.app` |
+| **Redirect URLs** (add all) | `https://www.mycubicle.app/auth/callback` |
+| | `https://www.mycubicle.app/**` |
+| | `https://mycubicle.app/auth/callback` |
+| | `https://mycubicle.app/**` |
+| | `http://localhost:3000/auth/callback` (local dev) |
+| | `http://localhost:3000/**` (local dev) |
+
+Optional later: `https://mycubicle.com/**` and `https://www.mycubicle.com/**` after DNS is on Vercel.
+
+Save, then try **Continue with Google** again on production (old `?code=` links expire).
+
+#### Local-only project (dev sandbox only)
+
+Only if this Supabase project is **never** used on Vercel:
+
+- **Site URL:** `http://localhost:3000`
+- **Redirect URLs:** `http://localhost:3000/auth/callback`, `http://localhost:3000/**`
 
 ---
 
 ## 5. Smoke test
 
-1. `npm run dev` → open http://localhost:3000/login  
-2. **Continue with Google** with an **allowlisted** account → land on board  
+1. **Production:** open https://www.mycubicle.app/login → Google → must stay on mycubicle.app (never localhost)  
+2. **Local:** `npm run dev` → http://localhost:3000/login with allowlisted account  
 3. Confirm carts load (Oak, Maple, …)  
 4. Create a booking → refresh → still there  
 5. Sign out → sign in with a **non-allowlisted** Google account → blocked  
