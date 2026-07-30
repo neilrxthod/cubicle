@@ -1,8 +1,8 @@
 # Cubicle
 
-**Professional school laptop-cart scheduling for teachers and IT.**
+**School laptop-cart scheduling for teachers and IT.**
 
-Cubicle helps schools book laptop carts by period, track availability on a daily board, report equipment issues, and coordinate swaps — with **Google sign-in limited to allowlisted `@rbe.sk.ca` staff**.
+Cubicle helps schools book laptop carts by period, see who has what on a daily board, report equipment issues, and coordinate swaps — with **Google sign-in limited to allowlisted `@rbe.sk.ca` staff**.
 
 **Live:** [https://mycubicle.app](https://mycubicle.app)
 
@@ -18,16 +18,19 @@ Cubicle helps schools book laptop carts by period, track availability on a daily
 
 | Area | Capability |
 |------|------------|
-| **Daily board** | Period-by-period cart availability |
-| **Bookings** | Reserve carts by date, period, class, and room |
-| **Settings** | Profile, Google Calendar connect, email prefs, role-aware shortcuts |
-| **Google Calendar** | Connect · auto-sync book/cancel · one-click Add to Calendar |
-| **Swaps** | Request and resolve booking swaps |
-| **Issues** | Report severity-tagged equipment problems |
-| **Admin** | Cart status, restrictions, staff allowlist + verified badges |
-| **Auth** | Google OAuth · school domain only · IT allowlist |
-| **Data durability** | Supabase Postgres — deploys never wipe bookings/staff/carts |
-| **Compliance** | Terms, Privacy, Security, Acceptable Use on-site |
+| **Schedule / daily board** | Cart × period grid — open, yours, booked, restricted, maintenance |
+| **Bookings** | Reserve by date, period, class, subject, notes; manage / cancel own slots |
+| **Stats** | Day-level booked, utilization, yours, free slots, open issues (+ sparklines) |
+| **Swaps** | Request a swap on someone else’s booking; owner accepts or declines |
+| **Issues** | Report severity-tagged equipment problems from any cart |
+| **Settings** | Profile, photo, notification prefs, role-aware shortcuts |
+| **Google Calendar** | Optional connect · auto-sync book/cancel · Add to Calendar deep links |
+| **Admin** | Cart maintenance, slot restrictions, booking window, staff allowlist |
+| **Verified staff** | Permanent employment type → blue verification tick on the board |
+| **Auth** | Google OAuth · `@rbe.sk.ca` only · IT allowlist · teacher / admin roles |
+| **Realtime** | Multi-user board updates via Supabase Realtime |
+| **Data durability** | Supabase Postgres — code deploys never wipe school data |
+| **Compliance** | Terms, Privacy, Security, Acceptable Use in-app |
 
 ---
 
@@ -38,13 +41,14 @@ Cubicle is **not** a public consumer app.
 | Rule | Enforcement |
 |------|-------------|
 | School Google only | `@rbe.sk.ca` required |
-| Allowlist | Exact email must be approved by IT |
-| Other domains | Blocked (Gmail, Yahoo, etc.) |
+| Allowlist | Exact email must be approved by IT (`allowed_emails`) |
+| Other domains | Blocked (Gmail, Yahoo, personal accounts, etc.) |
 | Roles | `teacher` or `admin` from allowlist / profile |
 | Secrets | Service role key server-only; never `NEXT_PUBLIC_` |
 | Repository | **Private** GitHub project |
 
-Full security narrative: [`/legal/security`](https://mycubicle.app/legal/security) (after deploy).
+In-product security narrative: [https://mycubicle.app/legal/security](https://mycubicle.app/legal/security)  
+Operator policy: [`SECURITY.md`](./SECURITY.md)
 
 ### Required Vercel environment variables
 
@@ -52,6 +56,13 @@ Full security narrative: [`/legal/security`](https://mycubicle.app/legal/securit
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
+```
+
+Optional (recommended on production):
+
+```text
+NEXT_PUBLIC_CUBICLE_REQUIRE_REMOTE=true
+NEXT_PUBLIC_SITE_URL=https://mycubicle.app
 ```
 
 Spell **SUPABASE** correctly (not `SUBASE`). Redeploy after any `NEXT_PUBLIC_*` change.
@@ -68,7 +79,7 @@ Spell **SUPABASE** correctly (not `SUBASE`). Redeploy after any `NEXT_PUBLIC_*` 
 | Acceptable Use | `/legal/acceptable-use` |
 | Index | `/legal` |
 
-These pages are linked from the **login screen**, **auth footer**, and **in-app footer**.  
+Linked from the **login screen**, **auth footer**, and **in-app footer**.  
 Have school division IT / privacy / legal review them before formal board adoption.
 
 ---
@@ -78,10 +89,10 @@ Have school division IT / privacy / legal review them before formal board adopti
 | Layer | Technology |
 |-------|------------|
 | App | Next.js 16 (App Router), React 19, TypeScript |
-| UI | Tailwind CSS 4, shadcn/ui, Motion |
+| UI | Tailwind CSS 4, shadcn/ui (Radix), Motion, Lucide |
 | Auth | Supabase Auth · Google OAuth |
-| Data | Supabase Postgres · Row Level Security |
-| Hosting | Vercel · custom domain `mycubicle.app` |
+| Data | Supabase Postgres · Row Level Security · Realtime |
+| Hosting | Vercel · `mycubicle.app` (optional `mycubicle.com`) |
 
 ---
 
@@ -101,7 +112,7 @@ cd cubicle
 npm install
 ```
 
-Create `.env.local` (see names above; never commit secrets):
+Create `.env.local` (never commit secrets):
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
@@ -109,27 +120,32 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
-Run SQL (Supabase SQL Editor), in order:
+Run SQL in the Supabase SQL Editor, **in order**:
 
-1. `supabase/schema.sql`
-2. `supabase/allowed-emails.sql`
-3. `supabase/seed-carts.sql`
-4. `supabase/restrict-domain.sql` (enforces `@rbe.sk.ca` on allowlist)
-5. `supabase/realtime.sql` (live multi-user board)
-6. `supabase/employment-type.sql` (permanent / sub / temp + blue tick)
+| # | File | Purpose |
+|---|------|---------|
+| 1 | `supabase/schema.sql` | Tables, RLS, profile trigger |
+| 2 | `supabase/allowed-emails.sql` | Staff allowlist + admin policies |
+| 3 | `supabase/seed-carts.sql` | Laptop carts (safe re-run) |
+| 4 | `supabase/restrict-domain.sql` | DB enforces `@rbe.sk.ca` on allowlist |
+| 5 | `supabase/realtime.sql` | Live multi-user board |
+| 6 | `supabase/employment-type.sql` | Permanent / sub / temp + blue tick |
+| 7 | `supabase/profile-name-sync.sql` | Fan-out display name to bookings / issues / swaps |
 
-Production checklist: [`PRODUCTION.md`](./PRODUCTION.md)  
-Data safety (survives every push): [`supabase/DATA_DURABILITY.md`](./supabase/DATA_DURABILITY.md)
+Then:
 
-Add staff in **Table Editor → `allowed_emails`** (or Admin → Staff after first admin login), then:
+- Production checklist → [`PRODUCTION.md`](./PRODUCTION.md)
+- Data safety (survives every push) → [`supabase/DATA_DURABILITY.md`](./supabase/DATA_DURABILITY.md)
+- Backend detail → [`supabase/SETUP.md`](./supabase/SETUP.md)
+- Supabase file index → [`supabase/README.md`](./supabase/README.md)
+
+Add staff in **Table Editor → `allowed_emails`** (or Admin → Staff after first admin login):
 
 ```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
-
-**Detailed backend checklist:** [`supabase/SETUP.md`](./supabase/SETUP.md)
 
 ### Scripts
 
@@ -140,11 +156,13 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run start` | Serve production build |
 | `npm run lint` | ESLint |
 
-Optional local demo picker (off by default; **do not enable on Vercel**):
+Optional local demo picker (**off by default; never enable on Vercel production**):
 
 ```env
 NEXT_PUBLIC_ENABLE_DEMO_LOGIN=true
 ```
+
+Without Supabase env vars, localhost can run a browser-local demo seed. Production hosts hard-stop if the database is not connected.
 
 ---
 
@@ -152,45 +170,59 @@ NEXT_PUBLIC_ENABLE_DEMO_LOGIN=true
 
 ```text
 cubicle/
-├── app/                 # Routes (board, admin, auth callback, legal, …)
-├── components/          # UI, auth, admin, legal shell
+├── app/                    # App Router routes (board, admin, auth, legal, settings, …)
+├── components/
+│   ├── app/                # Dashboard frame, auth gate, bootstrap
+│   ├── auth/               # Login / signup / wordmark
+│   ├── legal/              # Legal shell + nav
+│   ├── tool-ui/            # Stats display + sparklines
+│   └── ui/                 # shadcn primitives
 ├── lib/
-│   ├── auth/            # Session, allowlist, school domain gate
-│   ├── legal/           # Legal constants
-│   ├── supabase/        # Clients + platform API
-│   └── data/            # Client store + hydrate
-├── supabase/            # SQL schema, allowlist, seeds, setup docs
-└── public/              # Static assets
+│   ├── auth/               # Session, allowlist, school domain, OAuth helpers
+│   ├── calendar/           # Bell schedule (America/Regina) for calendar events
+│   ├── data/               # Platform store + durability guards
+│   ├── legal/              # Legal link constants
+│   ├── staff/              # Employment / verified badge rules
+│   └── supabase/           # Clients, mappers, platform API, realtime
+├── supabase/               # SQL schema, seeds, setup docs
+├── PRODUCTION.md           # Ship checklist
+├── SECURITY.md             # Vulnerability reporting + access model
+└── public/                 # Static assets
 ```
 
 ---
 
 ## Roles
 
-**Teachers** — board, bookings, issues, swaps, profile settings  
+| Role | Access |
+|------|--------|
+| **Teacher** | Schedule board, book / cancel own slots, swaps, issues, settings |
+| **Admin / IT** | Everything teachers can + cart status, restrictions, booking policy, staff allowlist |
 
-**Admins / IT** — maintenance console, cart status, restrictions, allowlist staff  
+Permanent staff can show a **verified** badge; substitutes / temporary staff do not.
 
 ---
 
 ## Credential & data safety (operators)
 
-1. Keep the GitHub repo **private**.  
-2. Never commit `.env.local` or service-role keys.  
-3. Anon key may be public in the browser; rely on **RLS + domain + allowlist**.  
-4. Rotate `SUPABASE_SERVICE_ROLE_KEY` if it was ever exposed.  
-5. Offboard staff by removing them from `allowed_emails`.  
-6. Prefer least privilege on Google Cloud OAuth clients.  
+1. Keep the GitHub repo **private**.
+2. Never commit `.env.local` or service-role keys.
+3. Anon key may ship to the browser; rely on **RLS + domain + allowlist**.
+4. Rotate `SUPABASE_SERVICE_ROLE_KEY` if it was ever exposed.
+5. Offboard staff by removing them from `allowed_emails`.
+6. Prefer least privilege on Google Cloud OAuth clients.
+7. Code deploys never wipe Postgres — see [`supabase/DATA_DURABILITY.md`](./supabase/DATA_DURABILITY.md).
 
 ---
 
 ## Deployment
 
-1. Connect the private GitHub repo to Vercel.  
-2. Set the three environment variables.  
-3. Attach `mycubicle.app` (and `www`) DNS as Vercel instructs.  
-4. Update Supabase Auth URL config + Google OAuth origins for production.  
-5. Confirm legal pages load at `https://mycubicle.app/legal`.  
+1. Connect the private GitHub repo to Vercel.
+2. Set the required environment variables (and optional remote lock).
+3. Attach `mycubicle.app` (and `www` / `mycubicle.com` if used) in Vercel → Domains.
+4. Update Supabase Auth URL config + Google OAuth origins for production.
+5. Confirm legal pages load at `https://mycubicle.app/legal`.
+6. Walk through [`PRODUCTION.md`](./PRODUCTION.md).
 
 ---
 

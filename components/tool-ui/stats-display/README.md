@@ -1,19 +1,30 @@
 # Stats Display
 
-Implementation for the "stats-display" Tool UI surface.
+Schedule dashboard metrics used on the home **Schedule** page (`app/page.tsx`).
+
+Shows day-level figures with optional sparklines and day-over-day diffs: booked slots, utilization, your bookings, open issues, and free capacity.
 
 ## Files
 
-- public exports: components/tool-ui/stats-display/index.tsx
-- serializable schema + parse helpers: components/tool-ui/stats-display/schema.ts
+| Path | Role |
+|------|------|
+| `index.tsx` | Public exports |
+| `stats-display.tsx` | Main UI |
+| `sparkline.tsx` | Mini trend chart |
+| `schema.ts` | Serializable stat item types |
+| `_adapter.tsx` | Tool-UI adapter helpers |
+| `../shared/` | Shared contract / parse utilities |
 
-## Companion assets
+## Usage
 
-- Docs page: app/docs/stats-display/content.mdx
-- Preset payload: lib/presets/stats-display.ts
+```tsx
+import { StatsDisplay, type StatItem } from "@/components/tool-ui/stats-display"
 
-## Quick check
+<StatsDisplay id="schedule-stats" stats={stats} />
+```
 
-Run this after edits:
+`StatItem` supports number/percent formats, optional sparkline series, and optional `diff` for day-over-day change.
 
-pnpm test
+## Styling
+
+Monochrome product look (matches Cubicle’s post-auth canvas). Prefer neutral sparkline colors so the board stays calm under classroom lighting.
