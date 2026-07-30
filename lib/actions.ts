@@ -61,7 +61,7 @@ export type CreateBookingResult = {
   booking?: Booking;
 };
 
-function useRemote() {
+function isRemoteEnabled() {
   return isSupabaseConfigured();
 }
 
@@ -86,7 +86,7 @@ async function refreshRemote(): Promise<Result> {
 }
 
 export async function hydratePlatformFromSupabase(): Promise<Result> {
-  if (!useRemote()) return { ok: true };
+  if (!isRemoteEnabled()) return { ok: true };
   return refreshRemote();
 }
 
@@ -178,7 +178,7 @@ export async function createBooking(
     return { ok: false, error: restricted.reason ?? "Slot is restricted." };
   }
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     if (!isUuid(session.id)) {
       return {
         ok: false,
@@ -274,7 +274,7 @@ export async function cancelBooking(bookingId: string): Promise<Result> {
     return { ok: false, error: "You can only cancel your own bookings." };
   }
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     const { error } = await dbDeleteBooking(bookingId);
     if (error) return { ok: false, error };
     return refreshRemote();
@@ -307,7 +307,7 @@ export async function reportIssue(formData: FormData): Promise<Result> {
     return { ok: false, error: "Describe the issue." };
   }
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     if (!isUuid(session.id)) {
       return {
         ok: false,
@@ -362,7 +362,7 @@ export async function updateIssueStatus(
     return { ok: false, error: "Admin only." };
   }
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     const { error } = await dbUpdateIssueStatus(issueId, status);
     if (error) return { ok: false, error };
 
@@ -415,7 +415,7 @@ export async function setCartStatus(
     return { ok: false, error: "Admin only." };
   }
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     const { error } = await dbSetCartStatus(cartId, status);
     if (error) return { ok: false, error };
     return refreshRemote();
@@ -445,7 +445,7 @@ export async function requestSwap(formData: FormData): Promise<Result> {
     return { ok: false, error: "You already own this booking." };
   }
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     if (!isUuid(session.id)) {
       return {
         ok: false,
@@ -495,7 +495,7 @@ export async function acceptSwap(requestId: string): Promise<Result> {
     return { ok: false, error: "Only the owner can accept." };
   }
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     const { error } = await dbAcceptSwap(request);
     if (error) return { ok: false, error };
     return refreshRemote();
@@ -520,7 +520,7 @@ export async function declineSwap(requestId: string): Promise<Result> {
   const session = requireSession();
   if (!session) return { ok: false, error: "Sign in required." };
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     const { error } = await dbDeclineSwap(requestId);
     if (error) return { ok: false, error };
     return refreshRemote();
@@ -542,7 +542,7 @@ export async function deleteBookings(bookingIds: string[]): Promise<Result> {
     return { ok: false, error: "Admin only." };
   }
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     const { error } = await dbDeleteBookings(bookingIds);
     if (error) return { ok: false, error };
     return refreshRemote();
@@ -584,7 +584,7 @@ export async function reassignBooking(
   );
   if (conflict) return { ok: false, error: "Target cart is already booked." };
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     const { error } = await dbReassignBooking(bookingId, cartId);
     if (error) return { ok: false, error };
     return refreshRemote();
@@ -618,7 +618,7 @@ export async function toggleSlotRestriction(
       entry.period === period,
   );
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     if (existing) {
       const { error } = await dbDeleteRestriction(cartId, date, period);
       if (error) return { ok: false, error };
@@ -690,7 +690,7 @@ export async function batchRestrictSlots(
   });
   const dates = days.map((day) => format(day, "yyyy-MM-dd"));
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     const state = getState();
 
     if (action === "available") {
@@ -817,7 +817,7 @@ export async function updateBookingPolicy(
     return { ok: false, error: "Admin only." };
   }
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     const { error } = await dbUpdateBookingPolicy(maxAdvanceDays);
     if (error) return { ok: false, error };
     return refreshRemote();
@@ -877,7 +877,7 @@ export async function createTeacherCredentials(
   }
 
   // School domain is enforced in production (Google allowlist). Local demo is open.
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     const domainError = schoolEmailError(email);
     if (domainError) return { ok: false, error: domainError };
 
@@ -971,7 +971,7 @@ export async function updateTeacherCredentials(
     return { ok: false, error: "Enter a valid email address." };
   }
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     const domainError = schoolEmailError(email);
     if (domainError) return { ok: false, error: domainError };
 
@@ -1089,7 +1089,7 @@ export async function setStaffVerified(
     return { ok: true };
   }
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     const { error } = await dbUpdateAllowedEmail(user.email, {
       employmentType,
     });
@@ -1127,7 +1127,7 @@ export async function deleteTeacherCredentials(
     return { ok: false, error: "Admin only." };
   }
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     const user = getState().users.find((entry) => entry.id === teacherId);
     if (!user) return { ok: false, error: "Staff member not found." };
     if (user.allowlisted === false) {
@@ -1171,7 +1171,7 @@ export async function resetTeacherPassword(
     return { ok: false, error: "Admin only." };
   }
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     return {
       ok: false,
       error: "Staff sign in with Google — there is no password to reset.",
@@ -1214,7 +1214,7 @@ export async function signOutAction() {
     }
   }
 
-  if (useRemote()) {
+  if (isRemoteEnabled()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
@@ -1243,7 +1243,7 @@ export async function updateProfile(
     return { ok: false, error: "Photo is too large. Try a smaller image." };
   }
 
-  if (useRemote() && isUuid(session.id)) {
+  if (isRemoteEnabled() && isUuid(session.id)) {
     const { error, data } = await dbUpdateProfile(session.id, input);
     if (error || !data) return { ok: false, error: error ?? "Update failed." };
 

@@ -1,7 +1,6 @@
 "use client"
 
 import {
-  useEffect,
   useMemo,
   useState,
   useTransition,
@@ -307,20 +306,17 @@ export function StaffPanel({
     })
   }, [users, query, filter, sortKey, metricsByUser])
 
-  // Keep selection valid; auto-pick first when empty.
-  useEffect(() => {
-    if (filtered.length === 0) {
-      if (selectedId !== null) setSelectedId(null)
-      return
-    }
-    if (!selectedId || !filtered.some((u) => u.id === selectedId)) {
-      setSelectedId(filtered[0].id)
-    }
-  }, [filtered, selectedId])
+  // Derive a valid selection from the filtered list (no effect / setState).
+  const resolvedSelectedId =
+    filtered.length === 0
+      ? null
+      : selectedId && filtered.some((u) => u.id === selectedId)
+        ? selectedId
+        : filtered[0].id
 
   const selected =
-    filtered.find((u) => u.id === selectedId) ??
-    users.find((u) => u.id === selectedId) ??
+    filtered.find((u) => u.id === resolvedSelectedId) ??
+    users.find((u) => u.id === resolvedSelectedId) ??
     null
   const selectedMetrics = selected
     ? metricsByUser.get(selected.id) ?? null
@@ -532,7 +528,7 @@ export function StaffPanel({
             <ul className="max-h-[min(70vh,40rem)] divide-y divide-neutral-100 overflow-y-auto">
               {filtered.map((user) => {
                 const m = metricsByUser.get(user.id)
-                const active = selectedId === user.id
+                const active = resolvedSelectedId === user.id
                 return (
                   <li key={user.id}>
                     <button
@@ -601,7 +597,6 @@ export function StaffPanel({
               user={selected}
               metrics={selectedMetrics}
               cartMap={cartMap}
-              googleMode={googleMode}
               verifyBusy={busyKey === `verify:${selected.id}`}
               onEdit={() => openEdit(selected)}
               onRemove={() => {
@@ -856,7 +851,6 @@ function StaffDetail({
   user,
   metrics,
   cartMap,
-  googleMode,
   verifyBusy,
   onEdit,
   onRemove,
@@ -866,7 +860,6 @@ function StaffDetail({
   user: User
   metrics: StaffMetrics
   cartMap: Map<string, Cart>
-  googleMode: boolean
   verifyBusy?: boolean
   onEdit: () => void
   onRemove: () => void

@@ -41,25 +41,17 @@ export function RequirePlatformAuth({
     getSessionSnapshot,
     () => null,
   );
-  const [restoring, setRestoring] = useState(
-    () => isSupabaseConfigured() && !getSessionSnapshot(),
-  );
-  const [onboardingReady, setOnboardingReady] = useState(false);
+  const needsSessionRestore =
+    isSupabaseConfigured() && !getSessionSnapshot();
+  const [restoring, setRestoring] = useState(needsSessionRestore);
 
   // Restore app session from Supabase if localStorage was cleared but cookies remain.
   useEffect(() => {
-    if (!isSupabaseConfigured()) {
-      setRestoring(false);
-      return;
-    }
-    if (getSessionSnapshot()) {
-      setRestoring(false);
-      return;
-    }
+    if (!needsSessionRestore) return;
 
     let cancelled = false;
 
-    (async () => {
+    void (async () => {
       try {
         const { createClient } = await import("@/lib/supabase/client");
         const supabase = createClient();
@@ -115,7 +107,7 @@ export function RequirePlatformAuth({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [needsSessionRestore]);
 
   // Live: when Google token refreshes or user metadata changes, re-sync name.
   useEffect(() => {
@@ -212,12 +204,9 @@ export function RequirePlatformAuth({
     if (!skipOnboarding) {
       const key = session.id || session.email;
       const done = isOnboardingComplete(key);
-      setOnboardingReady(true);
       if (!done && pathname !== "/onboarding") {
         router.replace("/onboarding");
       }
-    } else {
-      setOnboardingReady(true);
     }
   }, [session, role, router, restoring, skipOnboarding, pathname]);
 
@@ -234,10 +223,6 @@ export function RequirePlatformAuth({
   }
 
   const onboardingKey = session.id || session.email;
-
-  if (!skipOnboarding && !onboardingReady) {
-    return <LoadingScreen />;
-  }
 
   if (
     !skipOnboarding &&

@@ -32,35 +32,26 @@ export function PlatformBootstrap({
   children: React.ReactNode;
 }) {
   const remoteMissing = isRemoteRequiredButMissing();
-  const useRemote = isSupabaseConfigured();
+  const remoteEnabled = isSupabaseConfigured();
 
   const [ready, setReady] = useState(
     () =>
       remoteMissing ||
       isLocalDemoMode() ||
-      (useRemote && isPlatformRemoteHydrated()),
+      !remoteEnabled ||
+      isPlatformRemoteHydrated(),
   );
   const [error, setError] = useState("");
 
-  // Initial load from Postgres
+  // Initial load from Postgres (async only — sync ready cases are in useState above)
   useEffect(() => {
-    if (remoteMissing) {
-      setReady(true);
-      return;
-    }
-    if (!useRemote) {
-      // Safe local demo only
-      setReady(true);
-      return;
-    }
-    if (isPlatformRemoteHydrated()) {
-      setReady(true);
+    if (remoteMissing || !remoteEnabled || isPlatformRemoteHydrated()) {
       return;
     }
 
     let cancelled = false;
 
-    (async () => {
+    void (async () => {
       const result = await hydratePlatformFromSupabase();
       if (cancelled) return;
       if (!result.ok) {
@@ -77,11 +68,11 @@ export function PlatformBootstrap({
     return () => {
       cancelled = true;
     };
-  }, [remoteMissing, useRemote]);
+  }, [remoteMissing, remoteEnabled]);
 
   // Live updates: any change to bookings/carts/issues/profiles refreshes shared store
   useEffect(() => {
-    if (!useRemote || !ready || error || remoteMissing) return;
+    if (!remoteEnabled || !ready || error || remoteMissing) return;
 
     const unsubscribe = subscribePlatformRealtime(() => {
       void hydratePlatformFromSupabase().then((result) => {
@@ -92,7 +83,7 @@ export function PlatformBootstrap({
     });
 
     return unsubscribe;
-  }, [ready, error, useRemote, remoteMissing]);
+  }, [ready, error, remoteEnabled, remoteMissing]);
 
   // Keep header/session name in lockstep with platform store (Realtime + local).
   useEffect(() => {

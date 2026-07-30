@@ -16,8 +16,7 @@ export interface SparklineProps {
 }
 
 /**
- * Compact trend line. Solid stroke + fill so demo sparklines stay readable
- * even when embedded in KPI tiles (tool-ui dash animation is optional polish).
+ * Compact trend line — Tesla quiet: thin monochrome stroke, whisper fill.
  */
 export function Sparkline({
   data,
@@ -27,7 +26,7 @@ export function Sparkline({
   className,
   style,
   showFill = true,
-  fillOpacity = 0.14,
+  fillOpacity = 0.08,
 }: SparklineProps) {
   const gradientId = useId().replace(/:/g, "");
 
@@ -37,9 +36,8 @@ export function Sparkline({
 
   const minVal = Math.min(...data);
   const maxVal = Math.max(...data);
-  // Always leave a little headroom so flat series still draws a baseline.
   const range = maxVal - minVal || Math.max(maxVal, 1);
-  const padY = 2;
+  const padY = 3;
   const padX = 1;
 
   const usableWidth = width - padX * 2;
@@ -82,35 +80,22 @@ export function Sparkline({
         </>
       ) : null}
 
-      {/* Soft under-stroke for contrast on white cards */}
       <polyline
         points={linePointsString}
         fill="none"
         stroke={color}
-        strokeWidth={2.5}
-        strokeOpacity={0.12}
+        strokeWidth={1.25}
+        strokeOpacity={0.55}
         strokeLinecap="round"
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
       />
-      {/* Primary trend */}
-      <polyline
-        points={linePointsString}
-        fill="none"
-        stroke={color}
-        strokeWidth={1.75}
-        strokeOpacity={0.92}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
-      />
-      {/* Endpoint marker — last day of series */}
       <circle
         cx={last.x}
         cy={last.y}
-        r={2.25}
+        r={1.75}
         fill={color}
-        fillOpacity={0.95}
+        fillOpacity={0.85}
       />
     </svg>
   );

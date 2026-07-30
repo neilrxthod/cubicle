@@ -59,6 +59,56 @@ function Avatar({
   );
 }
 
+function isActivePath(pathname: string, href: string) {
+  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+}
+
+/**
+ * Tesla product nav: pure type, open tracking, no pill chrome.
+ * Active = full black + hairline underline. Inactive = muted, hover reveals.
+ */
+function NavLink({
+  href,
+  label,
+  active,
+  className,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+  className?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "group relative inline-flex h-full items-center justify-center px-3",
+        "text-[12px] font-medium tracking-[0.08em] uppercase",
+        "transition-colors duration-200 ease-out",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10 focus-visible:ring-offset-2",
+        active
+          ? "text-neutral-950"
+          : "text-neutral-400 hover:text-neutral-950",
+        className,
+      )}
+    >
+      <span className="relative">
+        {label}
+        <span
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute -bottom-1 left-0 right-0 h-px origin-center bg-neutral-950 transition-transform duration-300 ease-out",
+            active
+              ? "scale-x-100"
+              : "scale-x-0 group-hover:scale-x-100 group-hover:bg-neutral-400",
+          )}
+        />
+      </span>
+    </Link>
+  );
+}
+
 export function AppHeader({ user }: { user: SessionUser }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -80,32 +130,23 @@ export function AppHeader({ user }: { user: SessionUser }) {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[var(--hairline)] bg-white/85 backdrop-blur-xl">
-      <div className="relative mx-auto flex h-12 w-full max-w-300 items-center justify-between px-4 sm:h-14 sm:px-6">
+    <header className="sticky top-0 z-40 border-b border-[var(--hairline)] bg-white/80 backdrop-blur-2xl">
+      <div className="relative mx-auto flex h-14 w-full max-w-300 items-center justify-between px-4 sm:h-16 sm:px-6">
         <CubicleWordmark size="sm" href="/" />
 
-        <nav className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 md:block">
-          <div className="inline-flex h-8 items-center gap-0.5 rounded-lg bg-neutral-100/90 p-0.5">
-            {navItems.map((item) => {
-              const active =
-                item.href === "/"
-                  ? pathname === "/"
-                  : pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "inline-flex h-7 items-center justify-center rounded-md px-3.5 text-[12.5px] font-medium transition-colors",
-                    active
-                      ? "bg-white text-neutral-950 shadow-sm"
-                      : "text-neutral-500 hover:text-neutral-800",
-                  )}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
+        <nav
+          aria-label="Primary"
+          className="absolute left-1/2 top-0 hidden h-full -translate-x-1/2 md:block"
+        >
+          <div className="flex h-full items-stretch gap-1">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.href}
+                href={item.href}
+                label={item.label}
+                active={isActivePath(pathname, item.href)}
+              />
+            ))}
           </div>
         </nav>
 
@@ -114,12 +155,12 @@ export function AppHeader({ user }: { user: SessionUser }) {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex h-8 max-w-[11rem] items-center gap-2 rounded-lg border border-neutral-200/90 bg-white py-0.5 pl-0.5 pr-2 text-left transition-colors hover:border-neutral-300 hover:bg-neutral-50/80"
+                className="flex h-8 max-w-[11rem] items-center gap-2 rounded-full border border-transparent bg-transparent py-0.5 pl-0.5 pr-2 text-left transition-colors duration-200 hover:border-neutral-200/80 hover:bg-neutral-50/90"
               >
                 <Avatar user={user} size="sm" />
                 <span className="hidden min-w-0 flex-col leading-tight sm:flex">
                   <span className="inline-flex min-w-0 items-center gap-1">
-                    <span className="truncate text-[12px] font-medium text-neutral-950">
+                    <span className="truncate text-[12px] font-medium tracking-[-0.01em] text-neutral-950">
                       {user.firstName || user.name.split(" ")[0]}
                     </span>
                     {isVerifiedStaff(user) ? (
@@ -166,31 +207,40 @@ export function AppHeader({ user }: { user: SessionUser }) {
         </div>
       </div>
 
-      {/* Mobile nav */}
-      <div className="border-t border-[var(--hairline)] px-3 py-1.5 md:hidden">
-        <div className="flex gap-0.5 rounded-lg bg-neutral-100/90 p-0.5">
+      <nav
+        aria-label="Primary"
+        className="border-t border-[var(--hairline)] md:hidden"
+      >
+        <div className="flex h-11 items-stretch px-1">
           {navItems.map((item) => {
-            const active =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
+            const active = isActivePath(pathname, item.href);
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={active ? "page" : undefined}
                 className={cn(
-                  "inline-flex h-8 min-w-0 flex-1 items-center justify-center rounded-md px-2 text-[11.5px] font-medium",
+                  "relative flex min-w-0 flex-1 items-center justify-center",
+                  "text-[10.5px] font-medium tracking-[0.1em] uppercase",
+                  "transition-colors duration-200 ease-out",
                   active
-                    ? "bg-white text-neutral-950 shadow-sm"
-                    : "text-neutral-500",
+                    ? "text-neutral-950"
+                    : "text-neutral-400 active:text-neutral-700",
                 )}
               >
-                <span className="truncate">{item.label}</span>
+                <span className="truncate px-1">{item.label}</span>
+                <span
+                  aria-hidden
+                  className={cn(
+                    "pointer-events-none absolute inset-x-3 bottom-0 h-px bg-neutral-950 transition-opacity duration-200",
+                    active ? "opacity-100" : "opacity-0",
+                  )}
+                />
               </Link>
             );
           })}
         </div>
-      </div>
+      </nav>
     </header>
   );
 }

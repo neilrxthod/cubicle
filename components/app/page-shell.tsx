@@ -1,7 +1,8 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Post-auth page header — Tesla-like: large quiet title, one restrained line of context.
+ * Post-auth page header — Tesla product: light display title,
+ * one restrained line of context, no decorative chrome.
  */
 export function PageShell({
   title,
@@ -28,13 +29,13 @@ export function PageShell({
         className,
       )}
     >
-      <header className="mb-6 flex items-end justify-between gap-6 sm:mb-8">
+      <header className="mb-7 flex items-end justify-between gap-6 sm:mb-9">
         <div className="min-w-0 max-w-2xl">
-          <h1 className="text-[1.75rem] font-medium leading-[1.1] tracking-[-0.045em] text-neutral-950 sm:text-[2rem]">
+          <h1 className="text-[1.875rem] font-light leading-[1.05] tracking-[-0.04em] text-neutral-950 sm:text-[2.25rem]">
             {title}
           </h1>
           {description ? (
-            <p className="mt-2 max-w-xl text-[13px] font-normal leading-relaxed tracking-[-0.01em] text-neutral-400 sm:text-[13.5px]">
+            <p className="mt-2.5 max-w-md text-[13px] font-normal leading-relaxed tracking-[-0.005em] text-neutral-400 sm:text-[13.5px]">
               {description}
             </p>
           ) : null}

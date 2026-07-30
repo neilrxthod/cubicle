@@ -68,16 +68,13 @@ export default function LoginForm() {
 
   const supabaseReady = isSupabaseConfigured();
   const demoEnabled = isDemoLoginEnabled();
+  const urlError = messageForError(searchParams.get("error"));
+  const displayError = error || urlError;
 
   useEffect(() => {
     const existing = getSession();
     if (existing) router.replace(getDashboardPath(existing.role));
   }, [router]);
-
-  useEffect(() => {
-    const code = searchParams.get("error");
-    if (code) setError(messageForError(code));
-  }, [searchParams]);
 
   function requireLegal(): boolean {
     if (acceptedLegal) {
@@ -239,18 +236,18 @@ export default function LoginForm() {
                   setAcceptedLegal(value);
                   if (value) {
                     setLegalInvalid(false);
-                    if (error === LEGAL_REQUIRED) setError("");
+                    if (error === LEGAL_REQUIRED || urlError) setError("");
                   }
                 }}
                 invalid={legalInvalid}
               />
 
-              {(error || legalInvalid) && (
+              {(displayError || legalInvalid) && (
                 <p
                   role="alert"
                   className="text-center text-[12.5px] font-medium text-red-600"
                 >
-                  {error || "You must accept to sign in."}
+                  {displayError || "You must accept to sign in."}
                 </p>
               )}
             </motion.div>

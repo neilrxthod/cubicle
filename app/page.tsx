@@ -154,16 +154,16 @@ function HomeBoard({ user }: { user: SessionUser }) {
         ? issueSpark[issueSpark.length - 2]!
         : 0;
 
+    // Monochrome sparks — Tesla product, not multi-color analytics.
+    const spark = "rgb(23 23 23)";
+
     return [
       {
         key: "booked",
         label: "Booked",
         value: todayBookings.length,
         format: { kind: "number" },
-        sparkline: {
-          data: bookedSpark,
-          color: "var(--chart-1)",
-        },
+        sparkline: { data: bookedSpark, color: spark },
         diff: dayOverDayDiff(todayBookings.length, yBooked),
       },
       {
@@ -171,10 +171,7 @@ function HomeBoard({ user }: { user: SessionUser }) {
         label: "Utilization",
         value: utilization,
         format: { kind: "percent", decimals: 1, basis: "unit" },
-        sparkline: {
-          data: utilSpark,
-          color: "var(--chart-3)",
-        },
+        sparkline: { data: utilSpark, color: spark },
         diff: dayOverDayDiff(utilization, yUtil),
       },
       {
@@ -182,10 +179,7 @@ function HomeBoard({ user }: { user: SessionUser }) {
         label: "Yours",
         value: mine.length,
         format: { kind: "number" },
-        sparkline: {
-          data: mineSpark,
-          color: "var(--chart-2)",
-        },
+        sparkline: { data: mineSpark, color: spark },
         diff: dayOverDayDiff(mine.length, yMine),
       },
       {
@@ -193,10 +187,7 @@ function HomeBoard({ user }: { user: SessionUser }) {
         label: "Issues",
         value: openIssues,
         format: { kind: "number" },
-        sparkline: {
-          data: issueSpark,
-          color: "var(--chart-4)",
-        },
+        sparkline: { data: issueSpark, color: spark },
         diff: dayOverDayDiff(openIssues, yIssues, {
           upIsPositive: false,
         }),
@@ -206,10 +197,7 @@ function HomeBoard({ user }: { user: SessionUser }) {
         label: "Free",
         value: freeSlots,
         format: { kind: "number" },
-        sparkline: {
-          data: freeSpark,
-          color: "var(--chart-5)",
-        },
+        sparkline: { data: freeSpark, color: spark },
         diff: dayOverDayDiff(freeSlots, yFree),
       },
     ];

@@ -1,6 +1,6 @@
 "use client";
 
-import { cn, Card, CardContent } from "./_adapter";
+import { cn } from "./_adapter";
 import type {
   StatsDisplayProps,
   StatItem,
@@ -8,6 +8,8 @@ import type {
   StatDiff,
 } from "./schema";
 import { Sparkline } from "./sparkline";
+
+const TESLA_SPARK = "rgb(23 23 23)";
 
 function FormattedValue({
   value,
@@ -38,7 +40,7 @@ function FormattedValue({
               part.type === "compact" ? (
                 <span
                   key={i}
-                  className="ml-0.5 text-[0.62em] font-normal opacity-60"
+                  className="ml-0.5 text-[0.55em] font-normal text-neutral-400"
                   aria-hidden="true"
                 >
                   {part.value}
@@ -81,7 +83,7 @@ function FormattedValue({
         <span className="tabular-nums" aria-label={`${formatted} percent`}>
           {formatted}
           <span
-            className="ml-0.5 text-[0.5em] font-normal opacity-50"
+            className="ml-0.5 text-[0.42em] font-light text-neutral-400"
             aria-hidden="true"
           >
             %
@@ -110,104 +112,76 @@ function DeltaValue({ diff }: { diff: StatDiff }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums tracking-tight",
-        isZero && "bg-neutral-100 text-neutral-400",
-        !isZero && isGood && "bg-emerald-50 text-emerald-700",
-        !isZero && isBad && "bg-red-50 text-red-600",
-        !isZero && !isGood && !isBad && "bg-neutral-100 text-neutral-400",
+        "inline-flex items-baseline gap-1 text-[11px] font-medium tabular-nums tracking-[-0.01em]",
+        isZero && "text-neutral-300",
+        !isZero && isGood && "text-neutral-500",
+        !isZero && isBad && "text-neutral-950",
+        !isZero && !isGood && !isBad && "text-neutral-400",
       )}
     >
-      {!upIsPositive && !isZero ? (
-        <span className="leading-none opacity-70" aria-hidden>
-          {isGood ? "↓" : "↑"}
-        </span>
-      ) : null}
-      {display}
+      <span>{display}</span>
       {label ? (
-        <span className="font-normal text-current/65">{label}</span>
+        <span className="font-normal text-neutral-400">{label}</span>
       ) : null}
     </span>
   );
 }
 
-function StatCard({
+function isEmphasized(stat: StatItem) {
+  return (
+    stat.key === "issues" &&
+    typeof stat.value === "number" &&
+    stat.value > 0
+  );
+}
+
+function StatCell({
   stat,
   locale,
-  isSingle = false,
   index = 0,
-  asBlock = false,
 }: {
   stat: StatItem;
   locale?: string;
-  isSingle?: boolean;
   index?: number;
-  /** Standalone tile (own border + radius) */
-  asBlock?: boolean;
 }) {
-  const sparklineColor = stat.sparkline?.color ?? "var(--chart-3)";
   const sparkData = stat.sparkline?.data ?? [];
   const hasSparkline = sparkData.length >= 2;
-  const delay = index * 55;
+  const emphasize = isEmphasized(stat);
 
   return (
     <div
-      className={cn(
-        "relative flex h-full flex-col overflow-hidden",
-        asBlock
-          ? "min-h-[7.5rem] justify-between gap-2 rounded-2xl bg-white px-4 py-3.5 shadow-[0_0_0_1px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)] transition-[box-shadow] duration-200 hover:shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_4px_14px_rgba(0,0,0,0.05)] sm:min-h-[8rem] sm:px-5 sm:py-4"
-          : cn(
-              "justify-between gap-2 px-4 py-4 sm:px-5 sm:py-[1.15rem]",
-              isSingle
-                ? "min-h-[9rem] justify-center"
-                : "min-h-[6.5rem] sm:min-h-[6.75rem]",
-            ),
-      )}
+      className="relative flex h-full min-h-[7.25rem] flex-col justify-between gap-3 px-4 py-4 sm:min-h-[7.75rem] sm:px-5 sm:py-5"
+      style={{ animationDelay: `${index * 40}ms` }}
     >
-      <div className="relative z-[1] flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-3">
         <span
-          className="pt-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400"
-          style={{ animationDelay: `${delay + 30}ms` }}
+          className={cn(
+            "text-[10px] font-medium uppercase tracking-[0.16em]",
+            emphasize ? "text-neutral-950" : "text-neutral-400",
+          )}
         >
           {stat.label}
         </span>
-        {/* Dedicated spark strip — always visible, driven by real series data */}
-        {hasSparkline && asBlock ? (
+        {hasSparkline ? (
           <div
-            className="h-9 w-[4.75rem] shrink-0 sm:h-10 sm:w-[5.5rem]"
+            className="h-7 w-14 shrink-0 opacity-70 sm:h-8 sm:w-16"
             title={`14-day trend (${sparkData[0]} → ${sparkData[sparkData.length - 1]})`}
           >
             <Sparkline
               data={sparkData}
-              color={sparklineColor}
+              color={TESLA_SPARK}
               showFill
-              fillOpacity={0.18}
-              width={88}
-              height={40}
+              fillOpacity={0.08}
+              width={64}
+              height={32}
               className="h-full w-full"
             />
           </div>
         ) : null}
       </div>
 
-      {!asBlock && hasSparkline ? (
-        <Sparkline
-          data={sparkData}
-          color={sparklineColor}
-          showFill
-          fillOpacity={0.1}
-          className="pointer-events-none absolute inset-x-0 bottom-0 top-8 opacity-80"
-        />
-      ) : null}
-
-      <div className="relative z-[1] flex flex-wrap items-end gap-x-2 gap-y-1">
-        <span
-          className={cn(
-            "font-light tracking-[-0.035em] text-neutral-950",
-            isSingle && !asBlock
-              ? "text-[2.75rem] leading-none"
-              : "text-[1.85rem] leading-none sm:text-[2rem]",
-          )}
-        >
+      <div className="flex flex-wrap items-end gap-x-2.5 gap-y-1">
+        <span className="text-[1.875rem] font-light leading-none tracking-[-0.04em] text-neutral-950 sm:text-[2.125rem]">
           <FormattedValue
             value={stat.value}
             format={stat.format}
@@ -217,6 +191,68 @@ function StatCard({
         {stat.diff ? <DeltaValue diff={stat.diff} /> : null}
       </div>
     </div>
+  );
+}
+
+function MetricsStrip({
+  stats,
+  locale,
+}: {
+  stats: StatItem[];
+  locale?: string;
+}) {
+  const n = stats.length;
+
+  return (
+    <>
+      <div className="hidden overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white lg:flex">
+        {stats.map((stat, index) => (
+          <div
+            key={stat.key}
+            className={cn(
+              "min-w-0 flex-1",
+              index > 0 && "border-l border-[var(--hairline)]",
+            )}
+          >
+            <StatCell stat={stat} locale={locale} index={index} />
+          </div>
+        ))}
+      </div>
+
+      <div
+        className={cn(
+          "overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white lg:hidden",
+          "grid grid-cols-2 sm:grid-cols-3",
+        )}
+      >
+        {stats.map((stat, index) => {
+          const colsSm = 3;
+          const isLast = index === n - 1;
+          const rowStartSm = Math.floor(index / colsSm) * colsSm;
+          const isLastRowSm = rowStartSm + colsSm >= n;
+          const isOddMobile = index % 2 === 1;
+          const isLastRowMobile = index >= n - (n % 2 === 0 ? 2 : 1);
+
+          return (
+            <div
+              key={stat.key}
+              className={cn(
+                "min-w-0 border-[var(--hairline)]",
+                isOddMobile && "border-l",
+                !isLastRowMobile && "border-b",
+                "sm:border-l-0 sm:border-b-0",
+                index % colsSm !== 0 && "sm:border-l",
+                !isLastRowSm && "sm:border-b",
+                isLast && n % 2 === 1 && "col-span-2 sm:col-span-1",
+                isLast && n % colsSm !== 0 && n % 2 === 1 && "max-sm:border-l-0",
+              )}
+            >
+              <StatCell stat={stat} locale={locale} index={index} />
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
@@ -251,73 +287,39 @@ export function StatsDisplay({
       {hasHeader ? (
         <header className="mb-3 px-0.5">
           {title ? (
-            <h2 className="text-[13px] font-medium tracking-[-0.02em] text-neutral-950">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-400">
               {title}
             </h2>
           ) : null}
           {description ? (
-            <p className="mt-0.5 text-[12px] text-neutral-400">{description}</p>
+            <p className="mt-1 text-[12.5px] text-neutral-400">{description}</p>
           ) : null}
         </header>
       ) : null}
 
       {horizontal ? (
-        /* Each KPI is its own block — equal columns, real gaps between cards */
-        <div
-          className={cn(
-            "grid gap-2.5 sm:gap-3",
-            n === 3 && "grid-cols-1 sm:grid-cols-3",
-            n === 4 && "grid-cols-2 lg:grid-cols-4",
-            n >= 5 && "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5",
-          )}
-        >
-          {stats.map((stat, index) => (
-            <div
-              key={stat.key}
-              className={cn(
-                "min-w-0",
-                n >= 5 && index === 4 && "max-sm:col-span-2",
-              )}
-            >
-              <StatCard
-                stat={stat}
-                locale={locale}
-                isSingle={false}
-                index={index}
-                asBlock
-              />
-            </div>
-          ))}
-        </div>
+        <MetricsStrip stats={stats} locale={locale} />
       ) : (
-        <Card className="gap-0 overflow-hidden rounded-2xl border-0 bg-white py-0 shadow-[0_0_0_1px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)]">
-          <CardContent className="p-0">
-            <div
-              className="grid @container @[440px]:-ml-px @[440px]:-mt-px"
-              style={{
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              }}
-            >
-              {stats.map((stat, index) => (
-                <div
-                  key={stat.key}
-                  className={cn(
-                    "overflow-clip border-border py-0",
-                    index > 0 && "border-t",
-                    "@[440px]:border-l @[440px]:border-t",
-                  )}
-                >
-                  <StatCard
-                    stat={stat}
-                    locale={locale}
-                    isSingle={isSingle}
-                    index={index}
-                  />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white">
+          <div
+            className="grid"
+            style={{
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            }}
+          >
+            {stats.map((stat, index) => (
+              <div
+                key={stat.key}
+                className={cn(
+                  "min-w-0 border-[var(--hairline)]",
+                  index > 0 && "border-t sm:border-l sm:border-t-0",
+                )}
+              >
+                <StatCell stat={stat} locale={locale} index={index} />
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </article>
   );

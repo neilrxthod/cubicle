@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     // Archive / unused component trees
     "components-old/**",
     "components-new/**",
+    // Scratch / partial extract files (not part of the app)
+    "scripts/**",
   ]),
 ]);
 

@@ -32,6 +32,11 @@ import { VerifiedBadge } from "@/components/verified-badge"
 
 const PERIODS: Period[] = ["P1", "P2", "P3", "P4", "P5"]
 
+const GRID_COLS = "minmax(10rem, 1.15fr) repeat(5, minmax(0, 1fr))"
+
+const cellBase =
+  "flex min-h-12 min-w-0 border-l border-[var(--hairline)] transition-colors duration-150 ease-out"
+
 export function DailyBoard({
   session,
   carts,
@@ -104,7 +109,6 @@ export function DailyBoard({
 
     const existing = bookingMap.get(`${cart.id}:${period}`)
     if (existing) {
-      // Own booking or admin: open manage/cancel. Other teachers: request swap.
       if (existing.teacherId === session.id || session.role === "admin") {
         setManageDialog(existing)
         return
@@ -145,50 +149,74 @@ export function DailyBoard({
   }
 
   const heading = format(parseISO(date), "EEEE, MMM d")
+  const isViewingToday = date === today
   const managedCart = manageDialog
     ? carts.find((c) => c.id === manageDialog.cartId)
     : undefined
 
+  const contextLine =
+    session.role !== "admin"
+      ? `${maxAdvanceDays}-day window · through ${format(parseISO(lastBookableDate), "MMM d")}`
+      : "Open slots to book · report issues from any cart"
+
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex flex-col gap-3 rounded-2xl border-0 bg-white p-4 shadow-[0_0_0_1px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)] sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4">
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 border-b border-[var(--hairline)] pb-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6 sm:pb-5">
         <div className="min-w-0">
-          <h2 className="text-[1.05rem] font-medium tracking-[-0.03em] text-neutral-950 sm:text-[1.15rem]">
+          <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-neutral-400">
+            {isViewingToday ? "Today" : "Board"}
+          </p>
+          <h2 className="mt-1.5 text-[1.375rem] font-light leading-none tracking-[-0.035em] text-neutral-950 sm:text-[1.5rem]">
             {heading}
           </h2>
-          <p className="mt-1 text-[12px] tracking-[-0.01em] text-neutral-400">
-            {session.role !== "admin"
-              ? `${maxAdvanceDays}-day window · through ${format(parseISO(lastBookableDate), "MMM d")}`
-              : "Open slots to book · report issues from any cart"}
+          <p className="mt-2 max-w-md text-[12.5px] font-normal leading-relaxed tracking-[-0.005em] text-neutral-400">
+            {contextLine}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="flex shrink-0 items-center gap-0.5 self-start sm:self-end">
           <button
             type="button"
             aria-label="Previous day"
             onClick={() => go(-1)}
-            className="flex size-8 items-center justify-center rounded-full border border-black/[0.06] bg-white text-neutral-500 transition-colors hover:border-black/[0.1] hover:bg-neutral-50 hover:text-neutral-950"
+            className="flex size-9 items-center justify-center text-neutral-400 transition-colors duration-200 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10"
           >
-            <ChevronLeft className="size-3.5" strokeWidth={1.5} />
+            <ChevronLeft className="size-4" strokeWidth={1.25} />
           </button>
 
           <Popover>
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-black/[0.06] bg-white px-3 text-[12px] font-medium tracking-[-0.01em] text-neutral-950 transition-colors hover:border-black/[0.1] hover:bg-neutral-50"
+                className={cn(
+                  "inline-flex h-9 items-center gap-2 px-2.5",
+                  "text-[12px] font-medium tracking-[-0.01em] text-neutral-950",
+                  "transition-colors duration-200",
+                  "hover:text-neutral-600",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+                )}
               >
-                <CalendarIcon className="size-3.5 text-neutral-400" strokeWidth={1.5} />
-                {format(parseISO(date), "MMM d, yyyy")}
+                <CalendarIcon
+                  className="size-3.5 text-neutral-400"
+                  strokeWidth={1.25}
+                />
+                <span className="tabular-nums">
+                  {format(parseISO(date), "MMM d, yyyy")}
+                </span>
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
+            <PopoverContent
+              className="w-auto overflow-hidden rounded-xl border-[var(--hairline-strong)] p-0 shadow-[0_8px_30px_rgba(0,0,0,0.08)]"
+              align="end"
+            >
               <Calendar
                 mode="single"
                 selected={parseISO(date)}
                 onSelect={(val) => val && setDate(format(val, "yyyy-MM-dd"))}
-                disabled={(day) => isTeacherWindowEnforced && format(day, "yyyy-MM-dd") > lastBookableDate}
+                disabled={(day) =>
+                  isTeacherWindowEnforced &&
+                  format(day, "yyyy-MM-dd") > lastBookableDate
+                }
               />
             </PopoverContent>
           </Popover>
@@ -198,259 +226,311 @@ export function DailyBoard({
             aria-label="Next day"
             onClick={() => go(1)}
             disabled={isTeacherWindowEnforced && date >= lastBookableDate}
-            className="flex size-8 items-center justify-center rounded-full border border-black/[0.06] bg-white text-neutral-500 transition-colors hover:border-black/[0.1] hover:bg-neutral-50 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-35"
+            className="flex size-9 items-center justify-center text-neutral-400 transition-colors duration-200 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10 disabled:cursor-not-allowed disabled:opacity-30"
           >
-            <ChevronRight className="size-3.5" strokeWidth={1.5} />
+            <ChevronRight className="size-4" strokeWidth={1.25} />
           </button>
+
+          <span
+            aria-hidden
+            className="mx-1.5 hidden h-4 w-px bg-[var(--hairline-strong)] sm:block"
+          />
+
           <button
             type="button"
             onClick={() => setDate(today)}
-            className="h-8 rounded-full bg-neutral-950 px-3.5 text-[12px] font-medium tracking-[-0.01em] text-white transition-opacity hover:opacity-90"
+            disabled={isViewingToday}
+            className={cn(
+              "h-9 px-3 text-[11px] font-medium uppercase tracking-[0.12em] transition-colors duration-200",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+              isViewingToday
+                ? "cursor-default text-neutral-300"
+                : "text-neutral-950 hover:text-neutral-500",
+            )}
           >
             Today
           </button>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-0.5 text-[11px] text-neutral-400">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2 rounded-sm border border-neutral-200 bg-white" />
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-0.5">
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
+          <span className="size-1.5 rounded-[1px] border border-neutral-300 bg-white" />
           Open
         </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2 rounded-sm bg-neutral-950" />
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
+          <span className="size-1.5 rounded-[1px] bg-neutral-950" />
           Yours
         </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2 rounded-sm bg-neutral-200" />
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
+          <span className="size-1.5 rounded-[1px] bg-neutral-200" />
           Booked
         </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Lock className="size-2.5 text-slate-400" strokeWidth={2} />
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
+          <Lock className="size-2.5 text-neutral-400" strokeWidth={1.5} />
           Restricted
         </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Wrench className="size-2.5 text-amber-600" strokeWidth={2} />
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
+          <Wrench className="size-2.5 text-neutral-400" strokeWidth={1.5} />
           Maintenance
         </span>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white shadow-[var(--shadow-surface)]">
+      <div className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white">
         <div className="overflow-x-auto">
-          <div className="min-w-[52rem]">
-          <div
-            className="grid border-b border-neutral-800 bg-neutral-950"
-            style={{ gridTemplateColumns: "minmax(9rem, 1fr) repeat(5, minmax(0, 1fr))" }}
-          >
-            <div className="type-label flex items-center px-4 py-2.5 text-white/65">
-              Cart
-            </div>
-            {PERIODS.map((p) => (
-              <div
-                key={p}
-                className="type-label flex items-center justify-center border-l border-white/10 px-2 py-2.5 text-white/65"
-              >
-                {p}
-              </div>
-            ))}
-          </div>
-
-          {carts.length === 0 ? (
-            <div className="px-4 py-12 text-center text-[13px] text-neutral-500">
-              No carts are set up yet. Ask an admin to add laptop carts.
-            </div>
-          ) : null}
-
-          {carts.map((cart) => {
-            const isMaintenanceRow = cart.status === "maintenance"
-            return (
+          <div className="min-w-[54rem]">
             <div
-              key={cart.id}
-              className={cn(
-                "grid border-b last:border-b-0",
-                isMaintenanceRow
-                  ? "border-amber-200/70 bg-gradient-to-r from-amber-50/90 via-amber-50/40 to-white"
-                  : "border-neutral-100 bg-white",
-              )}
-              style={{ gridTemplateColumns: "minmax(9rem, 1fr) repeat(5, minmax(0, 1fr))" }}
+              className="grid bg-neutral-950"
+              style={{ gridTemplateColumns: GRID_COLS }}
             >
-              <div
-                className={cn(
-                  "flex items-center justify-between gap-2 border-r px-3 py-2.5",
-                  isMaintenanceRow ? "border-amber-200/70" : "border-neutral-100",
-                )}
-              >
-                <div className="min-w-0">
-                  <span className="type-body-strong block truncate">{cart.name}</span>
-                  {isMaintenanceRow ? (
-                    <span className="type-label mt-0.5 block text-amber-700">
-                      Maintenance
-                    </span>
-                  ) : cart.location ? (
-                    <span className="mt-0.5 block truncate text-[11px] text-neutral-400">
-                      {cart.location}
-                    </span>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  aria-label={`Report issue on ${cart.name}`}
-                  title="Report issue"
-                  onClick={() => setIssueDialog(cart)}
-                  className={cn(
-                    "flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
-                    isMaintenanceRow
-                      ? "text-amber-600 hover:bg-amber-100/80 hover:text-amber-800"
-                      : "text-neutral-400 hover:bg-neutral-100 hover:text-neutral-950",
-                  )}
-                >
-                  <AlertTriangle className="size-3.5" strokeWidth={1.5} />
-                </button>
+              <div className="flex items-center px-4 py-3.5 text-[10px] font-medium uppercase tracking-[0.18em] text-white/45">
+                Cart
               </div>
+              {PERIODS.map((p) => (
+                <div
+                  key={p}
+                  className="flex items-center justify-center border-l border-white/[0.08] px-2 py-3.5 text-[10px] font-medium uppercase tracking-[0.18em] text-white/45"
+                >
+                  {p}
+                </div>
+              ))}
+            </div>
 
-              {PERIODS.map((period) => {
-                const booking = bookingMap.get(`${cart.id}:${period}`)
-                const restriction = restrictionMap.get(`${cart.id}:${period}`)
-                const isMine = booking?.teacherId === session.id
-                const isMaintenance = cart.status === "maintenance"
-                const isRestricted = !!restriction
-                const restrictionTitle =
-                  restriction?.category === "ap_exam"
-                    ? "AP exam slot"
-                    : restriction?.reason || "Restricted by admin"
+            {carts.length === 0 ? (
+              <div className="px-4 py-16 text-center">
+                <p className="text-[13px] font-light tracking-[-0.01em] text-neutral-400">
+                  No carts are set up yet.
+                </p>
+                <p className="mt-1 text-[12px] text-neutral-300">
+                  Ask an admin to add laptop carts.
+                </p>
+              </div>
+            ) : null}
 
-                if (isMaintenance) {
-                  return (
-                    <div
-                      key={period}
-                      title="Cart under maintenance — unavailable"
+            {carts.map((cart) => {
+              const isMaintenanceRow = cart.status === "maintenance"
+              return (
+                <div
+                  key={cart.id}
+                  className={cn(
+                    "group/row grid border-b border-[var(--hairline)] last:border-b-0",
+                    isMaintenanceRow ? "bg-neutral-50/80" : "bg-white",
+                  )}
+                  style={{ gridTemplateColumns: GRID_COLS }}
+                >
+                  <div
+                    className={cn(
+                      "flex items-center justify-between gap-2 border-r border-[var(--hairline)] px-3.5 py-3",
+                      isMaintenanceRow && "opacity-70",
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <span className="block truncate text-[13px] font-medium tracking-[-0.02em] text-neutral-950">
+                        {cart.name}
+                      </span>
+                      {isMaintenanceRow ? (
+                        <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+                          Maintenance
+                        </span>
+                      ) : cart.location ? (
+                        <span className="mt-0.5 block truncate text-[11px] tracking-[-0.01em] text-neutral-400">
+                          {cart.location}
+                        </span>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Report issue on ${cart.name}`}
+                      title="Report issue"
+                      onClick={() => setIssueDialog(cart)}
                       className={cn(
-                        "flex min-h-11 items-center justify-center",
-                        "border-l border-amber-200/70",
-                        "bg-gradient-to-br from-amber-50/90 via-amber-50/45 to-white",
-                        "text-amber-600",
+                        "flex size-8 shrink-0 items-center justify-center rounded-md",
+                        "text-neutral-300 transition-colors duration-150",
+                        "hover:bg-neutral-100 hover:text-neutral-950",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+                        "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100",
                       )}
                     >
-                      <Wrench className="size-3.5" strokeWidth={1.5} />
-                    </div>
-                  )
-                }
-
-                if (booking && isMine) {
-                  const primaryLabel = booking.className?.trim() || "Yours"
-                  const verified = verifiedByTeacherId.get(booking.teacherId)
-                  return (
-                    <button
-                      key={period}
-                      type="button"
-                      onClick={() => onCellClick(cart, period)}
-                      title={`${primaryLabel} — click to manage or cancel`}
-                      className="flex min-h-11 min-w-0 items-center gap-1 border-l border-neutral-800 bg-neutral-950 px-2 text-left text-white transition-colors hover:bg-neutral-800"
-                    >
-                      <span className="truncate text-[11.5px] font-semibold leading-tight">
-                        {primaryLabel}
-                      </span>
-                      {verified ? (
-                        <VerifiedBadge
-                          size="xs"
-                          className="shrink-0 text-sky-400"
-                          title="Verified permanent staff"
-                        />
-                      ) : null}
+                      <AlertTriangle className="size-3.5" strokeWidth={1.25} />
                     </button>
-                  )
-                }
+                  </div>
 
-                if (booking) {
-                  const primaryLabel = booking.className?.trim() || booking.teacherName
-                  const verified = verifiedByTeacherId.get(booking.teacherId)
-                  return (
-                    <button
-                      key={period}
-                      type="button"
-                      onClick={() => onCellClick(cart, period)}
-                      title={`${primaryLabel} · ${booking.teacherName}${verified ? " · verified permanent" : ""} — click to request swap`}
-                      className="flex min-h-11 min-w-0 flex-col justify-center border-l border-neutral-100 bg-neutral-50 px-2 text-left transition-colors hover:bg-neutral-100"
-                    >
-                      <span className="flex min-w-0 items-center gap-1">
-                        <span className="truncate text-[11.5px] font-medium leading-tight text-neutral-900">
-                          {primaryLabel}
+                  {PERIODS.map((period) => {
+                    const booking = bookingMap.get(`${cart.id}:${period}`)
+                    const restriction = restrictionMap.get(`${cart.id}:${period}`)
+                    const isMine = booking?.teacherId === session.id
+                    const isMaintenance = cart.status === "maintenance"
+                    const isRestricted = !!restriction
+                    const restrictionTitle =
+                      restriction?.category === "ap_exam"
+                        ? "AP exam slot"
+                        : restriction?.reason || "Restricted by admin"
+
+                    if (isMaintenance) {
+                      return (
+                        <div
+                          key={period}
+                          title="Cart under maintenance — unavailable"
+                          className={cn(
+                            cellBase,
+                            "items-center justify-center bg-neutral-50 text-neutral-300",
+                          )}
+                        >
+                          <Wrench className="size-3.5" strokeWidth={1.25} />
+                        </div>
+                      )
+                    }
+
+                    if (booking && isMine) {
+                      const primaryLabel = booking.className?.trim() || "Yours"
+                      const verified = verifiedByTeacherId.get(booking.teacherId)
+                      return (
+                        <button
+                          key={period}
+                          type="button"
+                          onClick={() => onCellClick(cart, period)}
+                          title={`${primaryLabel} — click to manage or cancel`}
+                          className={cn(
+                            cellBase,
+                            "items-center gap-1.5 border-l-neutral-900 bg-neutral-950 px-2.5 text-left text-white",
+                            "hover:bg-neutral-800",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25",
+                          )}
+                        >
+                          <span className="truncate text-[12px] font-medium leading-tight tracking-[-0.015em]">
+                            {primaryLabel}
+                          </span>
+                          {verified ? (
+                            <VerifiedBadge
+                              size="xs"
+                              className="shrink-0 text-white/70"
+                              title="Verified permanent staff"
+                            />
+                          ) : null}
+                        </button>
+                      )
+                    }
+
+                    if (booking) {
+                      const primaryLabel =
+                        booking.className?.trim() || booking.teacherName
+                      const verified = verifiedByTeacherId.get(booking.teacherId)
+                      return (
+                        <button
+                          key={period}
+                          type="button"
+                          onClick={() => onCellClick(cart, period)}
+                          title={`${primaryLabel} · ${booking.teacherName}${verified ? " · verified permanent" : ""} — click to request swap`}
+                          className={cn(
+                            cellBase,
+                            "flex-col justify-center gap-0.5 bg-neutral-50/90 px-2.5 text-left",
+                            "hover:bg-neutral-100",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-900/10",
+                          )}
+                        >
+                          <span className="flex min-w-0 items-center gap-1">
+                            <span className="truncate text-[12px] font-medium leading-tight tracking-[-0.015em] text-neutral-900">
+                              {primaryLabel}
+                            </span>
+                            {verified ? (
+                              <VerifiedBadge size="xs" className="shrink-0" />
+                            ) : null}
+                          </span>
+                          <span className="truncate text-[10.5px] leading-tight tracking-[-0.01em] text-neutral-400">
+                            {booking.teacherName}
+                          </span>
+                        </button>
+                      )
+                    }
+
+                    if (isRestricted && session.role !== "admin") {
+                      return (
+                        <div
+                          key={period}
+                          title={restrictionTitle}
+                          className={cn(
+                            cellBase,
+                            "flex-col items-center justify-center gap-1 bg-[repeating-linear-gradient(-45deg,transparent,transparent_3px,rgba(0,0,0,0.03)_3px,rgba(0,0,0,0.03)_4px)] text-neutral-400",
+                          )}
+                        >
+                          <Lock className="size-3" strokeWidth={1.25} />
+                          <span className="text-[9px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+                            {restriction?.category === "ap_exam" ? "AP" : "Locked"}
+                          </span>
+                        </div>
+                      )
+                    }
+
+                    if (isRestricted && session.role === "admin") {
+                      return (
+                        <button
+                          key={period}
+                          type="button"
+                          onClick={() => onCellClick(cart, period)}
+                          title={`${restrictionTitle} — admins can still book`}
+                          className={cn(
+                            cellBase,
+                            "flex-col items-center justify-center gap-1",
+                            "bg-[repeating-linear-gradient(-45deg,transparent,transparent_3px,rgba(0,0,0,0.03)_3px,rgba(0,0,0,0.03)_4px)]",
+                            "text-neutral-500",
+                            "hover:bg-neutral-100 hover:text-neutral-950",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-900/10",
+                          )}
+                        >
+                          <Lock className="size-3" strokeWidth={1.25} />
+                          <span className="text-[9px] font-medium uppercase tracking-[0.14em]">
+                            Admin
+                          </span>
+                        </button>
+                      )
+                    }
+
+                    if (!canBookOpenSlots) {
+                      return (
+                        <div
+                          key={period}
+                          title={
+                            isPastDate
+                              ? "Past date — cannot book"
+                              : "Outside booking window"
+                          }
+                          className={cn(
+                            cellBase,
+                            "items-center justify-center bg-white text-neutral-200",
+                          )}
+                        >
+                          <span className="text-[11px] font-light">—</span>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <button
+                        key={period}
+                        type="button"
+                        onClick={() => onCellClick(cart, period)}
+                        className={cn(
+                          cellBase,
+                          "group/cell items-center justify-center bg-white",
+                          "hover:bg-neutral-950",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-900/15",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "text-[10px] font-medium uppercase tracking-[0.16em]",
+                            "text-neutral-300 transition-colors duration-150",
+                            "group-hover/cell:text-white",
+                          )}
+                        >
+                          Book
                         </span>
-                        {verified ? (
-                          <VerifiedBadge size="xs" className="shrink-0" />
-                        ) : null}
-                      </span>
-                      <span className="truncate text-[10px] leading-tight text-neutral-400">
-                        {booking.teacherName}
-                      </span>
-                    </button>
-                  )
-                }
-
-                // Restricted: slate (not amber — amber is maintenance only)
-                if (isRestricted && session.role !== "admin") {
-                  return (
-                    <div
-                      key={period}
-                      title={restrictionTitle}
-                      className="flex min-h-11 flex-col items-center justify-center gap-0.5 border-l border-slate-100 bg-slate-50 text-slate-500"
-                    >
-                      <Lock className="size-3" strokeWidth={1.5} />
-                      <span className="text-[9px] font-medium uppercase tracking-wide">
-                        {restriction?.category === "ap_exam" ? "AP" : "Locked"}
-                      </span>
-                    </div>
-                  )
-                }
-
-                // Admin on restricted empty slot — still bookable, clearly marked
-                if (isRestricted && session.role === "admin") {
-                  return (
-                    <button
-                      key={period}
-                      type="button"
-                      onClick={() => onCellClick(cart, period)}
-                      title={`${restrictionTitle} — admins can still book`}
-                      className="flex min-h-11 flex-col items-center justify-center gap-0.5 border-l border-slate-200 bg-slate-50/80 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                    >
-                      <Lock className="size-3" strokeWidth={1.5} />
-                      <span className="text-[9px] font-medium uppercase tracking-wide">
-                        Admin
-                      </span>
-                    </button>
-                  )
-                }
-
-                if (!canBookOpenSlots) {
-                  return (
-                    <div
-                      key={period}
-                      title={
-                        isPastDate
-                          ? "Past date — cannot book"
-                          : "Outside booking window"
-                      }
-                      className="flex min-h-11 items-center justify-center border-l border-neutral-100 bg-neutral-50/60 text-[10px] text-neutral-300"
-                    >
-                      —
-                    </div>
-                  )
-                }
-
-                return (
-                  <button
-                    key={period}
-                    type="button"
-                    onClick={() => onCellClick(cart, period)}
-                    className="flex min-h-11 items-center justify-center border-l border-neutral-100 text-[10.5px] font-medium uppercase tracking-wider text-neutral-400 transition-colors hover:bg-neutral-950 hover:text-white"
-                  >
-                    Book
-                  </button>
-                )
-              })}
-            </div>
-            )
-          })}
+                      </button>
+                    )
+                  })}
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

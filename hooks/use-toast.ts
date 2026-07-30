@@ -142,11 +142,14 @@ type Toast = Omit<ToasterToast, 'id'>
  * Calls remain valid so feature code does not need to change.
  */
 function toast(_props: Toast) {
+  void _props
   const id = genId()
   return {
     id,
     dismiss: () => {},
-    update: (_next: ToasterToast) => {},
+    update: (_next: ToasterToast) => {
+      void _next
+    },
   }
 }
 

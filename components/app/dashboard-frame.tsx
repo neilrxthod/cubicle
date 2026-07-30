@@ -22,20 +22,33 @@ export function DashboardFrame({
       <main className="mx-auto w-full max-w-300 flex-1 px-4 py-6 sm:px-6 sm:py-9">
         {children}
       </main>
-      <footer className="border-t border-[var(--hairline)] bg-white/60">
-        <div className="mx-auto flex w-full max-w-300 items-center justify-between gap-3 px-4 py-3 text-[11px] text-neutral-400 sm:px-6">
-          <p className="shrink-0 tracking-[-0.01em]">
-            © {new Date().getFullYear()} Cubicle
+      {/* Tesla footer — pure type, open tracking, whisper hairline */}
+      <footer className="border-t border-[var(--hairline)] bg-transparent">
+        <div className="mx-auto flex w-full max-w-300 flex-col items-center justify-between gap-3 px-4 py-4 sm:flex-row sm:gap-6 sm:px-6 sm:py-5">
+          <p className="shrink-0 text-[10.5px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+            <span className="text-neutral-300">©</span>{" "}
+            {new Date().getFullYear()}{" "}
+            <span className="tracking-[0.2em] text-neutral-500">Cubicle</span>
           </p>
-          <nav className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-            {LEGAL_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="transition-colors hover:text-neutral-700"
-              >
-                {link.shortLabel}
-              </Link>
+          <nav
+            aria-label="Legal"
+            className="flex flex-wrap items-center justify-center gap-x-0 sm:justify-end"
+          >
+            {LEGAL_LINKS.map((link, index) => (
+              <span key={link.href} className="inline-flex items-center">
+                {index > 0 ? (
+                  <span
+                    aria-hidden
+                    className="mx-2.5 h-2.5 w-px bg-neutral-200 sm:mx-3"
+                  />
+                ) : null}
+                <Link
+                  href={link.href}
+                  className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-neutral-400 transition-colors duration-200 hover:text-neutral-950"
+                >
+                  {link.shortLabel}
+                </Link>
+              </span>
             ))}
           </nav>
         </div>

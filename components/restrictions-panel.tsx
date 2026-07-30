@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   addDays,
@@ -758,11 +758,14 @@ function BatchToolsDialog({
   )
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    if (!open) return
-    setDateRange({ from: parseISO(activeDate), to: parseISO(activeDate) })
-    setMaxAdvance(String(bookingPolicy.maxAdvanceDays ?? 14))
-  }, [open, activeDate, bookingPolicy.maxAdvanceDays])
+  // Reset form fields when the dialog opens (via onOpenChange, not an effect).
+  function handleOpenChange(next: boolean) {
+    if (next) {
+      setDateRange({ from: parseISO(activeDate), to: parseISO(activeDate) })
+      setMaxAdvance(String(bookingPolicy.maxAdvanceDays ?? 14))
+    }
+    onOpenChange(next)
+  }
 
   const selectedDates = useMemo(() => {
     if (!dateRange?.from) return [] as string[]
@@ -877,7 +880,7 @@ function BatchToolsDialog({
   )
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="gap-0 overflow-hidden rounded-2xl border-neutral-200 p-0 sm:max-w-lg">
         <DialogHeader className="space-y-1 border-b border-neutral-100 px-5 py-4 text-left">
           <DialogTitle className="text-[15px] font-semibold tracking-tight">
