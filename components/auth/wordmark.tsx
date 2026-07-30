@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
+/**
+ * Tesla-style wordmark: pure type, uppercase, open tracking, light weight.
+ * No icon — the name is the logo.
+ */
 const sizeStyles = {
-  sm: "text-[14px] tracking-[-0.038em]",
-  md: "text-[16px] tracking-[-0.042em]",
-  lg: "text-[21px] tracking-[-0.048em]",
-  hero: "text-[clamp(2.75rem,5.2vw,4.5rem)] tracking-[-0.06em] leading-[0.9]",
+  sm: "text-[11px] tracking-[0.32em]",
+  md: "text-[12px] tracking-[0.36em]",
+  lg: "text-[14px] tracking-[0.4em]",
+  hero: "text-[clamp(1.75rem,4vw,2.75rem)] tracking-[0.42em] leading-none",
 } as const;
 
 type WordmarkSize = keyof typeof sizeStyles;
@@ -24,10 +28,6 @@ const toneStyles = {
   muted: "text-neutral-500",
 } as const;
 
-/**
- * Cubicle wordmark — type only, no icon.
- * Tuned tracking + weight so the name reads like a real product logo.
- */
 export function CubicleWordmark({
   size = "md",
   href = "/login",
@@ -37,7 +37,7 @@ export function CubicleWordmark({
   const mark = (
     <span
       className={cn(
-        "inline-block font-semibold select-none",
+        "inline-block select-none font-medium uppercase",
         sizeStyles[size],
         toneStyles[tone],
         className,
@@ -55,7 +55,7 @@ export function CubicleWordmark({
     <Link
       href={href}
       aria-label="Cubicle home"
-      className="inline-flex rounded-sm transition-opacity duration-200 hover:opacity-65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/15 focus-visible:ring-offset-2"
+      className="inline-flex rounded-sm transition-opacity duration-200 hover:opacity-55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/15 focus-visible:ring-offset-2"
     >
       {mark}
     </Link>

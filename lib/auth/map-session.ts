@@ -27,7 +27,10 @@ export function toPlatformSession(user: AuthSessionUser): SessionUser {
           : match.id.startsWith("pending:")
             ? user.id ?? match.id
             : match.id,
+      // Prefer live platform/profile name (kept in sync with Google + Realtime).
       name: match.name || user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
       email: match.email,
       role: match.role,
       // Session often has Google photo before/alongside DB profile.
@@ -44,6 +47,8 @@ export function toPlatformSession(user: AuthSessionUser): SessionUser {
   return {
     id: user.id ?? user.email,
     name: user.name,
+    firstName: user.firstName,
+    lastName: user.lastName,
     email: user.email,
     role: user.role,
     avatarUrl: pickAvatar(user.avatarUrl),

@@ -79,7 +79,7 @@ export function AuthLayout({
         >
           <Image
             src={AUTH_IMAGE}
-            alt=""
+            alt="Laptop charging carts in a modern school media center"
             fill
             priority
             className="object-cover object-center"
@@ -88,13 +88,22 @@ export function AuthLayout({
 
           <div
             aria-hidden="true"
-            className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.08)_0%,transparent_35%,rgba(0,0,0,0.45)_100%)]"
+            className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.12)_0%,transparent_40%,rgba(0,0,0,0.55)_100%)]"
           />
 
           <div
             aria-hidden="true"
-            className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-white/15 to-transparent"
+            className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-white/10 to-transparent"
           />
+
+          <div className="absolute inset-x-0 bottom-0 p-8 xl:p-10">
+            <p className="max-w-sm text-[15px] font-medium tracking-[-0.02em] text-white/95">
+              School laptop carts, scheduled with clarity.
+            </p>
+            <p className="mt-1.5 max-w-sm text-[13px] leading-relaxed text-white/65">
+              Book by period. Track fleet health. Keep every class ready.
+            </p>
+          </div>
         </aside>
       </div>
     </div>

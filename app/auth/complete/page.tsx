@@ -2,20 +2,21 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { extractOAuthAvatarUrl } from "@/lib/auth/google-avatar";
 import { isSchoolEmail } from "@/lib/auth/school-domain";
 import { setSession } from "@/lib/auth/session";
-import type { UserRole } from "@/lib/auth/types";
+import { syncOAuthProfileFromGoogle } from "@/lib/auth/sync-oauth-profile";
 import { createClient } from "@/lib/supabase/client";
 
 /**
- * After Supabase OAuth + allowlist pass, load profile (incl. Google photo)
- * and write the app session used by RequirePlatformAuth.
+ * After Supabase OAuth + allowlist pass:
+ * 1. Pull First + Last name (and photo) from the Google account
+ * 2. Persist to profiles + denormalized booking/issue names
+ * 3. Write the app session used by RequirePlatformAuth
  */
 function CompleteInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const [message, setMessage] = useState("Finishing sign-in…");
+  const [message, setMessage] = useState("Syncing your Google profile…");
 
   useEffect(() => {
     let cancelled = false;
@@ -35,66 +36,40 @@ function CompleteInner() {
           return;
         }
 
-        // Defense in depth: never complete sign-in for non-school domains
         if (!isSchoolEmail(user.email)) {
           await supabase.auth.signOut();
           router.replace("/login?error=invalid_domain");
           return;
         }
 
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select(
-            "id, email, name, role, avatar_url, title, department, phone, bio, notify_email, notify_issues",
-          )
-          .eq("id", user.id)
-          .maybeSingle();
+        setMessage("Loading your name from Google…");
+        const synced = await syncOAuthProfileFromGoogle(user);
 
         if (cancelled) return;
 
-        if (!profile) {
+        if (!synced) {
           router.replace("/login?error=session_bridge");
           return;
-        }
-
-        const role = profile.role as UserRole;
-        if (role !== "teacher" && role !== "admin") {
-          router.replace("/login?error=session_bridge");
-          return;
-        }
-
-        const avatarFromGoogle = extractOAuthAvatarUrl(user);
-        const avatarUrl =
-          (typeof profile.avatar_url === "string" && profile.avatar_url) ||
-          avatarFromGoogle ||
-          undefined;
-
-        // Backfill Google photo into profiles if the row was missing it.
-        if (avatarFromGoogle && profile.avatar_url !== avatarFromGoogle) {
-          await supabase
-            .from("profiles")
-            .update({
-              avatar_url: avatarFromGoogle,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", user.id);
         }
 
         setSession({
-          id: profile.id,
-          email: profile.email,
-          name: profile.name,
-          role,
-          avatarUrl,
-          title: profile.title ?? undefined,
-          department: profile.department ?? undefined,
-          phone: profile.phone ?? undefined,
-          bio: profile.bio ?? undefined,
-          notifyEmail: profile.notify_email ?? true,
-          notifyIssues: profile.notify_issues ?? true,
+          id: synced.id,
+          email: synced.email,
+          name: synced.name,
+          role: synced.role,
+          avatarUrl: synced.avatarUrl,
+          title: synced.title,
+          department: synced.department,
+          phone: synced.phone,
+          bio: synced.bio,
+          notifyEmail: synced.notifyEmail,
+          notifyIssues: synced.notifyIssues,
+          firstName: synced.firstName,
+          lastName: synced.lastName,
         });
 
-        const next = params.get("next") || (role === "admin" ? "/admin" : "/");
+        const next =
+          params.get("next") || (synced.role === "admin" ? "/admin" : "/");
         router.replace(next.startsWith("/") ? next : "/");
       } catch {
         if (!cancelled) {

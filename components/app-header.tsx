@@ -16,6 +16,7 @@ import { signOutAction } from "@/lib/actions";
 import { isVerifiedStaff } from "@/lib/staff/employment";
 import type { SessionUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { CubicleWordmark } from "@/components/auth/wordmark";
 import { VerifiedBadge } from "@/components/verified-badge";
 
 function initials(name: string) {
@@ -81,12 +82,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--hairline)] bg-white/85 backdrop-blur-xl">
       <div className="relative mx-auto flex h-12 w-full max-w-300 items-center justify-between px-4 sm:h-14 sm:px-6">
-        <Link
-          href="/"
-          className="shrink-0 text-[0.9375rem] font-semibold tracking-tight text-neutral-950"
-        >
-          Cubicle
-        </Link>
+        <CubicleWordmark size="sm" href="/" />
 
         <nav className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 md:block">
           <div className="inline-flex h-8 items-center gap-0.5 rounded-lg bg-neutral-100/90 p-0.5">
@@ -124,7 +120,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
                 <span className="hidden min-w-0 flex-col leading-tight sm:flex">
                   <span className="inline-flex min-w-0 items-center gap-1">
                     <span className="truncate text-[12px] font-medium text-neutral-950">
-                      {user.name.split(" ")[0]}
+                      {user.firstName || user.name.split(" ")[0]}
                     </span>
                     {isVerifiedStaff(user) ? (
                       <VerifiedBadge size="xs" />

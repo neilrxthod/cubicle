@@ -3,7 +3,7 @@ import {
   checkSchoolAccess,
   deleteUnauthorizedUser,
 } from "@/lib/auth/allowlist";
-import { extractOAuthAvatarUrl } from "@/lib/auth/google-avatar";
+import { extractOAuthIdentity } from "@/lib/auth/google-identity";
 import { getDashboardPath } from "@/lib/auth/session";
 import type { UserRole } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
@@ -14,6 +14,8 @@ import { createClient } from "@/lib/supabase/server";
  * 1. Email domain must be @rbe.sk.ca (blocks gmail.com and all others)
  * 2. Email must be on allowed_emails
  * Unauthorized users are signed out and deleted from Auth.
+ *
+ * Display name: prefer Google given_name + family_name (First + Last).
  */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -69,19 +71,20 @@ export async function GET(request: Request) {
 
   const allowed = access.allowed;
   const role = allowed.role as UserRole;
-  const name =
-    allowed.name ||
-    (user.user_metadata?.full_name as string | undefined) ||
-    (user.user_metadata?.name as string | undefined) ||
-    user.email.split("@")[0];
-
   const employmentType = allowed.employmentType ?? "permanent";
 
-  const avatarUrl = extractOAuthAvatarUrl(user);
+  // Google Workspace first + last (given_name / family_name) is source of truth.
+  const identity = extractOAuthIdentity(user);
+  const name =
+    (identity.fromGoogle && identity.fullName) ||
+    allowed.name?.trim() ||
+    identity.fullName;
+
+  const avatarUrl = identity.avatarUrl;
 
   const { data: existing } = await supabase
     .from("profiles")
-    .select("avatar_url")
+    .select("avatar_url, name")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -89,7 +92,6 @@ export async function GET(request: Request) {
     avatarUrl ||
     (typeof existing?.avatar_url === "string" ? existing.avatar_url : null);
 
-  // Upsert core profile. employment_type requires employment-type.sql applied.
   const profilePayload: Record<string, unknown> = {
     id: user.id,
     email: user.email.toLowerCase(),
@@ -116,6 +118,22 @@ export async function GET(request: Request) {
 
   if (upsertError) {
     console.error("[auth/callback] profile upsert failed:", upsertError.message);
+  } else {
+    // Keep denormalized names in sync so open boards update via Realtime.
+    await Promise.all([
+      supabase
+        .from("bookings")
+        .update({ teacher_name: name })
+        .eq("teacher_id", user.id),
+      supabase
+        .from("issues")
+        .update({ reporter_name: name })
+        .eq("reported_by_id", user.id),
+      supabase
+        .from("swap_requests")
+        .update({ requester_name: name })
+        .eq("requester_id", user.id),
+    ]);
   }
 
   const dashboard =

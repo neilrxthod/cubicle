@@ -102,6 +102,8 @@ function requireSession(): SessionUser | null {
     return {
       id: user.id.startsWith("pending:") ? session.id ?? user.id : user.id,
       name: user.name,
+      firstName: session.firstName,
+      lastName: session.lastName,
       email: user.email,
       role: user.role,
       avatarUrl: user.avatarUrl ?? session.avatarUrl,

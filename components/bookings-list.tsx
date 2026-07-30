@@ -4,13 +4,8 @@ import { useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
-import { CalendarPlus } from "lucide-react"
 import type { Booking, Cart } from "@/lib/types"
 import { cancelBooking } from "@/lib/actions"
-import {
-  buildGoogleCalendarTemplateUrl,
-  syncBookingCanceled,
-} from "@/lib/calendar/google-calendar"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { usePlatformStore } from "@/lib/data/platform-store"
@@ -108,16 +103,6 @@ export function BookingsList({
                   ) : null}
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                  <a
-                    href={buildGoogleCalendarTemplateUrl({ booking: b, cart })}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="Add to Google Calendar"
-                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 text-[12px] font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
-                  >
-                    <CalendarPlus className="size-3.5" strokeWidth={1.75} />
-                    <span className="hidden sm:inline">Calendar</span>
-                  </a>
                   {canCancel ? (
                     <button
                       type="button"
@@ -133,7 +118,6 @@ export function BookingsList({
                             })
                             return
                           }
-                          await syncBookingCanceled(b.id)
                           toast({ title: "Canceled" })
                           router.refresh()
                         })

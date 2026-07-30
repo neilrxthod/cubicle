@@ -9,6 +9,8 @@ See **[SETUP.md](./SETUP.md)** for the full ordered checklist.
 | `schema.sql` | First — tables + RLS |
 | `allowed-emails.sql` | Second — Google allowlist |
 | `seed-carts.sql` | Third — 22 carts + high-issue trigger |
+| `realtime.sql` | Enable Realtime on platform tables |
+| `profile-name-sync.sql` | Fan-out Google/profile display name to bookings, issues, swaps |
 
 ## App modules
 

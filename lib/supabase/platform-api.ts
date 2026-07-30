@@ -501,19 +501,90 @@ export async function dbDeleteAllowedEmail(email: string): Promise<{ error?: str
   return { error: error?.message };
 }
 
+/**
+ * Fan-out display name to denormalized columns so the board, issues, and
+ * swaps update immediately (and via Realtime) when Google/profile name changes.
+ */
 export async function dbSyncBookingTeacherName(
   teacherId: string,
   name: string,
 ): Promise<void> {
   const supabase = client();
-  await supabase
-    .from("bookings")
-    .update({ teacher_name: name })
-    .eq("teacher_id", teacherId);
-  await supabase
-    .from("issues")
-    .update({ reporter_name: name })
-    .eq("reported_by_id", teacherId);
+  const trimmed = name.trim();
+  if (!trimmed) return;
+
+  await Promise.all([
+    supabase
+      .from("bookings")
+      .update({ teacher_name: trimmed })
+      .eq("teacher_id", teacherId),
+    supabase
+      .from("issues")
+      .update({ reporter_name: trimmed })
+      .eq("reported_by_id", teacherId),
+    supabase
+      .from("swap_requests")
+      .update({ requester_name: trimmed })
+      .eq("requester_id", teacherId),
+  ]);
+}
+
+/**
+ * Persist Google OAuth first+last (as full name) + avatar onto profiles,
+ * then fan-out denormalized names for live boards.
+ */
+export async function dbSyncOAuthIdentity(
+  userId: string,
+  input: {
+    name: string;
+    avatarUrl?: string | null;
+    /** When true, always write name. When false, only fill placeholders. */
+    forceName?: boolean;
+    existingName?: string | null;
+    email?: string | null;
+  },
+): Promise<{ name: string; avatarUrl?: string }> {
+  const supabase = client();
+  const nextName = input.name.trim().slice(0, 80);
+  const force = input.forceName !== false;
+
+  const { isPlaceholderDisplayName } = await import(
+    "@/lib/auth/google-identity"
+  );
+  const shouldWriteName =
+    Boolean(nextName) &&
+    (force ||
+      isPlaceholderDisplayName(input.existingName, input.email) ||
+      (input.existingName ?? "").trim() !== nextName);
+
+  const payload: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (shouldWriteName) {
+    payload.name = nextName;
+  }
+
+  if (input.avatarUrl) {
+    payload.avatar_url = input.avatarUrl;
+  }
+
+  if (Object.keys(payload).length > 1) {
+    await supabase.from("profiles").update(payload).eq("id", userId);
+  }
+
+  const resolvedName = shouldWriteName
+    ? nextName
+    : (input.existingName ?? nextName).trim();
+
+  if (resolvedName) {
+    await dbSyncBookingTeacherName(userId, resolvedName);
+  }
+
+  return {
+    name: resolvedName,
+    avatarUrl: input.avatarUrl ?? undefined,
+  };
 }
 
 export function isUuid(value: string): boolean {

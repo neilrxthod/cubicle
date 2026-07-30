@@ -1,5 +1,5 @@
-export const AUTH_IMAGE =
-  "https://assets.watermelon.sh/auth-7.avif";
+/** Local brand panel art — modern laptop-cart media center. */
+export const AUTH_IMAGE = "/auth-panel.jpg";
 
 export const AUTH_ROUTES = {
   login: "/login",

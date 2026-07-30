@@ -6,7 +6,12 @@ export type SessionUser = {
   /** Supabase auth user id when signed in with Google. */
   id?: string;
   email: string;
+  /** Display name — typically "First Last" from Google Workspace. */
   name: string;
+  /** Google given_name when available. */
+  firstName?: string;
+  /** Google family_name when available. */
+  lastName?: string;
   role: UserRole;
   avatarUrl?: string;
   title?: string;

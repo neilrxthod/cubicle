@@ -115,14 +115,44 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  display_name text;
+  given_n text;
+  family_n text;
 begin
-  insert into public.profiles (id, email, name, role)
+  -- Google OAuth typically provides given_name + family_name (First + Last).
+  given_n := nullif(btrim(coalesce(new.raw_user_meta_data ->> 'given_name', '')), '');
+  family_n := nullif(btrim(coalesce(new.raw_user_meta_data ->> 'family_name', '')), '');
+
+  if given_n is not null or family_n is not null then
+    display_name := btrim(concat_ws(' ', given_n, family_n));
+  else
+    display_name := coalesce(
+      nullif(btrim(coalesce(new.raw_user_meta_data ->> 'full_name', '')), ''),
+      nullif(btrim(coalesce(new.raw_user_meta_data ->> 'name', '')), ''),
+      split_part(coalesce(new.email, 'user'), '@', 1)
+    );
+  end if;
+
+  insert into public.profiles (id, email, name, role, avatar_url)
   values (
     new.id,
     coalesce(new.email, ''),
-    coalesce(new.raw_user_meta_data ->> 'name', split_part(coalesce(new.email, 'user'), '@', 1)),
-    coalesce(new.raw_user_meta_data ->> 'role', 'teacher')
-  );
+    display_name,
+    coalesce(new.raw_user_meta_data ->> 'role', 'teacher'),
+    coalesce(
+      new.raw_user_meta_data ->> 'avatar_url',
+      new.raw_user_meta_data ->> 'picture',
+      null
+    )
+  )
+  on conflict (id) do update
+    set
+      email = excluded.email,
+      name = excluded.name,
+      avatar_url = coalesce(excluded.avatar_url, public.profiles.avatar_url),
+      updated_at = now();
+
   return new;
 end;
 $$;

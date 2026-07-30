@@ -189,15 +189,15 @@ body[data-scroll-locked] {
 */
 @layer utilities {
   .type-page-title {
-    font-size: 1.5rem;
+    font-size: 1.75rem;
     font-weight: 500;
-    letter-spacing: -0.03em;
-    line-height: 1.2;
+    letter-spacing: -0.045em;
+    line-height: 1.1;
     color: var(--foreground);
   }
   @media (min-width: 640px) {
     .type-page-title {
-      font-size: 1.75rem;
+      font-size: 2rem;
     }
   }
 

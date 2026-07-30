@@ -1,8 +1,7 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Shared page header for post-auth routes.
- * Tight hierarchy: title + quiet description + optional action.
+ * Post-auth page header — Tesla-like: large quiet title, one restrained line of context.
  */
 export function PageShell({
   title,
@@ -29,15 +28,19 @@ export function PageShell({
         className,
       )}
     >
-      <header className="mb-5 flex items-start justify-between gap-4 sm:mb-6">
-        <div className="min-w-0">
-          <h1 className="type-page-title">{title}</h1>
+      <header className="mb-6 flex items-end justify-between gap-6 sm:mb-8">
+        <div className="min-w-0 max-w-2xl">
+          <h1 className="text-[1.75rem] font-medium leading-[1.1] tracking-[-0.045em] text-neutral-950 sm:text-[2rem]">
+            {title}
+          </h1>
           {description ? (
-            <p className="type-body mt-1 max-w-2xl leading-snug">{description}</p>
+            <p className="mt-2 max-w-xl text-[13px] font-normal leading-relaxed tracking-[-0.01em] text-neutral-400 sm:text-[13.5px]">
+              {description}
+            </p>
           ) : null}
         </div>
         {action ? (
-          <div className="flex h-9 shrink-0 items-center justify-end">
+          <div className="flex shrink-0 items-center justify-end pb-0.5">
             {action}
           </div>
         ) : null}

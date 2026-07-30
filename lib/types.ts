@@ -19,9 +19,13 @@ export type RestrictionCategory = "ap_exam" | "general" | "other";
 export type SessionUser = {
   id: string;
   name: string;
+  /** Google given_name when available. */
+  firstName?: string;
+  /** Google family_name when available. */
+  lastName?: string;
   email: string;
   role: Role;
-  /** Profile photo as data URL (demo localStorage). */
+  /** Profile photo as data URL (demo localStorage) or OAuth URL. */
   avatarUrl?: string;
   title?: string;
   department?: string;

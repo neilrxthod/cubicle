@@ -150,25 +150,25 @@ export function DailyBoard({
     : undefined
 
   return (
-    <section className="flex flex-col gap-2.5">
-      <div className="flex flex-col gap-3 rounded-xl border border-[var(--hairline-strong)] bg-white p-3.5 shadow-[var(--shadow-surface)] sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-3.5">
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 rounded-2xl border-0 bg-white p-4 shadow-[0_0_0_1px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)] sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4">
         <div className="min-w-0">
-          <h2 className="text-[1.125rem] font-semibold tracking-tight text-neutral-950 sm:text-[1.25rem]">
+          <h2 className="text-[1.05rem] font-medium tracking-[-0.03em] text-neutral-950 sm:text-[1.15rem]">
             {heading}
           </h2>
-          <p className="mt-0.5 text-[12.5px] text-neutral-400">
+          <p className="mt-1 text-[12px] tracking-[-0.01em] text-neutral-400">
             {session.role !== "admin"
               ? `${maxAdvanceDays}-day window · through ${format(parseISO(lastBookableDate), "MMM d")}`
-              : "Open slots to book · ⚠ to report"}
+              : "Open slots to book · report issues from any cart"}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1">
           <button
             type="button"
             aria-label="Previous day"
             onClick={() => go(-1)}
-            className="flex size-8 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 transition-colors hover:border-neutral-300 hover:text-neutral-950"
+            className="flex size-8 items-center justify-center rounded-full border border-black/[0.06] bg-white text-neutral-500 transition-colors hover:border-black/[0.1] hover:bg-neutral-50 hover:text-neutral-950"
           >
             <ChevronLeft className="size-3.5" strokeWidth={1.5} />
           </button>
@@ -177,7 +177,7 @@ export function DailyBoard({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 text-[12.5px] font-medium text-neutral-950 hover:border-neutral-300"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-black/[0.06] bg-white px-3 text-[12px] font-medium tracking-[-0.01em] text-neutral-950 transition-colors hover:border-black/[0.1] hover:bg-neutral-50"
               >
                 <CalendarIcon className="size-3.5 text-neutral-400" strokeWidth={1.5} />
                 {format(parseISO(date), "MMM d, yyyy")}
@@ -198,14 +198,14 @@ export function DailyBoard({
             aria-label="Next day"
             onClick={() => go(1)}
             disabled={isTeacherWindowEnforced && date >= lastBookableDate}
-            className="flex size-8 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 transition-colors hover:border-neutral-300 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex size-8 items-center justify-center rounded-full border border-black/[0.06] bg-white text-neutral-500 transition-colors hover:border-black/[0.1] hover:bg-neutral-50 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-35"
           >
             <ChevronRight className="size-3.5" strokeWidth={1.5} />
           </button>
           <button
             type="button"
             onClick={() => setDate(today)}
-            className="h-8 rounded-lg bg-neutral-950 px-3 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+            className="h-8 rounded-full bg-neutral-950 px-3.5 text-[12px] font-medium tracking-[-0.01em] text-white transition-opacity hover:opacity-90"
           >
             Today
           </button>

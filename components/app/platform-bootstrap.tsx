@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { hydratePlatformFromSupabase } from "@/lib/actions";
+import { syncSessionFromPlatformState } from "@/lib/auth/session-live";
 import {
+  getPlatformSnapshot,
   isPlatformRemoteHydrated,
   markPlatformRemoteHydrated,
+  subscribePlatform,
 } from "@/lib/data/platform-store";
 import {
   isLocalDemoMode,
@@ -76,16 +79,29 @@ export function PlatformBootstrap({
     };
   }, [remoteMissing, useRemote]);
 
-  // Live updates: any change to bookings/carts/issues refreshes shared store
+  // Live updates: any change to bookings/carts/issues/profiles refreshes shared store
   useEffect(() => {
     if (!useRemote || !ready || error || remoteMissing) return;
 
     const unsubscribe = subscribePlatformRealtime(() => {
-      void hydratePlatformFromSupabase();
+      void hydratePlatformFromSupabase().then((result) => {
+        if (result.ok) {
+          syncSessionFromPlatformState(getPlatformSnapshot());
+        }
+      });
     });
 
     return unsubscribe;
   }, [ready, error, useRemote, remoteMissing]);
+
+  // Keep header/session name in lockstep with platform store (Realtime + local).
+  useEffect(() => {
+    if (!ready) return;
+    syncSessionFromPlatformState(getPlatformSnapshot());
+    return subscribePlatform(() => {
+      syncSessionFromPlatformState(getPlatformSnapshot());
+    });
+  }, [ready]);
 
   if (remoteMissing) {
     return <RemoteRequiredScreen message={REMOTE_REQUIRED_MESSAGE} />;
