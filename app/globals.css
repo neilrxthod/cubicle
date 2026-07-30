@@ -158,16 +158,29 @@ html {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   /*
-    Reserve gutter when a scrollbar appears so layout width stays stable,
-    but do not force a permanent vertical scrollbar track.
+    Keep layout width stable when content height changes and when Radix
+    modals (Dialog / Select / Dropdown) lock body scroll.
+    - overflow-y: scroll always reserves the vertical scrollbar track
+    - scrollbar-gutter: stable covers browsers that hide overlay scrollbars
   */
   scrollbar-gutter: stable;
-  overflow-y: auto;
+  overflow-y: scroll;
 }
 
 body {
   font-family: var(--font-sans);
   letter-spacing: -0.011em;
+}
+
+/*
+  react-remove-scroll (used by Radix Dialog, Select, Dropdown, etc.) injects
+  body[data-scroll-locked] { margin-right: <scrollbar-width> !important }.
+  That gap is already reserved by the html scrollbar track / gutter above, so
+  the extra margin shrinks the page and leaves a thick white strip on the right.
+*/
+body[data-scroll-locked] {
+  margin-right: 0 !important;
+  padding-right: 0 !important;
 }
 
 /*
