@@ -252,17 +252,28 @@ function CartsGrid({ carts }: { carts: Cart[] }) {
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex items-center gap-2 text-[12.5px] tabular-nums">
-        <span className="font-medium text-neutral-900">{carts.length}</span>
-        <span className="text-neutral-400">carts</span>
-        <span className="text-neutral-300">·</span>
-        <span className="text-emerald-700/90">{activeCount} active</span>
-        {pausedCount > 0 ? (
-          <>
-            <span className="text-neutral-300">·</span>
-            <span className="text-neutral-400">{pausedCount} paused</span>
-          </>
-        ) : null}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] tracking-[-0.01em]">
+        <p className="tabular-nums text-neutral-950">
+          <span className="font-medium">{carts.length}</span>
+          <span className="ml-1 font-normal text-neutral-400">carts</span>
+        </p>
+        <span aria-hidden className="hidden h-3 w-px bg-neutral-200 sm:block" />
+        <p className="tabular-nums text-neutral-500">
+          Active{" "}
+          <span className="font-medium text-emerald-700">{activeCount}</span>
+        </p>
+        <span aria-hidden className="hidden h-3 w-px bg-neutral-200 sm:block" />
+        <p className="tabular-nums text-neutral-500">
+          Paused{" "}
+          <span
+            className={cn(
+              "font-medium",
+              pausedCount > 0 ? "text-red-600" : "text-neutral-400",
+            )}
+          >
+            {pausedCount}
+          </span>
+        </p>
       </div>
 
       {carts.length === 0 ? (
@@ -327,8 +338,11 @@ function CartsGrid({ carts }: { carts: Cart[] }) {
                   >
                     {isPending ? (
                       <Loader2 className="size-3 animate-spin opacity-70" />
-                    ) : null}
-                    {isPending ? "…" : paused ? "Resume" : "Pause"}
+                    ) : paused ? (
+                      "Resume"
+                    ) : (
+                      "Pause"
+                    )}
                   </button>
                 </div>
               </div>
