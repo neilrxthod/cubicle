@@ -298,11 +298,15 @@ function CartsGrid({ carts }: { carts: Cart[] }) {
                     : "border-[var(--hairline-strong)] shadow-[var(--shadow-surface)] hover:border-neutral-300/90 hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_20px_rgba(0,0,0,0.04)]",
                 )}
               >
-                {/* Full-height left status rail */}
+                {/*
+                  Left status rail: runs the full left edge of the card, but
+                  stops at the midpoint of the top-left / bottom-left curves
+                  (rounded-2xl = 16px → inset 8px each end).
+                */}
                 <span
                   aria-hidden
                   className={cn(
-                    "absolute inset-y-0 left-0",
+                    "absolute left-0 top-2 bottom-2",
                     paused ? "w-1 bg-red-500" : "w-[3px] bg-emerald-500",
                   )}
                 />
