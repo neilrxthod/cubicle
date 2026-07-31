@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, ScrollText, Settings } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -140,12 +140,13 @@ export function AppHeader({ user }: { user: SessionUser }) {
             href="/"
             className="font-bold leading-none tracking-[0.28em] mr-[-0.28em] text-[12px]"
           />
-          <span
-            title="Platform version — auto-bumped on each git commit"
-            className="select-none rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums tracking-tight text-neutral-500"
+          <Link
+            href="/changelog"
+            title="Changelog — what is new"
+            className="select-none rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums tracking-tight text-neutral-500 transition-colors hover:bg-neutral-200/80 hover:text-neutral-800"
           >
             {APP_VERSION_LABEL}
-          </span>
+          </Link>
         </div>
 
         <nav
@@ -208,6 +209,13 @@ export function AppHeader({ user }: { user: SessionUser }) {
               >
                 <Settings className="size-4" strokeWidth={1.5} />
                 Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer gap-2 rounded-lg text-[13px]"
+                onClick={() => router.push("/changelog")}
+              >
+                <ScrollText className="size-4" strokeWidth={1.5} />
+                Changelog
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="cursor-pointer gap-2 rounded-lg text-[13px]"
