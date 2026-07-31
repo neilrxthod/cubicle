@@ -51,7 +51,6 @@ import type {
   RestrictionCategory,
   SessionUser,
 } from "@/lib/types";
-
 type Ok<T = undefined> = { ok: true; data?: T; error?: undefined };
 type Fail = { ok: false; error: string };
 type Result<T = undefined> = Ok<T> | Fail;
@@ -165,6 +164,23 @@ export async function createBooking(
   );
   if (conflict) return { ok: false, error: "That slot is already booked." };
 
+  // One cart per teacher per period — prevents double-pulling fleet.
+  if (session.role !== "admin") {
+    const alreadyThisPeriod = state.bookings.find(
+      (booking) =>
+        booking.teacherId === session.id &&
+        booking.date === date &&
+        booking.period === period,
+    );
+    if (alreadyThisPeriod) {
+      return {
+        ok: false,
+        error:
+          "You already have a cart this period. Cancel or reassign that booking first.",
+      };
+    }
+  }
+
   const restricted = state.slotRestrictions.find(
     (entry) =>
       entry.cartId === cartId &&
@@ -191,6 +207,9 @@ export async function createBooking(
       className: className || undefined,
       subject: subject || undefined,
       notes: notes || undefined,
+      lastEditedById: session.id,
+      lastEditedByName: session.name,
+      lastEditedByAvatarUrl: session.avatarUrl,
     });
     // Always refresh so a lost race shows the other teacher's booking on the board.
     const refreshed = await refreshRemote();
@@ -235,6 +254,7 @@ export async function createBooking(
       return;
     }
     localBookingId = makeId("bk");
+    const now = new Date().toISOString();
     draft.bookings.unshift({
       id: localBookingId,
       cartId,
@@ -245,7 +265,11 @@ export async function createBooking(
       className: className || undefined,
       subject: subject || undefined,
       notes: notes || undefined,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      lastEditedById: session.id,
+      lastEditedByName: session.name,
+      lastEditedByAvatarUrl: session.avatarUrl,
+      lastEditedAt: now,
     });
   });
   if (localConflict) {
@@ -506,6 +530,10 @@ export async function acceptSwap(requestId: string): Promise<Result> {
     if (target && swap) {
       target.teacherId = swap.requesterId;
       target.teacherName = swap.requesterName;
+      target.lastEditedById = session.id;
+      target.lastEditedByName = session.name;
+      target.lastEditedByAvatarUrl = session.avatarUrl;
+      target.lastEditedAt = new Date().toISOString();
       swap.status = "accepted";
     }
   });
@@ -581,8 +609,14 @@ export async function reassignBooking(
   );
   if (conflict) return { ok: false, error: "Target cart is already booked." };
 
+  const editor = {
+    id: session.id,
+    name: session.name,
+    avatarUrl: session.avatarUrl,
+  };
+
   if (isRemoteEnabled()) {
-    const { error } = await dbReassignBooking(bookingId, cartId);
+    const { error } = await dbReassignBooking(bookingId, cartId, editor);
     if (error) return { ok: false, error };
     return refreshRemote();
   }
@@ -591,7 +625,13 @@ export async function reassignBooking(
   if (!__demo.ok) return __demo;
   mutate((draft) => {
     const target = draft.bookings.find((entry) => entry.id === bookingId);
-    if (target) target.cartId = cartId;
+    if (target) {
+      target.cartId = cartId;
+      target.lastEditedById = editor.id;
+      target.lastEditedByName = editor.name;
+      target.lastEditedByAvatarUrl = editor.avatarUrl;
+      target.lastEditedAt = new Date().toISOString();
+    }
   });
 
   return { ok: true };

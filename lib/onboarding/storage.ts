@@ -3,7 +3,6 @@ import type { Period, Role } from "@/lib/types";
 const KEY = "cubicle_onboarding_v2";
 const LEGACY_KEY = "cubicle_onboarding_v1";
 const DRAFT_KEY = "cubicle_onboarding_draft_v1";
-const FIRST_RUN_KEY = "cubicle_first_run_v1";
 const CHANGE = "cubicle_onboarding_change";
 
 /** High-school grades supported in Cubicle. */
@@ -59,6 +58,8 @@ export type OnboardingPrefs = {
   patternNote?: string;
   /** Soft-skipped admin fleet confirm (can finish in Admin). */
   fleetDeferred?: boolean;
+  /** Optional classroom / office room label. */
+  room?: string;
 };
 
 /** In-progress wizard state (autosave). */
@@ -67,16 +68,11 @@ export type OnboardingDraft = {
   avatarDataUrl?: string | null;
   assignments?: TeachingAssignment[];
   maxAdvanceDays?: number;
-  confirmedFleet?: boolean;
-  fleetDeferred?: boolean;
-  notifyEmail?: boolean;
-  notifyIssues?: boolean;
   updatedAt: string;
 };
 
 type Store = Record<string, OnboardingPrefs>;
 type DraftStore = Record<string, OnboardingDraft>;
-type FirstRunStore = Record<string, { showCoach: boolean; createdAt: string }>;
 
 function readStore(): Store {
   if (typeof window === "undefined") return {};
@@ -114,21 +110,6 @@ function readDraftStore(): DraftStore {
 function writeDraftStore(store: DraftStore) {
   if (typeof window === "undefined") return;
   localStorage.setItem(DRAFT_KEY, JSON.stringify(store));
-}
-
-function readFirstRunStore(): FirstRunStore {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = localStorage.getItem(FIRST_RUN_KEY);
-    return raw ? (JSON.parse(raw) as FirstRunStore) : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeFirstRunStore(store: FirstRunStore) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(FIRST_RUN_KEY, JSON.stringify(store));
 }
 
 function draftKeys(...keys: Array<string | undefined | null>): string[] {
@@ -234,7 +215,6 @@ export function resetOnboarding(
   }
   if (changed) writeStore(store);
   clearOnboardingDraft(...keys);
-  clearFirstRunCoach(...keys);
 }
 
 /**
@@ -263,12 +243,15 @@ export function subscribeOnboarding(onChange: () => void) {
   };
 }
 
-export function onboardingHomeForRole(role: Role, opts?: { firstRun?: boolean }) {
-  const base = role === "admin" ? "/admin" : "/";
+/** After onboarding, land on Schedule for every role (not Admin). */
+export function onboardingHomeForRole(
+  _role: Role,
+  opts?: { firstRun?: boolean },
+) {
   if (opts?.firstRun) {
-    return `${base}${base.includes("?") ? "&" : "?"}firstRun=1`;
+    return "/?firstRun=1";
   }
-  return base;
+  return "/";
 }
 
 export function newTeachingAssignment(): TeachingAssignment {
@@ -350,7 +333,8 @@ export function filterSubjectSuggestions(
   limit = 6,
 ): string[] {
   const q = query.trim().toLowerCase();
-  if (!q) return [...SUBJECT_SUGGESTIONS].slice(0, limit);
+  // No empty-query defaults — only filter once the teacher starts typing.
+  if (!q) return [];
   return SUBJECT_SUGGESTIONS.filter((s) => s.toLowerCase().includes(q)).slice(
     0,
     limit,
@@ -400,55 +384,4 @@ export function clearOnboardingDraft(
   if (changed) writeDraftStore(store);
 }
 
-/* ─── First-run coach ────────────────────────────────────── */
 
-export function markFirstRunCoach(
-  ...keys: Array<string | undefined | null>
-): void {
-  const ids = draftKeys(...keys);
-  if (ids.length === 0) return;
-  const store = readFirstRunStore();
-  const entry = { showCoach: true, createdAt: new Date().toISOString() };
-  for (const key of ids) {
-    store[key] = entry;
-  }
-  writeFirstRunStore(store);
-}
-
-export function shouldShowFirstRunCoach(
-  ...keys: Array<string | undefined | null>
-): boolean {
-  const store = readFirstRunStore();
-  for (const key of draftKeys(...keys)) {
-    if (store[key]?.showCoach) return true;
-  }
-  return false;
-}
-
-export function dismissFirstRunCoach(
-  ...keys: Array<string | undefined | null>
-): void {
-  const store = readFirstRunStore();
-  let changed = false;
-  for (const key of draftKeys(...keys)) {
-    if (store[key]?.showCoach) {
-      store[key] = { ...store[key], showCoach: false };
-      changed = true;
-    }
-  }
-  if (changed) writeFirstRunStore(store);
-}
-
-export function clearFirstRunCoach(
-  ...keys: Array<string | undefined | null>
-): void {
-  const store = readFirstRunStore();
-  let changed = false;
-  for (const key of draftKeys(...keys)) {
-    if (key in store) {
-      delete store[key];
-      changed = true;
-    }
-  }
-  if (changed) writeFirstRunStore(store);
-}

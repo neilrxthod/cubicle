@@ -159,22 +159,40 @@ export async function dbCreateBooking(input: {
   className?: string;
   subject?: string;
   notes?: string;
+  lastEditedById?: string;
+  lastEditedByName?: string;
+  lastEditedByAvatarUrl?: string;
 }): Promise<{ id?: string; error?: string }> {
   const supabase = client();
-  const { data, error } = await supabase
+  const editedAt = new Date().toISOString();
+  const base = {
+    cart_id: input.cartId,
+    date: input.date,
+    period: input.period,
+    teacher_id: input.teacherId,
+    teacher_name: input.teacherName,
+    class_name: input.className ?? null,
+    subject: input.subject ?? null,
+    notes: input.notes ?? null,
+  };
+  // Prefer columns from booking-last-editor.sql; fall back if not migrated yet.
+  const withEditor = {
+    ...base,
+    last_edited_by_id: input.lastEditedById ?? null,
+    last_edited_by_name: input.lastEditedByName ?? null,
+    last_edited_by_avatar_url: input.lastEditedByAvatarUrl ?? null,
+    last_edited_at: editedAt,
+  };
+  let { data, error } = await supabase
     .from("bookings")
-    .insert({
-      cart_id: input.cartId,
-      date: input.date,
-      period: input.period,
-      teacher_id: input.teacherId,
-      teacher_name: input.teacherName,
-      class_name: input.className ?? null,
-      subject: input.subject ?? null,
-      notes: input.notes ?? null,
-    })
+    .insert(withEditor)
     .select("id")
     .single();
+  if (error && /last_edited/i.test(error.message ?? "")) {
+    const retry = await supabase.from("bookings").insert(base).select("id").single();
+    data = retry.data;
+    error = retry.error;
+  }
   return {
     id: data?.id ? String(data.id) : undefined,
     error: mapBookingDbError(error?.message),
@@ -196,12 +214,31 @@ export async function dbDeleteBookings(bookingIds: string[]): Promise<{ error?: 
 export async function dbReassignBooking(
   bookingId: string,
   cartId: string,
+  editor?: {
+    id: string;
+    name: string;
+    avatarUrl?: string;
+  },
 ): Promise<{ error?: string }> {
   const supabase = client();
-  const { error } = await supabase
+  const payload: Record<string, unknown> = { cart_id: cartId };
+  if (editor) {
+    payload.last_edited_by_id = editor.id;
+    payload.last_edited_by_name = editor.name;
+    payload.last_edited_by_avatar_url = editor.avatarUrl ?? null;
+    payload.last_edited_at = new Date().toISOString();
+  }
+  let { error } = await supabase
     .from("bookings")
-    .update({ cart_id: cartId })
+    .update(payload)
     .eq("id", bookingId);
+  if (error && /last_edited/i.test(error.message ?? "")) {
+    const retry = await supabase
+      .from("bookings")
+      .update({ cart_id: cartId })
+      .eq("id", bookingId);
+    error = retry.error;
+  }
   return { error: mapBookingDbError(error?.message) };
 }
 

@@ -1,50 +1,46 @@
-"use client"
+"use client";
 
-import { useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { createBooking } from "@/lib/actions"
-import { getSessionSnapshot } from "@/lib/auth/session"
+} from "@/components/ui/dialog";
+import { createBooking } from "@/lib/actions";
+import { getSessionSnapshot } from "@/lib/auth/session";
 import {
   getOnboarding,
-  subjectsFromAssignments,
-} from "@/lib/onboarding/storage"
-import { toast } from "@/hooks/use-toast"
-import type { Cart, Period } from "@/lib/types"
+  isAssignmentComplete,
+} from "@/lib/onboarding/storage";
+import { toast } from "@/hooks/use-toast";
+import type { Cart, Period } from "@/lib/types";
 
-/**
- * Minimal confirm book — subject is filled from onboarding when available.
- */
+/** One-tap book. Subject comes from onboarding loads for this period. */
 export function BookDialog({
   cart,
   period,
   date,
   onClose,
 }: {
-  cart: Cart
-  period: Period
-  date: string
-  onClose: () => void
+  cart: Cart;
+  period: Period;
+  date: string;
+  onClose: () => void;
 }) {
-  const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   function resolveSubject() {
-    const session = getSessionSnapshot()
-    if (!session) return ""
-    const prefs = getOnboarding(session.id || session.email)
-    const subjects = subjectsFromAssignments(prefs.teachingAssignments ?? [])
-    const match = (prefs.teachingAssignments ?? []).find(
-      (a) => a.subject.trim() && a.periods.includes(period),
-    )
-    return match?.subject.trim() || subjects[0] || ""
+    const session = getSessionSnapshot();
+    if (!session) return "";
+    const prefs = getOnboarding(session.id || session.email);
+    const loads = (prefs.teachingAssignments ?? []).filter(isAssignmentComplete);
+    const match = loads.find((a) => a.periods.includes(period));
+    return match?.subject.trim() || loads[0]?.subject.trim() || "";
   }
 
   return (
@@ -61,7 +57,7 @@ export function BookDialog({
 
         <div className="flex flex-col gap-5 px-5 pb-5 pt-4">
           {error ? (
-            <p className="type-body text-red-600">{error}</p>
+            <p className="text-[12.5px] text-red-600">{error}</p>
           ) : null}
 
           <div className="flex items-center justify-end gap-3">
@@ -76,32 +72,35 @@ export function BookDialog({
               type="button"
               disabled={pending}
               onClick={() => {
-                setError(null)
-                const formData = new FormData()
-                formData.set("cartId", cart.id)
-                formData.set("date", date)
-                formData.set("period", period)
-                formData.set("subject", resolveSubject())
+                setError(null);
+                const formData = new FormData();
+                formData.set("cartId", cart.id);
+                formData.set("date", date);
+                formData.set("period", period);
+                const subject = resolveSubject();
+                if (subject) {
+                  formData.set("subject", subject);
+                  formData.set("className", subject);
+                }
                 startTransition(async () => {
-                  const res = await createBooking(formData)
+                  const res = await createBooking(formData);
                   if (res && "error" in res && res.error) {
-                    setError(res.error)
+                    setError(res.error);
                     toast({
                       title: "Could not book",
                       description: res.error,
                       variant: "destructive",
-                    })
-                    router.refresh()
-                    return
+                    });
+                    router.refresh();
+                    return;
                   }
-
                   toast({
                     title: "Booked",
                     description: `${cart.name} · ${period}`,
-                  })
-                  router.refresh()
-                  onClose()
-                })
+                  });
+                  router.refresh();
+                  onClose();
+                });
               }}
               className="h-9 rounded-lg bg-foreground px-5 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
             >
@@ -111,5 +110,5 @@ export function BookDialog({
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

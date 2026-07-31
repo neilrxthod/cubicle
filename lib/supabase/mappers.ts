@@ -31,6 +31,10 @@ export type DbBooking = {
   subject: string | null;
   notes: string | null;
   created_at: string;
+  last_edited_by_id?: string | null;
+  last_edited_by_name?: string | null;
+  last_edited_by_avatar_url?: string | null;
+  last_edited_at?: string | null;
 };
 
 export type DbIssue = {
@@ -123,6 +127,10 @@ export function mapBooking(row: DbBooking): Booking {
     subject: row.subject ?? undefined,
     notes: row.notes ?? undefined,
     createdAt: row.created_at,
+    lastEditedById: row.last_edited_by_id ?? undefined,
+    lastEditedByName: row.last_edited_by_name ?? undefined,
+    lastEditedByAvatarUrl: row.last_edited_by_avatar_url ?? undefined,
+    lastEditedAt: row.last_edited_at ?? undefined,
   };
 }
 

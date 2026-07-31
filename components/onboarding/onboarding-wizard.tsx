@@ -21,7 +21,6 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import Link from "next/link";
 import { CubicleWordmark } from "@/components/auth/wordmark";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -36,7 +35,6 @@ import {
   GRADES,
   hasPeriodConflicts,
   isAssignmentComplete,
-  markFirstRunCoach,
   newTeachingAssignment,
   onboardingHomeForRole,
   periodsFromAssignments,
@@ -54,23 +52,20 @@ import { setSession, getSession } from "@/lib/auth/session";
 import { toast } from "@/hooks/use-toast";
 
 /**
- * Psychology-led flow (3 steps only):
- * 1. Easy win — identity (low effort, personal)
- * 2. Real work — teaching / workspace (core value)
- * 3. Peak-end — confirm + one clear action (defaults on)
+ * Simple 2-step setup for cart booking only.
+ * 1. You — optional photo
+ * 2. Teach / School — classes or booking window → Schedule
  */
-type StepId = "welcome" | "setup" | "ready";
+type StepId = "welcome" | "setup";
 
 const TEACHER_STEPS: { id: StepId; label: string }[] = [
   { id: "welcome", label: "You" },
   { id: "setup", label: "Teach" },
-  { id: "ready", label: "Go" },
 ];
 
 const ADMIN_STEPS: { id: StepId; label: string }[] = [
   { id: "welcome", label: "You" },
   { id: "setup", label: "School" },
-  { id: "ready", label: "Go" },
 ];
 
 const stepTransition = {
@@ -112,13 +107,18 @@ function FeatureLaunchPanel() {
         animate={{ x: [0, 28, 0], y: [0, 18, 0] }}
         transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
       />
-      <div className="absolute inset-0 z-10 flex items-center justify-center px-6">
-        <CubicleWordmark
-          size="hero"
-          href={null}
-          tone="light"
-          className="font-extralight tracking-[0.52em] text-white/92 drop-shadow-[0_1px_24px_rgba(255,255,255,0.12)]"
-        />
+      {/* Setup mark — logo-style word only */}
+      <div className="absolute inset-0 z-10 flex items-center justify-center px-8 text-center">
+        <span
+          className={cn(
+            "inline-block select-none font-extralight uppercase antialiased",
+            "text-[clamp(1.65rem,3.6vw,2.35rem)] tracking-[0.48em] leading-none",
+            "text-white/95 mr-[-0.48em]",
+            "drop-shadow-[0_1px_24px_rgba(255,255,255,0.1)]",
+          )}
+        >
+          Setup
+        </span>
       </div>
     </aside>
   );
@@ -312,20 +312,6 @@ function TeachingLoadBlock({
             ))}
           </div>
         ) : null}
-        {!focused && !assignment.subject.trim() ? (
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {filterSubjectSuggestions("", 6).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => onChange({ ...assignment, subject: s })}
-                className="h-8 rounded-full border border-neutral-200 bg-white px-3 text-[12px] text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        ) : null}
       </div>
 
       {/* Grades — only after subject started (progressive disclosure feel) */}
@@ -393,7 +379,6 @@ function BookingWindowControl({
   return (
     <div className="overflow-hidden rounded-2xl border border-neutral-200/90 bg-white">
       <div className="px-5 pt-5 pb-4 text-center sm:px-6 sm:pt-6">
-        {/* Big number + stepper */}
         <div className="mt-1 flex items-center justify-center gap-4 sm:gap-5">
           <button
             type="button"
@@ -434,10 +419,8 @@ function BookingWindowControl({
             <Plus className="size-4" strokeWidth={2} />
           </button>
         </div>
-
       </div>
 
-      {/* Quick picks */}
       <div className="border-t border-neutral-100 bg-neutral-50/70 px-4 py-3.5 sm:px-5">
         <div className="flex flex-wrap items-center justify-center gap-2">
           {ADVANCE_PRESETS.map((preset) => {
@@ -464,39 +447,6 @@ function BookingWindowControl({
   );
 }
 
-function QuietToggle({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      className="flex flex-1 items-center justify-between gap-2 rounded-xl border border-neutral-200/90 bg-neutral-50/80 px-3.5 py-3 text-left transition hover:bg-neutral-50"
-    >
-      <span className="text-[13px] text-neutral-700">{label}</span>
-      <span
-        className={cn(
-          "relative h-5 w-9 shrink-0 rounded-full transition-colors",
-          checked ? "bg-neutral-950" : "bg-neutral-200",
-        )}
-      >
-        <span
-          className={cn(
-            "absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform",
-            checked ? "translate-x-4" : "translate-x-0.5",
-          )}
-        />
-      </span>
-    </button>
-  );
-}
-
 /* ─── main wizard ────────────────────────────────────────── */
 
 export function OnboardingWizard({ user }: { user: SessionUser }) {
@@ -510,8 +460,10 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Prefer Google OAuth photo (auto-fetched at sign-in); custom upload overrides.
   const [avatarSrc, setAvatarSrc] = useState(user.avatarUrl);
   const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
+  const [customPhotoChosen, setCustomPhotoChosen] = useState(false);
 
   const [assignments, setAssignments] = useState<TeachingAssignment[]>([
     newTeachingAssignment(),
@@ -519,32 +471,34 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
   const [maxAdvanceDays, setMaxAdvanceDays] = useState(
     platform.bookingPolicy.maxAdvanceDays ?? 14,
   );
-  const [notifyEmail, setNotifyEmail] = useState(true);
-  const [notifyIssues, setNotifyIssues] = useState(true);
+  // Defaults on — change later in Settings, not during setup.
+  const notifyEmail = true;
+  const notifyIssues = true;
+
+  // Session may hydrate Google avatar after first paint (OAuth sync).
+  useEffect(() => {
+    if (customPhotoChosen || avatarDataUrl) return;
+    if (user.avatarUrl) setAvatarSrc(user.avatarUrl);
+  }, [user.avatarUrl, customPhotoChosen, avatarDataUrl]);
 
   useEffect(() => {
     if (draftHydrated.current) return;
     draftHydrated.current = true;
     const draft = getOnboardingDraft(user.id, user.email);
     if (!draft) return;
-    // Map older 4-step drafts onto 3 steps
+    // Map older multi-step drafts onto current 3 steps
     if (typeof draft.stepIndex === "number") {
-      const mapped = draft.stepIndex >= 2 ? 2 : draft.stepIndex;
-      setStepIndex(Math.min(Math.max(0, mapped), steps.length - 1));
+      const mapped = Math.min(Math.max(0, draft.stepIndex), steps.length - 1);
+      setStepIndex(mapped);
     }
     if (draft.avatarDataUrl) {
       setAvatarDataUrl(draft.avatarDataUrl);
       setAvatarSrc(draft.avatarDataUrl);
+      setCustomPhotoChosen(true);
     }
     if (draft.assignments?.length) setAssignments(draft.assignments);
     if (typeof draft.maxAdvanceDays === "number") {
       setMaxAdvanceDays(draft.maxAdvanceDays);
-    }
-    if (typeof draft.notifyEmail === "boolean") {
-      setNotifyEmail(draft.notifyEmail);
-    }
-    if (typeof draft.notifyIssues === "boolean") {
-      setNotifyIssues(draft.notifyIssues);
     }
   }, [user.id, user.email, steps.length]);
 
@@ -557,8 +511,6 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
           avatarDataUrl,
           assignments: isAdmin ? undefined : assignments,
           maxAdvanceDays: isAdmin ? maxAdvanceDays : undefined,
-          notifyEmail,
-          notifyIssues,
         },
         user.id,
         user.email,
@@ -570,8 +522,6 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
     avatarDataUrl,
     assignments,
     maxAdvanceDays,
-    notifyEmail,
-    notifyIssues,
     isAdmin,
     user.id,
     user.email,
@@ -606,21 +556,13 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
   const canContinueFromStep =
     step === "welcome" ? true : step === "setup" ? setupOk : true;
 
-  const primaryLabel =
-    step === "welcome"
-      ? "Next"
-      : step === "setup"
-        ? "Looks good"
-        : isAdmin
-          ? "Open Cubicle"
-          : "Start booking";
-
   async function onPickAvatar(file: File | undefined) {
     if (!file) return;
     try {
       const dataUrl = await fileToAvatarDataUrl(file);
       setAvatarDataUrl(dataUrl);
       setAvatarSrc(dataUrl);
+      setCustomPhotoChosen(true);
     } catch (err) {
       toast({
         title: "Could not use that image",
@@ -632,8 +574,14 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
 
   function goNext() {
     setError(null);
-    if (step === "setup" && !setupOk) {
-      setError("Add one complete subject.");
+    if (step === "setup") {
+      if (!setupOk) {
+        setError(
+          isAdmin ? "Set a booking window." : "Add one complete subject.",
+        );
+        return;
+      }
+      void finish();
       return;
     }
     if (stepIndex < steps.length - 1) {
@@ -648,7 +596,9 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
 
   async function finish() {
     if (!setupOk) {
-      setError("Add one complete subject.");
+      setError(
+        isAdmin ? "Set a booking window." : "Add one complete subject.",
+      );
       setStepIndex(1);
       return;
     }
@@ -672,18 +622,19 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
       };
 
       try {
+        const nextAvatar = avatarDataUrl ?? avatarSrc ?? user.avatarUrl;
         await updateProfile({
           name: user.name,
           department: cleaned[0]?.subject.trim() || user.department,
           phone: user.phone,
           bio: user.bio,
-          avatarUrl: avatarDataUrl ?? undefined,
+          avatarUrl: nextAvatar ?? undefined,
           notifyEmail,
           notifyIssues,
         });
-        if (avatarDataUrl) {
+        if (nextAvatar) {
           const s = getSession();
-          if (s) setSession({ ...s, avatarUrl: avatarDataUrl });
+          if (s) setSession({ ...s, avatarUrl: nextAvatar });
         }
       } catch {
         // Local onboarding still completes.
@@ -699,21 +650,13 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
       }
 
       completeOnboarding(user.id || user.email, prefs, [user.id, user.email]);
-      markFirstRunCoach(user.id, user.email);
-      router.replace(
-        onboardingHomeForRole(user.role, { firstRun: true }),
-      );
+      router.replace(onboardingHomeForRole(user.role));
     } catch {
       setError("Could not save. Try again.");
     } finally {
       setPending(false);
     }
   }
-
-  const subjectSummary = validAssignments
-    .map((a) => a.subject.trim())
-    .filter(Boolean)
-    .join(", ");
 
   return (
     <div className="flex h-svh max-h-svh items-center justify-center overflow-hidden bg-[#ececef] p-3 sm:p-5 md:p-6">
@@ -753,7 +696,7 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
             <ProgressBar currentIndex={stepIndex} total={steps.length} />
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <AnimatePresence mode="wait">
               {/* ── 1. Easy win: you ── */}
               {step === "welcome" ? (
@@ -767,7 +710,9 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
                       Hey {firstName}
                     </h1>
                     <p className="mt-1.5 text-[14px] leading-relaxed text-neutral-500">
-                      Add a face so colleagues know it&apos;s you.
+                      {avatarSrc && !customPhotoChosen
+                        ? "We pulled this from your Google account. Use a clear, professional photo so colleagues can spot you on the board."
+                        : "We use your Google photo when available. Upload a clear, professional headshot so colleagues can identify you easily."}
                     </p>
                   </div>
 
@@ -776,7 +721,11 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
                       type="button"
                       onClick={() => fileRef.current?.click()}
                       className="group relative outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/15 focus-visible:ring-offset-4"
-                      aria-label="Upload profile photo"
+                      aria-label={
+                        avatarSrc
+                          ? "Change profile photo"
+                          : "Upload profile photo"
+                      }
                     >
                       <Avatar className="size-28 ring-4 ring-white shadow-[0_12px_40px_rgba(0,0,0,0.1)] sm:size-32">
                         {avatarSrc ? (
@@ -784,6 +733,7 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
                             src={avatarSrc}
                             alt={user.name}
                             className="object-cover"
+                            referrerPolicy="no-referrer"
                           />
                         ) : null}
                         <AvatarFallback className="bg-gradient-to-br from-neutral-100 to-neutral-200 text-2xl font-extralight text-neutral-400">
@@ -802,17 +752,30 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
                       {user.email}
                     </p>
                     {avatarSrc ? (
-                      <p className="mt-3 flex items-center gap-1.5 text-[12.5px] font-medium text-emerald-700">
-                        <Check className="size-3.5" strokeWidth={2.5} />
-                        Looking good
-                      </p>
+                      <div className="mt-3 flex flex-col items-center gap-1.5">
+                        {customPhotoChosen ? (
+                          <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-emerald-700">
+                            <Check className="size-3.5" strokeWidth={2.5} />
+                            Looking good
+                          </p>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => fileRef.current?.click()}
+                          className="text-[13px] font-medium text-neutral-600 underline-offset-4 hover:text-neutral-950 hover:underline"
+                        >
+                          {customPhotoChosen
+                            ? "Choose a different photo"
+                            : "Replace with a professional photo"}
+                        </button>
+                      </div>
                     ) : (
                       <button
                         type="button"
                         onClick={() => fileRef.current?.click()}
                         className="mt-4 text-[13px] font-medium text-neutral-600 underline-offset-4 hover:text-neutral-950 hover:underline"
                       >
-                        Choose photo
+                        Upload a professional photo
                       </button>
                     )}
                   </div>
@@ -833,7 +796,7 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
                     <p className="mt-1.5 text-[14px] leading-relaxed text-neutral-500">
                       {isAdmin
                         ? "Set how far ahead teachers can plan."
-                        : "We use this so free carts match your periods."}
+                        : "One row per class. Same periods across classes will warn you."}
                     </p>
                   </div>
 
@@ -902,88 +865,6 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
                 </motion.div>
               ) : null}
 
-              {/* ── 3. Peak-end: go ── */}
-              {step === "ready" ? (
-                <motion.div
-                  key="ready"
-                  {...stepTransition}
-                  className="flex h-full flex-col"
-                >
-                  <div className="mb-5">
-                    <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-neutral-950 text-white shadow-lg shadow-neutral-950/15">
-                      <Check className="size-5" strokeWidth={2} />
-                    </div>
-                    <h1 className="text-[1.5rem] font-extralight tracking-[-0.035em] text-neutral-950 sm:text-[1.65rem]">
-                      You&apos;re set
-                    </h1>
-                    <p className="mt-1.5 text-[14px] leading-relaxed text-neutral-500">
-                      {isAdmin
-                        ? "Manage carts and staff from Admin."
-                        : subjectSummary
-                          ? `${subjectSummary} — book carts that fit.`
-                          : "Book a free cart for your next period."}
-                    </p>
-                  </div>
-
-                  {/* Quiet defaults — default bias, low friction */}
-                  <div className="mb-4 space-y-2">
-                    <p className="text-[11px] font-medium tracking-[0.1em] text-neutral-400 uppercase">
-                      Notify me
-                    </p>
-                    <div className="flex gap-2">
-                      <QuietToggle
-                        checked={notifyEmail}
-                        onChange={setNotifyEmail}
-                        label="Email"
-                      />
-                      <QuietToggle
-                        checked={notifyIssues}
-                        onChange={setNotifyIssues}
-                        label="Issues"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-auto space-y-3">
-                    <div className="flex items-center gap-3 rounded-2xl border border-neutral-100 bg-neutral-50/90 px-3.5 py-3">
-                      <Avatar className="size-9 ring-2 ring-white">
-                        {avatarSrc ? (
-                          <AvatarImage src={avatarSrc} alt="" />
-                        ) : null}
-                        <AvatarFallback className="text-[11px]">
-                          {initials}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <p className="truncate text-[13.5px] font-medium tracking-[-0.01em] text-neutral-900">
-                          {user.name}
-                        </p>
-                        <p className="truncate text-[12px] text-neutral-400">
-                          {isAdmin
-                            ? `${maxAdvanceDays}-day booking window`
-                            : periodSummaryLine(validAssignments)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <p className="text-center text-[11.5px] text-neutral-400">
-                      <Link
-                        href="/legal/privacy"
-                        className="hover:text-neutral-600 hover:underline"
-                      >
-                        Privacy
-                      </Link>
-                      <span className="mx-1.5">·</span>
-                      <Link
-                        href="/legal/acceptable-use"
-                        className="hover:text-neutral-600 hover:underline"
-                      >
-                        Use
-                      </Link>
-                    </p>
-                  </div>
-                </motion.div>
-              ) : null}
             </AnimatePresence>
 
             {error ? (
@@ -1015,72 +896,41 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
               ) : null}
 
               {step === "welcome" ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={goNext}
-                    className={cn(
-                      authPrimaryButtonClassName,
-                      "h-12 flex-1 rounded-xl text-[15px]",
-                    )}
-                  >
-                    {avatarSrc ? "Next" : "Continue"}
-                    <ArrowRight className="size-4 opacity-80" strokeWidth={1.75} />
-                  </button>
-                </>
-              ) : step === "setup" ? (
                 <button
                   type="button"
-                  disabled={!canContinueFromStep}
                   onClick={goNext}
                   className={cn(
                     authPrimaryButtonClassName,
                     "h-12 flex-1 rounded-xl text-[15px]",
-                    !canContinueFromStep && "opacity-40",
                   )}
                 >
-                  Looks good
+                  Continue
                   <ArrowRight className="size-4 opacity-80" strokeWidth={1.75} />
                 </button>
               ) : (
                 <button
                   type="button"
-                  disabled={pending || !setupOk}
-                  onClick={() => void finish()}
+                  disabled={pending || !canContinueFromStep}
+                  onClick={goNext}
                   className={cn(
                     authPrimaryButtonClassName,
                     "h-12 flex-1 rounded-xl text-[15px]",
+                    !canContinueFromStep && !pending && "opacity-40",
                   )}
                 >
                   {pending ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : null}
-                  {pending ? "Opening…" : primaryLabel}
+                  {pending ? "Opening…" : "Go to Schedule"}
                   {!pending ? (
                     <ArrowRight className="size-4 opacity-80" strokeWidth={1.75} />
                   ) : null}
                 </button>
               )}
             </div>
-
-            {step === "welcome" && !avatarSrc ? (
-              <button
-                type="button"
-                onClick={goNext}
-                className="mt-2.5 w-full text-center text-[12.5px] text-neutral-400 transition hover:text-neutral-600"
-              >
-                Skip photo
-              </button>
-            ) : null}
           </footer>
         </div>
       </div>
     </div>
   );
-}
-
-function periodSummaryLine(assignments: TeachingAssignment[]): string {
-  const periods = periodsFromAssignments(assignments);
-  if (periods.length === 0) return "No periods yet";
-  return periods.join(" · ");
 }

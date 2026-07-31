@@ -30,6 +30,7 @@ import { usePlatformStore } from "@/lib/data/platform-store"
 import { isVerifiedStaff } from "@/lib/staff/employment"
 import { VerifiedBadge } from "@/components/verified-badge"
 
+
 const PERIODS: Period[] = ["P1", "P2", "P3", "P4", "P5"]
 
 const GRID_COLS = "minmax(10rem, 1.15fr) repeat(5, minmax(0, 1fr))"
@@ -392,7 +393,7 @@ export function DailyBoard({
                           title={`${primaryLabel} — click to manage or cancel`}
                           className={cn(
                             cellBase,
-                            "items-center gap-1.5 border-l-neutral-900 bg-neutral-950 px-2.5 text-left text-white",
+                            "items-center gap-1.5 border-l-neutral-900 bg-neutral-950 px-2 text-left text-white sm:px-2.5",
                             "hover:bg-neutral-800",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25",
                           )}

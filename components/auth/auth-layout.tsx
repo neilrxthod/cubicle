@@ -38,12 +38,13 @@ function AuthBrandPanel({ fullHeight }: { fullHeight: boolean }) {
       <div className="absolute -top-1/3 left-[-10%] h-[75%] w-[75%] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.14)_0%,transparent_65%)] blur-3xl" />
       <div className="absolute right-[-20%] bottom-[-15%] h-[60%] w-[60%] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.07)_0%,transparent_65%)] blur-3xl" />
 
-      <div className="absolute inset-0 z-10 flex items-center justify-center px-8">
+      {/* Centered logo — negative margin cancels trailing letter-spacing so optical center is true */}
+      <div className="absolute inset-0 z-10 flex items-center justify-center px-8 text-center">
         <CubicleWordmark
           size="hero"
           href={null}
           tone="light"
-          className="font-extralight tracking-[0.52em] text-white/92 drop-shadow-[0_1px_24px_rgba(255,255,255,0.12)]"
+          className="font-extralight tracking-[0.52em] text-white/92 drop-shadow-[0_1px_24px_rgba(255,255,255,0.12)] mr-[-0.52em] text-center"
         />
       </div>
     </aside>

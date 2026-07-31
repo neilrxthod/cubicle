@@ -83,6 +83,14 @@ export type Booking = {
   subject?: string;
   notes?: string;
   createdAt: string;
+  /**
+   * Who last created or changed this slot (teacher booker or admin editor).
+   * Shown to all roles so multi-admin edits are visible on the board.
+   */
+  lastEditedById?: string;
+  lastEditedByName?: string;
+  lastEditedByAvatarUrl?: string;
+  lastEditedAt?: string;
 };
 
 export type Issue = {

@@ -258,13 +258,13 @@ export function SettingsForm({
 
       <SettingsSection id="notifications" title="Email">
         <SettingsToggleRow
-          title="Bookings"
-          description="Reminders and cancellations"
+          title="Email updates"
+          description="Admin changes to your bookings, profile, or access"
           control={
             <Switch
               checked={notifyEmail}
               onCheckedChange={setNotifyEmail}
-              aria-label="Booking reminders"
+              aria-label="Email updates"
             />
           }
         />
