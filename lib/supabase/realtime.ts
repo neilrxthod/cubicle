@@ -29,11 +29,11 @@ export function subscribePlatformRealtime(onChange: () => void): () => void {
 
   const schedule = () => {
     if (debounceTimer) clearTimeout(debounceTimer);
-    // Short debounce: batch multi-row writes / rapid clicks into one refresh.
+    // Batch multi-row writes / rapid clicks into one full refresh.
     debounceTimer = setTimeout(() => {
       debounceTimer = null;
       onChange();
-    }, 120);
+    }, 280);
   };
 
   let channel = supabase.channel("cubicle-platform-v1");

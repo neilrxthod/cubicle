@@ -74,13 +74,31 @@ export function PlatformBootstrap({
   useEffect(() => {
     if (!remoteEnabled || !ready || error || remoteMissing) return;
 
-    const unsubscribe = subscribePlatformRealtime(() => {
-      void hydratePlatformFromSupabase().then((result) => {
-        if (result.ok) {
-          syncSessionFromPlatformState(getPlatformSnapshot());
-        }
-      });
-    });
+    let inFlight = false;
+    let queued = false;
+
+    const refresh = () => {
+      if (inFlight) {
+        queued = true;
+        return;
+      }
+      inFlight = true;
+      void hydratePlatformFromSupabase()
+        .then((result) => {
+          if (result.ok) {
+            syncSessionFromPlatformState(getPlatformSnapshot());
+          }
+        })
+        .finally(() => {
+          inFlight = false;
+          if (queued) {
+            queued = false;
+            refresh();
+          }
+        });
+    };
+
+    const unsubscribe = subscribePlatformRealtime(refresh);
 
     return unsubscribe;
   }, [ready, error, remoteEnabled, remoteMissing]);
