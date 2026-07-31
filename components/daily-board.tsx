@@ -155,59 +155,73 @@ export function DailyBoard({
     ? carts.find((c) => c.id === manageDialog.cartId)
     : undefined
 
-  const contextLine =
-    session.role !== "admin"
-      ? `${maxAdvanceDays}-day window · through ${format(parseISO(lastBookableDate), "MMM d")}`
-      : "Open slots to book · report issues from any cart"
+  const navBtn = cn(
+    "flex size-8 items-center justify-center rounded-md",
+    "text-neutral-500 transition-colors",
+    "hover:bg-neutral-100 hover:text-neutral-950",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+    "disabled:pointer-events-none disabled:opacity-30",
+  )
+
+  const legendItem =
+    "inline-flex items-center gap-1.5 text-[11px] text-neutral-500"
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-col gap-4 border-b border-[var(--hairline)] pb-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6 sm:pb-5">
+    <section className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white shadow-[var(--shadow-surface)]">
+      {/* ── Toolbar: date identity + day controls ── */}
+      <div className="flex flex-col gap-3 border-b border-[var(--hairline)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-5">
         <div className="min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-neutral-400">
-            {isViewingToday ? "Today" : "Board"}
-          </p>
-          <h2 className="type-heading mt-1.5 leading-none text-neutral-950">
-            {heading}
-          </h2>
-          <p className="mt-2 max-w-md text-[12.5px] font-normal leading-relaxed tracking-[-0.005em] text-neutral-400">
-            {contextLine}
-          </p>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+            <h2 className="truncate text-[15px] font-medium tracking-[-0.015em] text-neutral-950 sm:text-[16px]">
+              {heading}
+            </h2>
+            {isViewingToday ? (
+              <span className="text-[12px] text-neutral-400">Today</span>
+            ) : null}
+          </div>
+          {session.role !== "admin" && date >= today ? (
+            <p className="mt-0.5 text-[12px] text-neutral-400">
+              Booking window through{" "}
+              {format(parseISO(lastBookableDate), "MMM d")}
+            </p>
+          ) : null}
         </div>
 
-        <div className="flex shrink-0 items-center gap-0.5 self-start sm:self-end">
+        <div
+          role="group"
+          aria-label="Change board date"
+          className="flex shrink-0 items-center gap-0.5 self-start sm:self-center"
+        >
           <button
             type="button"
             aria-label="Previous day"
             onClick={() => go(-1)}
-            className="flex size-9 items-center justify-center text-neutral-400 transition-colors duration-200 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10"
+            className={navBtn}
           >
-            <ChevronLeft className="size-4" strokeWidth={1.25} />
+            <ChevronLeft className="size-4" strokeWidth={1.5} />
           </button>
 
           <Popover>
             <PopoverTrigger asChild>
               <button
                 type="button"
+                aria-label="Choose date"
                 className={cn(
-                  "inline-flex h-9 items-center gap-2 px-2.5",
-                  "text-[12px] font-medium tracking-[-0.01em] text-neutral-950",
-                  "transition-colors duration-200",
-                  "hover:text-neutral-600",
+                  "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5",
+                  "text-[13px] tabular-nums text-neutral-700",
+                  "transition-colors hover:bg-neutral-100 hover:text-neutral-950",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
                 )}
               >
                 <CalendarIcon
-                  className="size-3.5 text-neutral-400"
-                  strokeWidth={1.25}
+                  className="size-3.5 shrink-0 text-neutral-400"
+                  strokeWidth={1.5}
                 />
-                <span className="tabular-nums">
-                  {format(parseISO(date), "MMM d, yyyy")}
-                </span>
+                <span>{format(parseISO(date), "MMM d, yyyy")}</span>
               </button>
             </PopoverTrigger>
             <PopoverContent
-              className="w-auto overflow-hidden rounded-xl border-[var(--hairline-strong)] p-0 shadow-[0_8px_30px_rgba(0,0,0,0.08)]"
+              className="w-auto overflow-hidden rounded-lg border border-neutral-200 p-0 shadow-md"
               align="end"
             >
               <Calendar
@@ -227,86 +241,87 @@ export function DailyBoard({
             aria-label="Next day"
             onClick={() => go(1)}
             disabled={isTeacherWindowEnforced && date >= lastBookableDate}
-            className="flex size-9 items-center justify-center text-neutral-400 transition-colors duration-200 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10 disabled:cursor-not-allowed disabled:opacity-30"
+            className={navBtn}
           >
-            <ChevronRight className="size-4" strokeWidth={1.25} />
+            <ChevronRight className="size-4" strokeWidth={1.5} />
           </button>
 
-          <span
-            aria-hidden
-            className="mx-1.5 hidden h-4 w-px bg-[var(--hairline-strong)] sm:block"
-          />
-
-          <button
-            type="button"
-            onClick={() => setDate(today)}
-            disabled={isViewingToday}
-            className={cn(
-              "h-9 px-3 text-[11px] font-medium uppercase tracking-[0.12em] transition-colors duration-200",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
-              isViewingToday
-                ? "cursor-default text-neutral-300"
-                : "text-neutral-950 hover:text-neutral-500",
-            )}
-          >
-            Today
-          </button>
+          {!isViewingToday ? (
+            <>
+              <span
+                aria-hidden
+                className="mx-1 h-4 w-px shrink-0 bg-neutral-200"
+              />
+              <button
+                type="button"
+                onClick={() => setDate(today)}
+                className={cn(
+                  "h-8 rounded-md px-2.5 text-[12px] font-medium text-neutral-600",
+                  "transition-colors hover:bg-neutral-100 hover:text-neutral-950",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+                )}
+              >
+                Today
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-0.5">
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-          <span className="size-1.5 rounded-[1px] border border-neutral-300 bg-white" />
+      {/* ── Legend strip: aligned with toolbar padding ── */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-[var(--hairline)] bg-neutral-50/80 px-4 py-2 sm:px-5">
+        <span className={legendItem}>
+          <span className="size-2 shrink-0 rounded-[1px] border border-neutral-300 bg-white" />
           Open
         </span>
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-          <span className="size-1.5 rounded-[1px] bg-neutral-950" />
+        <span className={legendItem}>
+          <span className="size-2 shrink-0 rounded-[1px] bg-neutral-950" />
           Yours
         </span>
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-          <span className="size-1.5 rounded-[1px] bg-neutral-200" />
+        <span className={legendItem}>
+          <span className="size-2 shrink-0 rounded-[1px] bg-neutral-200" />
           Booked
         </span>
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-          <Lock className="size-2.5 text-neutral-400" strokeWidth={1.5} />
+        <span className={legendItem}>
+          <Lock className="size-2.5 shrink-0 text-neutral-400" strokeWidth={1.5} />
           Restricted
         </span>
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-          <Wrench className="size-2.5 text-neutral-400" strokeWidth={1.5} />
+        <span className={legendItem}>
+          <Wrench className="size-2.5 shrink-0 text-neutral-400" strokeWidth={1.5} />
           Maintenance
         </span>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white">
-        <div className="overflow-x-auto">
-          <div className="min-w-[54rem]">
-            <div
-              className="grid bg-neutral-950"
-              style={{ gridTemplateColumns: GRID_COLS }}
-            >
-              <div className="flex items-center px-4 py-3.5 text-[10px] font-medium uppercase tracking-[0.18em] text-white/45">
-                Cart
-              </div>
-              {PERIODS.map((p) => (
-                <div
-                  key={p}
-                  className="flex items-center justify-center border-l border-white/[0.08] px-2 py-3.5 text-[10px] font-medium uppercase tracking-[0.18em] text-white/45"
-                >
-                  {p}
-                </div>
-              ))}
+      {/* ── Period grid ── */}
+      <div className="overflow-x-auto">
+        <div className="min-w-[54rem]">
+          <div
+            className="grid bg-neutral-950"
+            style={{ gridTemplateColumns: GRID_COLS }}
+          >
+            <div className="flex items-center px-4 py-3 text-[10px] font-medium uppercase tracking-[0.16em] text-white/45 sm:px-5">
+              Cart
             </div>
-
-            {carts.length === 0 ? (
-              <div className="px-4 py-16 text-center">
-                <p className="text-[13px] font-light tracking-[-0.01em] text-neutral-400">
-                  No carts are set up yet.
-                </p>
-                <p className="mt-1 text-[12px] text-neutral-300">
-                  Ask an admin to add laptop carts.
-                </p>
+            {PERIODS.map((p) => (
+              <div
+                key={p}
+                className="flex items-center justify-center border-l border-white/[0.08] px-2 py-3 text-[10px] font-medium uppercase tracking-[0.16em] text-white/45"
+              >
+                {p}
               </div>
-            ) : null}
+            ))}
+          </div>
+
+          {carts.length === 0 ? (
+            <div className="px-4 py-16 text-center sm:px-5">
+              <p className="text-[13px] font-light tracking-[-0.01em] text-neutral-400">
+                No carts are set up yet.
+              </p>
+              <p className="mt-1 text-[12px] text-neutral-300">
+                Ask an admin to add laptop carts.
+              </p>
+            </div>
+          ) : null}
 
             {carts.map((cart) => {
               const isMaintenanceRow = cart.status === "maintenance"
@@ -321,7 +336,7 @@ export function DailyBoard({
                 >
                   <div
                     className={cn(
-                      "flex items-center justify-between gap-2 border-r border-[var(--hairline)] px-3.5 py-3",
+                      "flex items-center justify-between gap-2 border-r border-[var(--hairline)] px-4 py-3 sm:px-5",
                       isMaintenanceRow && "opacity-70",
                     )}
                   >
@@ -533,7 +548,6 @@ export function DailyBoard({
               )
             })}
           </div>
-        </div>
       </div>
 
       {bookDialog && (

@@ -213,11 +213,8 @@ function HomeBoard({ user }: { user: SessionUser }) {
 
   return (
     <DashboardFrame user={user}>
-      <PageShell
-        title="Schedule"
-        description="Laptop carts by period. Book free slots and manage your day."
-      >
-        <div className="flex flex-col gap-5 sm:gap-6">
+      <PageShell>
+        <div className="flex flex-col gap-4 sm:gap-5">
           <StatsDisplay
             id="schedule-stats"
             className="w-full max-w-none"

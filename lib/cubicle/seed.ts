@@ -1,7 +1,4 @@
 import type { Booking, Cart, CubicleState, Issue } from "./types";
-import { toDateKey } from "./periods";
-
-const today = toDateKey();
 
 export const SEED_CARTS: Cart[] = [
   {
@@ -50,56 +47,8 @@ export const SEED_CARTS: Cart[] = [
   },
 ];
 
-export const SEED_BOOKINGS: Booking[] = [
-  {
-    id: "bk-1",
-    cartId: "cart-a",
-    date: today,
-    periodId: 2,
-    teacherEmail: "teacher@cubicle.edu",
-    teacherName: "Sarah Chen",
-    className: "Biology 10",
-    room: "214",
-    status: "confirmed",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "bk-2",
-    cartId: "cart-b",
-    date: today,
-    periodId: 3,
-    teacherEmail: "m.lopez@cubicle.edu",
-    teacherName: "Maria Lopez",
-    className: "English 9",
-    room: "108",
-    status: "confirmed",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "bk-3",
-    cartId: "cart-c",
-    date: today,
-    periodId: 5,
-    teacherEmail: "j.park@cubicle.edu",
-    teacherName: "James Park",
-    className: "World History",
-    room: "301",
-    status: "confirmed",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "bk-4",
-    cartId: "cart-a",
-    date: today,
-    periodId: 6,
-    teacherEmail: "a.nguyen@cubicle.edu",
-    teacherName: "Amy Nguyen",
-    className: "Algebra II",
-    room: "220",
-    status: "confirmed",
-    createdAt: new Date().toISOString(),
-  },
-];
+/** Bookings start empty — no demo reservations on the board. */
+export const SEED_BOOKINGS: Booking[] = [];
 
 export const SEED_ISSUES: Issue[] = [
   {

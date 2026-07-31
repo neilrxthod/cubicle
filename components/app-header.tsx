@@ -132,7 +132,14 @@ export function AppHeader({ user }: { user: SessionUser }) {
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--hairline)] bg-white/80 backdrop-blur-2xl">
       <div className="relative mx-auto flex h-14 w-full max-w-300 items-center justify-between px-4 sm:h-16 sm:px-6">
-        <CubicleWordmark size="sm" href="/" />
+        {/* Same left edge as main (max-w-300 + px-4/6); bold mark with tracking compensated for optical align */}
+        <div className="relative z-10 flex h-full min-w-0 shrink-0 items-center">
+          <CubicleWordmark
+            size="sm"
+            href="/"
+            className="font-bold leading-none tracking-[0.28em] mr-[-0.28em] text-[12px]"
+          />
+        </div>
 
         <nav
           aria-label="Primary"
@@ -150,7 +157,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
           </div>
         </nav>
 
-        <div className="flex shrink-0 items-center">
+        <div className="relative z-10 flex h-full shrink-0 items-center">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button

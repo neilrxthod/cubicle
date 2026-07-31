@@ -13,7 +13,7 @@ export function PageShell({
   contentClassName,
   narrow = false,
 }: {
-  title: string;
+  title?: string;
   description?: string;
   action?: React.ReactNode;
   children: React.ReactNode;
@@ -21,6 +21,8 @@ export function PageShell({
   contentClassName?: string;
   narrow?: boolean;
 }) {
+  const showHeader = Boolean(title || description || action);
+
   return (
     <div
       className={cn(
@@ -29,23 +31,25 @@ export function PageShell({
         className,
       )}
     >
-      <header className="mb-7 flex items-end justify-between gap-6 sm:mb-9">
-        <div className="min-w-0 max-w-2xl">
-          <h1 className="type-page-title text-neutral-950">
-            {title}
-          </h1>
-          {description ? (
-            <p className="type-body mt-2.5 max-w-md leading-relaxed text-neutral-400 sm:text-[13.5px]">
-              {description}
-            </p>
-          ) : null}
-        </div>
-        {action ? (
-          <div className="flex shrink-0 items-center justify-end pb-0.5">
-            {action}
+      {showHeader ? (
+        <header className="mb-7 flex items-end justify-between gap-6 sm:mb-9">
+          <div className="min-w-0 max-w-2xl">
+            {title ? (
+              <h1 className="type-page-title text-neutral-950">{title}</h1>
+            ) : null}
+            {description ? (
+              <p className="type-body mt-2.5 max-w-md leading-relaxed text-neutral-400 sm:text-[13.5px]">
+                {description}
+              </p>
+            ) : null}
           </div>
-        ) : null}
-      </header>
+          {action ? (
+            <div className="flex shrink-0 items-center justify-end pb-0.5">
+              {action}
+            </div>
+          ) : null}
+        </header>
+      ) : null}
       <div className={cn(contentClassName)}>{children}</div>
     </div>
   );
