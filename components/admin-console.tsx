@@ -191,24 +191,14 @@ export function AdminConsole({
   )
 }
 
-type CartStatusFilter = "all" | "active" | "maintenance"
-
 function CartsGrid({ carts }: { carts: Cart[] }) {
   const router = useRouter()
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
-  const [optimisticStatusById, setOptimisticStatusById] = useState<
-    Record<string, Cart["status"]>
-  >({})
-  const [filter, setFilter] = useState<CartStatusFilter>("all")
-  const [query, setQuery] = useState("")
+  const [optimisticStatusById, setOptimisticStatusById] = useState<Record<string, Cart["status"]>>({})
   const [, startTransition] = useTransition()
 
-  function statusOf(cart: Cart): Cart["status"] {
-    return optimisticStatusById[cart.id] ?? cart.status
-  }
-
   function toggle(cart: Cart) {
-    const current = statusOf(cart)
+    const current = optimisticStatusById[cart.id] ?? cart.status
     const next = current === "maintenance" ? "active" : "maintenance"
     setPendingIds((prev) => {
       const s = new Set(prev)
@@ -231,11 +221,7 @@ function CartsGrid({ carts }: { carts: Cart[] }) {
           s.delete(cart.id)
           return s
         })
-        toast({
-          title: "Could not update",
-          description: res.error,
-          variant: "destructive",
-        })
+        toast({ title: "Could not update", description: res.error, variant: "destructive" })
         return
       }
 
@@ -244,6 +230,7 @@ function CartsGrid({ carts }: { carts: Cart[] }) {
         s.delete(cart.id)
         return s
       })
+      // Drop optimistic once store has refreshed; keep until then for snappy UI
       setOptimisticStatusById((prev) => {
         const m = { ...prev }
         delete m[cart.id]
@@ -251,206 +238,103 @@ function CartsGrid({ carts }: { carts: Cart[] }) {
       })
       toast({
         title: cart.name,
-        description: next === "maintenance" ? "Maintenance" : "Active",
+        description: next === "maintenance" ? "Paused" : "Active",
       })
       router.refresh()
     })
   }
 
-  const counts = useMemo(() => {
-    let active = 0
-    let maintenance = 0
-    for (const cart of carts) {
-      const status = optimisticStatusById[cart.id] ?? cart.status
-      if (status === "active") active += 1
-      else maintenance += 1
-    }
-    return { active, maintenance, all: carts.length }
-  }, [carts, optimisticStatusById])
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return [...carts]
-      .filter((cart) => {
-        const status = optimisticStatusById[cart.id] ?? cart.status
-        if (filter !== "all" && status !== filter) return false
-        if (!q) return true
-        return [cart.name, cart.location]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-          .includes(q)
-      })
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [carts, filter, query, optimisticStatusById])
-
-  const tabs: Array<{
-    id: CartStatusFilter
-    label: string
-    count: number
-    countClass: string
-    activeBar: string
-  }> = [
-    {
-      id: "all",
-      label: "All",
-      count: counts.all,
-      countClass: "text-neutral-400",
-      activeBar: "bg-neutral-950",
-    },
-    {
-      id: "active",
-      label: "Active",
-      count: counts.active,
-      countClass: "text-emerald-600",
-      activeBar: "bg-emerald-600",
-    },
-    {
-      id: "maintenance",
-      label: "Maintenance",
-      count: counts.maintenance,
-      countClass: "text-amber-600",
-      activeBar: "bg-amber-500",
-    },
-  ]
+  const activeCount = carts.filter((c) => {
+    const s = optimisticStatusById[c.id] ?? c.status
+    return s === "active"
+  }).length
+  const pausedCount = carts.length - activeCount
 
   return (
-    <section className="flex flex-col gap-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <nav
-          aria-label="Cart status"
-          className="flex items-center gap-1 border-b border-[var(--hairline)] sm:border-0"
-        >
-          {tabs.map((item) => {
-            const active = filter === item.id
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setFilter(item.id)}
-                className={cn(
-                  "relative inline-flex h-9 items-center gap-1.5 px-2.5 text-[13px] font-medium transition-colors",
-                  active
-                    ? "text-neutral-950"
-                    : "text-neutral-400 hover:text-neutral-700",
-                )}
-              >
-                {item.label}
-                <span
-                  className={cn(
-                    "text-[12px] tabular-nums",
-                    active || item.count > 0
-                      ? item.countClass
-                      : "text-neutral-400",
-                  )}
-                >
-                  {item.count}
-                </span>
-                {active ? (
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "absolute inset-x-2 -bottom-px h-px sm:bottom-0",
-                      item.activeBar,
-                    )}
-                  />
-                ) : null}
-              </button>
-            )
-          })}
-        </nav>
-
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search"
-          className={cn(
-            "h-8 w-full min-w-0 rounded-md border border-[var(--hairline-strong)] bg-white px-2.5 sm:w-44",
-            "text-[12.5px] text-neutral-900 outline-none placeholder:text-neutral-400",
-            "focus:border-neutral-400",
-          )}
-        />
+    <section className="flex flex-col gap-4">
+      <div className="flex items-center gap-2 text-[12.5px] tabular-nums">
+        <span className="font-medium text-neutral-900">{carts.length}</span>
+        <span className="text-neutral-400">carts</span>
+        <span className="text-neutral-300">·</span>
+        <span className="text-emerald-700/90">{activeCount} active</span>
+        {pausedCount > 0 ? (
+          <>
+            <span className="text-neutral-300">·</span>
+            <span className="text-neutral-400">{pausedCount} paused</span>
+          </>
+        ) : null}
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="rounded-xl border border-[var(--hairline)] bg-white px-5 py-12 text-center">
-          <p className="text-[13px] text-neutral-400">
-            {carts.length > 0 ? "No matching carts." : "No carts."}
-          </p>
-          {carts.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => {
-                setQuery("")
-                setFilter("all")
-              }}
-              className="mt-3 text-[13px] font-medium text-neutral-950 underline-offset-4 hover:underline"
-            >
-              Clear filters
-            </button>
-          ) : null}
+      {carts.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-neutral-200/80 bg-white px-6 py-16 text-center text-[13px] text-neutral-400">
+          No carts.
         </div>
       ) : (
-        <ul className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white">
-          {filtered.map((cart, index) => {
-            const visualStatus = statusOf(cart)
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {carts.map((cart) => {
+            const visualStatus = optimisticStatusById[cart.id] ?? cart.status
             const isPending = pendingIds.has(cart.id)
-            const offline = visualStatus === "maintenance"
+            const paused = visualStatus === "maintenance"
 
             return (
-              <li
+              <div
                 key={cart.id}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3.5 sm:gap-4 sm:px-5",
-                  index > 0 && "border-t border-[var(--hairline)]",
+                  "group relative flex flex-col justify-between overflow-hidden rounded-2xl border bg-white p-4 pl-5",
+                  "transition-[border-color,box-shadow,background-color] duration-200 ease-out",
+                  paused
+                    ? "border-neutral-200/80 bg-[#fafafa]"
+                    : "border-[var(--hairline-strong)] shadow-[var(--shadow-surface)] hover:border-neutral-300/90 hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_20px_rgba(0,0,0,0.04)]",
                 )}
               >
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                    <p className="truncate text-[13px] font-medium tracking-[-0.01em] text-neutral-950">
-                      {cart.name}
-                    </p>
-                    <StatusBadge status={visualStatus} />
-                  </div>
-                  <p className="mt-0.5 truncate text-[12px] text-neutral-400">
+                {/* Full-height left status rail */}
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute inset-y-0 left-0",
+                    paused ? "w-1 bg-red-500" : "w-[3px] bg-emerald-500",
+                  )}
+                />
+
+                <div className="min-w-0">
+                  <h3
+                    className={cn(
+                      "truncate text-[13.5px] font-medium tracking-[-0.02em]",
+                      paused ? "text-neutral-500" : "text-neutral-950",
+                    )}
+                  >
+                    {cart.name}
+                  </h3>
+                  <p className="mt-1 truncate text-[12px] tracking-[-0.01em] text-neutral-400">
                     {cart.location || "No location"}
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  disabled={isPending}
-                  onClick={() => toggle(cart)}
-                  className={cn(
-                    "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md px-2.5",
-                    "text-[12.5px] font-medium transition-colors duration-150",
-                    "focus-visible:outline-none focus-visible:ring-2",
-                    "disabled:pointer-events-none disabled:opacity-40",
-                    offline
-                      ? cn(
-                          "border border-neutral-200/90 bg-neutral-950 text-white",
-                          "hover:bg-neutral-800",
-                          "focus-visible:ring-neutral-900/15",
-                        )
-                      : cn(
-                          "border border-[var(--hairline-strong)] bg-white text-neutral-500",
-                          "hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-950",
-                          "focus-visible:ring-neutral-900/10",
-                        ),
-                  )}
-                >
-                  {isPending ? (
-                    <Loader2 className="size-3 animate-spin" />
-                  ) : offline ? (
-                    <Wrench className="size-3" strokeWidth={1.75} />
-                  ) : null}
-                  {isPending ? "…" : offline ? "Resume" : "Pause"}
-                </button>
-              </li>
+                <div className="mt-5 flex items-center justify-end">
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => toggle(cart)}
+                    className={cn(
+                      "inline-flex h-8 min-w-[4.75rem] items-center justify-center gap-1.5 rounded-full px-3.5",
+                      "text-[12px] font-medium tracking-[-0.01em] transition-all duration-150",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+                      "disabled:pointer-events-none disabled:opacity-40",
+                      paused
+                        ? "bg-neutral-950 text-white hover:bg-neutral-800 active:scale-[0.98]"
+                        : "bg-neutral-100/90 text-neutral-600 hover:bg-neutral-200/80 hover:text-neutral-950 active:scale-[0.98]",
+                    )}
+                  >
+                    {isPending ? (
+                      <Loader2 className="size-3 animate-spin opacity-70" />
+                    ) : null}
+                    {isPending ? "…" : paused ? "Resume" : "Pause"}
+                  </button>
+                </div>
+              </div>
             )
           })}
-        </ul>
+        </div>
       )}
     </section>
   )
@@ -1793,24 +1677,6 @@ function ReportsPanel({
         </div>
       </div>
     </section>
-  )
-}
-
-function StatusBadge({ status }: { status: "active" | "maintenance" }) {
-  const isMaint = status === "maintenance"
-
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center rounded-full px-2 py-0.5",
-        "text-[11px] font-medium tracking-[-0.01em]",
-        isMaint
-          ? "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200/80"
-          : "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200/80",
-      )}
-    >
-      {isMaint ? "Maintenance" : "Active"}
-    </span>
   )
 }
 
