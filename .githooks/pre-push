@@ -1,0 +1,6 @@
+#!/bin/sh
+# Safety net: if local HEAD version is behind commits being pushed with
+# real code changes but version files weren't updated, remind the user.
+# Primary bump happens in pre-commit.
+
+exit 0

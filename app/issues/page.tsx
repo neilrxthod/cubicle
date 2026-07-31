@@ -159,7 +159,7 @@ function IssuesView({ user }: { user: SessionUser }) {
           <button
             type="button"
             onClick={() => setReportOpen(true)}
-            className="h-9 rounded-lg bg-neutral-950 px-4 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
+            className="h-9 rounded-lg bg-red-600 px-4 text-[13px] font-medium text-white transition-colors hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/30"
           >
             Report
           </button>
@@ -453,7 +453,11 @@ function EmptyState({
       <button
         type="button"
         onClick={hasAny ? onReset : onReport}
-        className="mt-5 h-9 rounded-lg border border-neutral-200 bg-white px-4 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50"
+        className={
+          hasAny
+            ? "mt-5 h-9 rounded-lg border border-neutral-200 bg-white px-4 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50"
+            : "mt-5 h-9 rounded-lg bg-red-600 px-4 text-[13px] font-medium text-white transition-colors hover:bg-red-700"
+        }
       >
         {hasAny ? "Clear filters" : "Report"}
       </button>

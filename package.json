@@ -1,12 +1,16 @@
 {
   "name": "cubicle",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "version:bump": "node scripts/bump-platform-version.mjs",
+    "version:bump:minor": "node scripts/bump-platform-version.mjs --minor",
+    "version:bump:major": "node scripts/bump-platform-version.mjs --major",
+    "prepare": "git config core.hooksPath .githooks 2>nul || git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

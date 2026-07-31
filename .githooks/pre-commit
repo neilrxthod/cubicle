@@ -1,0 +1,19 @@
+#!/bin/sh
+# Auto-bump platform version on every commit (patch), then stage the files
+# so the bump is included in the same commit. Skip with SKIP_VERSION_BUMP=1.
+
+if [ "$SKIP_VERSION_BUMP" = "1" ]; then
+  exit 0
+fi
+
+# Only bump when there is something staged (ignore empty / version-only loops)
+if git diff --cached --quiet; then
+  exit 0
+fi
+
+# Avoid bumping if the only staged files are already the version artifacts
+# from a previous hook run with no other changes — still allow normal commits.
+node scripts/bump-platform-version.mjs || exit 1
+
+git add package.json lib/app-version.ts
+exit 0

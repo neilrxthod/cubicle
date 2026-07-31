@@ -18,6 +18,7 @@ import type { SessionUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CubicleWordmark } from "@/components/auth/wordmark";
 import { VerifiedBadge } from "@/components/verified-badge";
+import { APP_VERSION_LABEL } from "@/lib/app-version";
 
 function initials(name: string) {
   const parts = name.split(/\s+/).filter(Boolean);
@@ -132,13 +133,19 @@ export function AppHeader({ user }: { user: SessionUser }) {
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--hairline)] bg-white/80 backdrop-blur-2xl">
       <div className="relative mx-auto flex h-14 w-full max-w-300 items-center justify-between px-4 sm:h-16 sm:px-6">
-        {/* Same left edge as main (max-w-300 + px-4/6); bold mark with tracking compensated for optical align */}
-        <div className="relative z-10 flex h-full min-w-0 shrink-0 items-center">
+        {/* Same left edge as main (max-w-300 + px-4/6); bold mark + platform version */}
+        <div className="relative z-10 flex h-full min-w-0 shrink-0 items-center gap-2">
           <CubicleWordmark
             size="sm"
             href="/"
             className="font-bold leading-none tracking-[0.28em] mr-[-0.28em] text-[12px]"
           />
+          <span
+            title="Platform version — auto-bumped on each git commit"
+            className="select-none rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums tracking-tight text-neutral-500"
+          >
+            {APP_VERSION_LABEL}
+          </span>
         </div>
 
         <nav
