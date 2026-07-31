@@ -161,7 +161,7 @@ export function AdminConsole({
       {tab === "carts" ? (
         <CartsGrid carts={carts} />
       ) : tab === "bookings" ? (
-        <BookingsTable bookings={filteredBookings} carts={carts} />
+        <BookingsTable bookings={filteredBookings} carts={carts} users={users} />
       ) : tab === "reports" ? (
         <ReportsPanel
           bookings={filteredBookings}
@@ -357,8 +357,30 @@ function CartsGrid({ carts }: { carts: Cart[] }) {
   )
 }
 
-function BookingsTable({ bookings, carts }: { bookings: Booking[]; carts: Cart[] }) {
+function bookingTeacherInitials(name: string) {
+  const parts = name.split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  }
+  return (parts[0]?.slice(0, 2) ?? "?").toUpperCase()
+}
+
+function BookingsTable({
+  bookings,
+  carts,
+  users,
+}: {
+  bookings: Booking[]
+  carts: Cart[]
+  users: User[]
+}) {
   const cartMap = useMemo(() => new Map(carts.map((c) => [c.id, c])), [carts])
+  const userById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users])
+  const userByName = useMemo(() => {
+    const m = new Map<string, User>()
+    for (const u of users) m.set(u.name.toLowerCase(), u)
+    return m
+  }, [users])
   const [view, setView] = useState<"list" | "board">("list")
   const [query, setQuery] = useState("")
   const [dateFilter, setDateFilter] = useState("")
@@ -875,6 +897,10 @@ function BookingsTable({ bookings, carts }: { bookings: Booking[]; carts: Cart[]
                   const date = parseISO(b.date)
                   const isConflict = cart?.status === "maintenance"
                   const selected = selectedIds.has(b.id)
+                  const teacher =
+                    userById.get(b.teacherId) ??
+                    userByName.get(b.teacherName.toLowerCase())
+                  const avatarUrl = teacher?.avatarUrl
 
                   return (
                     <tr
@@ -940,7 +966,27 @@ function BookingsTable({ bookings, carts }: { bookings: Booking[]; carts: Cart[]
                         </div>
                       </td>
                       <td className="px-3 py-3.5">
-                        <span className="text-[13px] font-medium text-foreground">{b.teacherName}</span>
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          {avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={avatarUrl}
+                              alt=""
+                              referrerPolicy="no-referrer"
+                              className="size-8 shrink-0 rounded-full object-cover ring-1 ring-black/[0.06]"
+                            />
+                          ) : (
+                            <span
+                              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-semibold tracking-wide text-neutral-600 ring-1 ring-black/[0.04]"
+                              aria-hidden
+                            >
+                              {bookingTeacherInitials(b.teacherName)}
+                            </span>
+                          )}
+                          <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
+                            {b.teacherName}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-3 py-3.5 text-right">
                         <DropdownMenu modal={false}>
