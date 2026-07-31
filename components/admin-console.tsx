@@ -299,15 +299,14 @@ function CartsGrid({ carts }: { carts: Cart[] }) {
                 )}
               >
                 {/*
-                  Left status rail: runs the full left edge of the card, but
-                  stops at the midpoint of the top-left / bottom-left curves
-                  (rounded-2xl = 16px → inset 8px each end).
+                  Left status rail: full left edge, stops short of the
+                  top-left / bottom-left corner tips (rounded-2xl → 4px inset).
                 */}
                 <span
                   aria-hidden
                   className={cn(
-                    "absolute left-0 top-2 bottom-2",
-                    paused ? "w-1 bg-red-500" : "w-[3px] bg-emerald-500",
+                    "absolute left-0 top-1 bottom-1",
+                    paused ? "w-[5px] bg-red-500" : "w-[4px] bg-emerald-500",
                   )}
                 />
 
