@@ -42,6 +42,7 @@ export default function RootLayout({
     <html
       lang="en"
       className={cn("h-full", "font-sans", geist.variable)}
+      data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
       <body
