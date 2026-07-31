@@ -28,12 +28,9 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  BarChart3,
   Calendar as CalendarIcon,
-  CalendarClock,
   ChevronDown,
   Download,
-  Layers3,
   MoreHorizontal,
   Search,
   Wrench,
@@ -1094,11 +1091,11 @@ function ReportsPanel({
   range: DateRange | undefined
   onOpenTab: (tab: Tab) => void
 }) {
-  const cartMap = new Map(carts.map((c) => [c.id, c]))
-  const teacherNames = new Map(teachers.map((t) => [t.id, t.name]))
+  const cartMap = useMemo(() => new Map(carts.map((c) => [c.id, c])), [carts])
   const totalBookings = bookings.length
 
   const stats = useMemo(() => {
+    const teacherNames = new Map(teachers.map((t) => [t.id, t.name]))
     const usageByTeacher = new Map<string, { teacherId: string; teacherName: string; total: number; carts: Map<string, number> }>()
     const cartUsageByCart = new Map<string, { cartId: string; cartName: string; total: number; teachers: Map<string, number> }>()
     const bookingsByPeriod = new Map<string, number>()
@@ -1193,7 +1190,7 @@ function ReportsPanel({
       reporterRows: [...issuesByReporter.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4),
       activityData: last7Days.map(date => ({ date, day: format(parseISO(date), "EEE"), count: bookingsByDate.get(date) ?? 0 }))
     }
-  }, [bookings, issues, carts, teachers, cartMap, teacherNames, totalBookings])
+  }, [bookings, issues, carts, teachers, cartMap, totalBookings])
 
   const {
     usageRowsWithCarts,

@@ -60,7 +60,10 @@ export function AnimatedCancelButton({
   const [success, setSuccess] = useState(false);
   const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onSuccessRef = useRef(onSuccess);
-  onSuccessRef.current = onSuccess;
+
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
 
   useEffect(() => {
     return () => {

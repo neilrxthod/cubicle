@@ -455,55 +455,47 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
   const isAdmin = user.role === "admin";
   const steps = isAdmin ? ADMIN_STEPS : TEACHER_STEPS;
   const fileRef = useRef<HTMLInputElement>(null);
-  const draftHydrated = useRef(false);
+  const defaultMaxAdvanceDays = platform.bookingPolicy.maxAdvanceDays ?? 14;
 
-  const [stepIndex, setStepIndex] = useState(0);
+  // Hydrate draft once via lazy state init (avoids setState-in-effect).
+  const [stepIndex, setStepIndex] = useState(() => {
+    const draft = getOnboardingDraft(user.id, user.email);
+    const stepCount =
+      user.role === "admin" ? ADMIN_STEPS.length : TEACHER_STEPS.length;
+    if (typeof draft?.stepIndex === "number") {
+      return Math.min(Math.max(0, draft.stepIndex), stepCount - 1);
+    }
+    return 0;
+  });
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Prefer Google OAuth photo (auto-fetched at sign-in); custom upload overrides.
-  const [avatarSrc, setAvatarSrc] = useState(user.avatarUrl);
-  const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
-  const [customPhotoChosen, setCustomPhotoChosen] = useState(false);
+  // Custom upload overrides; otherwise follow live session avatar (OAuth may hydrate later).
+  const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(() => {
+    const draft = getOnboardingDraft(user.id, user.email);
+    return draft?.avatarDataUrl ?? null;
+  });
+  const [customPhotoChosen, setCustomPhotoChosen] = useState(() => {
+    const draft = getOnboardingDraft(user.id, user.email);
+    return Boolean(draft?.avatarDataUrl);
+  });
+  const avatarSrc = avatarDataUrl ?? user.avatarUrl ?? null;
 
-  const [assignments, setAssignments] = useState<TeachingAssignment[]>([
-    newTeachingAssignment(),
-  ]);
-  const [maxAdvanceDays, setMaxAdvanceDays] = useState(
-    platform.bookingPolicy.maxAdvanceDays ?? 14,
-  );
+  const [assignments, setAssignments] = useState<TeachingAssignment[]>(() => {
+    const draft = getOnboardingDraft(user.id, user.email);
+    return draft?.assignments?.length
+      ? draft.assignments
+      : [newTeachingAssignment()];
+  });
+  const [maxAdvanceDays, setMaxAdvanceDays] = useState(() => {
+    const draft = getOnboardingDraft(user.id, user.email);
+    if (typeof draft?.maxAdvanceDays === "number") return draft.maxAdvanceDays;
+    return defaultMaxAdvanceDays;
+  });
   // Defaults on — change later in Settings, not during setup.
   const notifyEmail = true;
   const notifyIssues = true;
 
-  // Session may hydrate Google avatar after first paint (OAuth sync).
   useEffect(() => {
-    if (customPhotoChosen || avatarDataUrl) return;
-    if (user.avatarUrl) setAvatarSrc(user.avatarUrl);
-  }, [user.avatarUrl, customPhotoChosen, avatarDataUrl]);
-
-  useEffect(() => {
-    if (draftHydrated.current) return;
-    draftHydrated.current = true;
-    const draft = getOnboardingDraft(user.id, user.email);
-    if (!draft) return;
-    // Map older multi-step drafts onto current 3 steps
-    if (typeof draft.stepIndex === "number") {
-      const mapped = Math.min(Math.max(0, draft.stepIndex), steps.length - 1);
-      setStepIndex(mapped);
-    }
-    if (draft.avatarDataUrl) {
-      setAvatarDataUrl(draft.avatarDataUrl);
-      setAvatarSrc(draft.avatarDataUrl);
-      setCustomPhotoChosen(true);
-    }
-    if (draft.assignments?.length) setAssignments(draft.assignments);
-    if (typeof draft.maxAdvanceDays === "number") {
-      setMaxAdvanceDays(draft.maxAdvanceDays);
-    }
-  }, [user.id, user.email, steps.length]);
-
-  useEffect(() => {
-    if (!draftHydrated.current) return;
     const t = window.setTimeout(() => {
       saveOnboardingDraft(
         {
@@ -561,7 +553,6 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
     try {
       const dataUrl = await fileToAvatarDataUrl(file);
       setAvatarDataUrl(dataUrl);
-      setAvatarSrc(dataUrl);
       setCustomPhotoChosen(true);
     } catch (err) {
       toast({
@@ -622,7 +613,7 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
       };
 
       try {
-        const nextAvatar = avatarDataUrl ?? avatarSrc ?? user.avatarUrl;
+        const nextAvatar = avatarDataUrl ?? user.avatarUrl;
         await updateProfile({
           name: user.name,
           department: cleaned[0]?.subject.trim() || user.department,
