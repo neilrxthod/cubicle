@@ -30,23 +30,21 @@ function MyBookings({ user }: { user: SessionUser }) {
 
   return (
     <DashboardFrame user={user}>
-      <PageShell title="Bookings" description="Your reservations.">
-        <div className="flex flex-col gap-4">
-          <BookingsList
-            title="Upcoming"
-            bookings={upcoming}
-            carts={state.carts}
-            emptyLabel="Nothing upcoming."
-            emptyAction={{ href: "/", label: "Book a cart" }}
-            canCancel
-          />
-          <BookingsList
-            title="Past"
-            bookings={past}
-            carts={state.carts}
-            emptyLabel="No past bookings."
-          />
-        </div>
+      <PageShell narrow contentClassName="flex flex-col gap-8">
+        <BookingsList
+          title="Upcoming"
+          bookings={upcoming}
+          carts={state.carts}
+          emptyLabel="Nothing upcoming."
+          emptyAction={{ href: "/", label: "Book a cart" }}
+          canCancel
+        />
+        <BookingsList
+          title="Past"
+          bookings={past}
+          carts={state.carts}
+          emptyLabel="No past bookings."
+        />
       </PageShell>
     </DashboardFrame>
   );
