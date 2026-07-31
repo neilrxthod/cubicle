@@ -393,12 +393,8 @@ function BookingWindowControl({
   return (
     <div className="overflow-hidden rounded-2xl border border-neutral-200/90 bg-white">
       <div className="px-5 pt-5 pb-4 text-center sm:px-6 sm:pt-6">
-        <p className="text-[11px] font-medium tracking-[0.12em] text-neutral-400 uppercase">
-          Booking window
-        </p>
-
         {/* Big number + stepper */}
-        <div className="mt-5 flex items-center justify-center gap-4 sm:gap-5">
+        <div className="mt-1 flex items-center justify-center gap-4 sm:gap-5">
           <button
             type="button"
             onClick={() => setDays(days - 1)}
@@ -439,9 +435,6 @@ function BookingWindowControl({
           </button>
         </div>
 
-        <p className="mx-auto mt-4 max-w-[16rem] text-[13px] leading-relaxed text-neutral-500">
-          Teachers can reserve carts this far into the future.
-        </p>
       </div>
 
       {/* Quick picks */}
