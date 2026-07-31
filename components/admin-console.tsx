@@ -294,9 +294,6 @@ function CartsGrid({ carts }: { carts: Cart[] }) {
                     </h3>
                     <p className="mt-0.5 truncate text-[12px] text-neutral-400">
                       {cart.location || "No location"}
-                      {typeof cart.laptopCount === "number"
-                        ? ` · ${cart.laptopCount} laptops`
-                        : ""}
                     </p>
                   </div>
                   <StatusBadge status={visualStatus} />

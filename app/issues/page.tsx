@@ -6,6 +6,13 @@ import { DashboardFrame } from "@/components/app/dashboard-frame";
 import { PageShell } from "@/components/app/page-shell";
 import { RequirePlatformAuth } from "@/components/app/require-platform-auth";
 import { IssueDialog } from "@/components/issue-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { updateIssueStatus } from "@/lib/actions";
 import { usePlatformStore } from "@/lib/data/platform-store";
 import type { Issue, IssueSeverity, IssueStatus, SessionUser } from "@/lib/types";
@@ -93,9 +100,27 @@ function IssuesView({ user }: { user: SessionUser }) {
   }
 
   const tabs = [
-    { id: "open" as const, label: "Open", count: counts.open },
-    { id: "resolved" as const, label: "Resolved", count: counts.resolved },
-    { id: "all" as const, label: "All", count: issues.length },
+    {
+      id: "open" as const,
+      label: "Open",
+      count: counts.open,
+      countClass: "text-red-600",
+      activeBar: "bg-red-600",
+    },
+    {
+      id: "resolved" as const,
+      label: "Resolved",
+      count: counts.resolved,
+      countClass: "text-emerald-600",
+      activeBar: "bg-emerald-600",
+    },
+    {
+      id: "all" as const,
+      label: "All",
+      count: issues.length,
+      countClass: "text-neutral-400",
+      activeBar: "bg-neutral-950",
+    },
   ];
 
   return (
@@ -122,13 +147,23 @@ function IssuesView({ user }: { user: SessionUser }) {
                   )}
                 >
                   {item.label}
-                  <span className="text-[12px] tabular-nums text-neutral-400">
+                  <span
+                    className={cn(
+                      "text-[12px] tabular-nums",
+                      active || item.count > 0
+                        ? item.countClass
+                        : "text-neutral-400",
+                    )}
+                  >
                     {item.count}
                   </span>
                   {active ? (
                     <span
                       aria-hidden
-                      className="absolute inset-x-2 -bottom-px h-px bg-neutral-950 sm:bottom-0"
+                      className={cn(
+                        "absolute inset-x-2 -bottom-px h-px sm:bottom-0",
+                        item.activeBar,
+                      )}
                     />
                   ) : null}
                 </button>
@@ -137,21 +172,64 @@ function IssuesView({ user }: { user: SessionUser }) {
           </nav>
 
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <Select
               value={severity}
-              onChange={(e) => setSeverity(e.target.value as SeverityFilter)}
-              aria-label="Severity"
-              className={cn(
-                "h-8 rounded-md border border-[var(--hairline-strong)] bg-white px-2.5",
-                "text-[12.5px] text-neutral-700 outline-none",
-                "focus:border-neutral-400",
-              )}
+              onValueChange={(value) =>
+                setSeverity((value ?? "all") as SeverityFilter)
+              }
             >
-              <option value="all">All severity</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
+              <SelectTrigger
+                size="sm"
+                aria-label="Severity"
+                className={cn(
+                  "h-8 min-w-[8.75rem] gap-1.5 rounded-md border-[var(--hairline-strong)] bg-white px-2.5",
+                  "text-[12.5px] font-medium text-neutral-700 shadow-none",
+                  "transition-[background-color,border-color,color] duration-150 ease-out",
+                  "hover:border-neutral-300 hover:bg-neutral-50",
+                  "data-[state=open]:border-neutral-400 data-[state=open]:bg-neutral-50",
+                  "focus-visible:border-neutral-400 focus-visible:ring-0",
+                  "[&_svg]:size-3.5 [&_svg]:opacity-45",
+                  "[&_svg]:transition-transform [&_svg]:duration-200 [&_svg]:ease-[cubic-bezier(0.22,1,0.36,1)]",
+                  "data-[state=open]:[&_svg]:rotate-180",
+                )}
+              >
+                <SelectValue placeholder="All severity" />
+              </SelectTrigger>
+              <SelectContent
+                align="start"
+                position="popper"
+                className={cn(
+                  "min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg",
+                  "border-[var(--hairline-strong)] bg-white",
+                  "shadow-[var(--shadow-soft)]",
+                  "data-[state=open]:duration-200 data-[state=closed]:duration-150",
+                  "data-[state=open]:ease-[cubic-bezier(0.22,1,0.36,1)]",
+                  "data-[state=closed]:ease-in",
+                )}
+              >
+                {(
+                  [
+                    { value: "all", label: "All severity" },
+                    { value: "high", label: "High" },
+                    { value: "medium", label: "Medium" },
+                    { value: "low", label: "Low" },
+                  ] as const
+                ).map((option) => (
+                  <SelectItem
+                    key={option.value}
+                    value={option.value}
+                    className={cn(
+                      "cursor-pointer rounded-md py-1.5 pl-2 pr-8 text-[12.5px] text-neutral-700",
+                      "transition-colors duration-150 ease-out",
+                      "focus:bg-neutral-100 focus:text-neutral-950",
+                      "data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-950",
+                    )}
+                  >
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             <input
               type="search"
@@ -213,6 +291,7 @@ function IssuesView({ user }: { user: SessionUser }) {
             {filtered.map((issue, index) => {
               const cart = cartMap.get(issue.cartId);
               const busy = busyId === issue.id;
+              const isOpen = issue.status === "open";
               const meta = [
                 severityLabel(issue.severity),
                 issue.reporterName,
@@ -231,15 +310,11 @@ function IssuesView({ user }: { user: SessionUser }) {
                   )}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                       <p className="truncate text-[13px] font-medium tracking-[-0.01em] text-neutral-950">
                         {cart?.name ?? "Cart"}
                       </p>
-                      {issue.status === "resolved" ? (
-                        <span className="shrink-0 text-[11px] text-neutral-400">
-                          Resolved
-                        </span>
-                      ) : null}
+                      <StatusBadge status={issue.status} />
                     </div>
                     <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-relaxed text-neutral-600 sm:line-clamp-1">
                       {issue.description}
@@ -254,26 +329,27 @@ function IssuesView({ user }: { user: SessionUser }) {
                       type="button"
                       disabled={busy}
                       onClick={() =>
-                        setStatus(
-                          issue,
-                          issue.status === "open" ? "resolved" : "open",
-                        )
+                        setStatus(issue, isOpen ? "resolved" : "open")
                       }
                       className={cn(
-                        "shrink-0 rounded-md px-2.5 py-1.5 text-[12.5px] font-medium",
+                        "shrink-0 rounded-md border px-2.5 py-1.5 text-[12.5px] font-medium",
                         "transition-colors duration-150",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+                        "focus-visible:outline-none focus-visible:ring-2",
                         "disabled:pointer-events-none disabled:opacity-40",
-                        issue.status === "open"
-                          ? "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950"
-                          : "text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700",
+                        isOpen
+                          ? cn(
+                              "border-emerald-200/90 bg-emerald-50 text-emerald-800",
+                              "hover:border-emerald-300 hover:bg-emerald-100",
+                              "focus-visible:ring-emerald-600/20",
+                            )
+                          : cn(
+                              "border-red-200/90 bg-red-50 text-red-700",
+                              "hover:border-red-300 hover:bg-red-100",
+                              "focus-visible:ring-red-600/20",
+                            ),
                       )}
                     >
-                      {busy
-                        ? "…"
-                        : issue.status === "open"
-                          ? "Resolve"
-                          : "Reopen"}
+                      {busy ? "…" : isOpen ? "Resolve" : "Reopen"}
                     </button>
                   ) : null}
                 </li>
@@ -294,4 +370,21 @@ function severityLabel(severity: IssueSeverity) {
   if (severity === "high") return "High";
   if (severity === "medium") return "Medium";
   return "Low";
+}
+
+function StatusBadge({ status }: { status: IssueStatus }) {
+  const isOpen = status === "open";
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-full px-2 py-0.5",
+        "text-[11px] font-medium tracking-[-0.01em]",
+        isOpen
+          ? "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200/80"
+          : "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200/80",
+      )}
+    >
+      {isOpen ? "Open" : "Resolved"}
+    </span>
+  );
 }

@@ -20,7 +20,7 @@ function AdminHome({ user }: { user: SessionUser }) {
 
   return (
     <DashboardFrame user={user}>
-      <PageShell title="Admin" description="Carts, staff, and locks.">
+      <PageShell>
         <AdminConsole
           carts={state.carts}
           bookings={state.bookings}
