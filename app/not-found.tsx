@@ -5,7 +5,7 @@ export default function NotFound() {
   return (
     <div className="flex min-h-svh flex-col items-center justify-center bg-[#f6f6f7] px-6">
       <CubicleWordmark size="md" href="/login" />
-      <h1 className="mt-10 text-[1.5rem] font-semibold tracking-[-0.03em] text-neutral-950">
+      <h1 className="type-heading mt-10 text-neutral-950">
         Page not found
       </h1>
       <p className="mt-2 max-w-sm text-center text-[14px] text-neutral-500">

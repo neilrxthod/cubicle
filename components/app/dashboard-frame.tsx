@@ -25,7 +25,7 @@ export function DashboardFrame({
       {/* Tesla footer — pure type, open tracking, whisper hairline */}
       <footer className="border-t border-[var(--hairline)] bg-transparent">
         <div className="mx-auto flex w-full max-w-300 flex-col items-center justify-between gap-3 px-4 py-4 sm:flex-row sm:gap-6 sm:px-6 sm:py-5">
-          <p className="shrink-0 text-[10.5px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+          <p className="shrink-0 text-[10.5px] font-normal uppercase tracking-[0.16em] text-neutral-400">
             <span className="text-neutral-300">©</span>{" "}
             {new Date().getFullYear()}{" "}
             <span className="tracking-[0.2em] text-neutral-500">Cubicle</span>
@@ -44,7 +44,7 @@ export function DashboardFrame({
                 ) : null}
                 <Link
                   href={link.href}
-                  className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-neutral-400 transition-colors duration-200 hover:text-neutral-950"
+                  className="text-[10.5px] font-normal uppercase tracking-[0.14em] text-neutral-400 transition-colors duration-200 hover:text-neutral-950"
                 >
                   {link.shortLabel}
                 </Link>

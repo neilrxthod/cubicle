@@ -61,6 +61,19 @@
   --control-h: 2.25rem;
   --radius-control: 0.5rem;
   --radius-surface: 0.75rem;
+
+  /*
+    Platform type scale — thin, sleek product typography.
+    Display / brand: extralight · Titles: light · Body: regular · UI: medium
+  */
+  --font-weight-display: 200;
+  --font-weight-title: 300;
+  --font-weight-body: 400;
+  --font-weight-ui: 500;
+  --tracking-display: -0.04em;
+  --tracking-title: -0.03em;
+  --tracking-body: -0.015em;
+  --tracking-label: 0.14em;
 }
 
 .dark {
@@ -169,7 +182,9 @@ html {
 
 body {
   font-family: var(--font-sans);
-  letter-spacing: -0.011em;
+  font-weight: var(--font-weight-body);
+  letter-spacing: var(--tracking-body);
+  font-feature-settings: "kern" 1, "liga" 1;
 }
 
 /*
@@ -184,14 +199,23 @@ body[data-scroll-locked] {
 }
 
 /*
-  App typography (post-auth) — matches Reports & Analytics / StatBar:
-  light large display figures, tight tracking, quiet uppercase labels.
+  App typography — thin sleek product system (Apple / Linear / Tesla).
+  Prefer these utilities over one-off font-semibold headings.
 */
 @layer utilities {
+  .type-display {
+    font-size: clamp(1.85rem, 4vw, 2.85rem);
+    font-weight: var(--font-weight-display);
+    letter-spacing: 0.48em;
+    line-height: 1;
+    text-transform: uppercase;
+    color: var(--foreground);
+  }
+
   .type-page-title {
     font-size: 1.875rem;
-    font-weight: 300;
-    letter-spacing: -0.04em;
+    font-weight: var(--font-weight-display);
+    letter-spacing: var(--tracking-display);
     line-height: 1.05;
     color: var(--foreground);
   }
@@ -201,25 +225,38 @@ body[data-scroll-locked] {
     }
   }
 
+  .type-heading {
+    font-size: 1.375rem;
+    font-weight: var(--font-weight-title);
+    letter-spacing: var(--tracking-title);
+    line-height: 1.15;
+    color: var(--foreground);
+  }
+  @media (min-width: 640px) {
+    .type-heading {
+      font-size: 1.5rem;
+    }
+  }
+
   .type-section-title {
     font-size: 0.8125rem;
-    font-weight: 600;
+    font-weight: var(--font-weight-ui);
     letter-spacing: -0.015em;
     color: var(--foreground);
   }
 
   .type-label {
     font-size: 0.625rem;
-    font-weight: 500;
-    letter-spacing: 0.16em;
+    font-weight: var(--font-weight-ui);
+    letter-spacing: var(--tracking-label);
     text-transform: uppercase;
     color: var(--muted-foreground);
   }
 
   .type-metric {
     font-size: 1.875rem;
-    font-weight: 300;
-    letter-spacing: -0.04em;
+    font-weight: var(--font-weight-display);
+    letter-spacing: var(--tracking-display);
     line-height: 1;
     font-variant-numeric: tabular-nums;
     color: var(--foreground);
@@ -232,16 +269,22 @@ body[data-scroll-locked] {
 
   .type-body {
     font-size: 0.875rem;
-    font-weight: 400;
-    letter-spacing: -0.011em;
+    font-weight: var(--font-weight-body);
+    letter-spacing: var(--tracking-body);
     color: var(--muted-foreground);
   }
 
   .type-body-strong {
     font-size: 0.8125rem;
-    font-weight: 600;
+    font-weight: var(--font-weight-ui);
     letter-spacing: -0.015em;
     color: var(--foreground);
+  }
+
+  .type-ui {
+    font-size: 0.8125rem;
+    font-weight: var(--font-weight-ui);
+    letter-spacing: -0.011em;
   }
 
   /* Reusable product surfaces */
@@ -283,8 +326,32 @@ body[data-scroll-locked] {
     @apply bg-background text-foreground;
   }
   html {
-    @apply font-sans;
+    @apply font-sans antialiased;
   }
+
+  /* Default heading rhythm — thin display, not heavy bold */
+  h1 {
+    font-weight: var(--font-weight-display);
+    letter-spacing: var(--tracking-display);
+    line-height: 1.1;
+  }
+  h2 {
+    font-weight: var(--font-weight-title);
+    letter-spacing: var(--tracking-title);
+    line-height: 1.15;
+  }
+  h3,
+  h4 {
+    font-weight: var(--font-weight-ui);
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+  }
+  h5,
+  h6 {
+    font-weight: var(--font-weight-ui);
+    letter-spacing: -0.01em;
+  }
+
   /* Single focus outline for form fields — avoid border + ring stacking */
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
   textarea,

@@ -97,10 +97,10 @@ export function AuthLayout({
           />
 
           <div className="absolute inset-x-0 bottom-0 p-8 xl:p-10">
-            <p className="max-w-sm text-[15px] font-medium tracking-[-0.02em] text-white/95">
+            <p className="max-w-sm text-[15px] font-light tracking-[-0.02em] text-white/95">
               School laptop carts, scheduled with clarity.
             </p>
-            <p className="mt-1.5 max-w-sm text-[13px] leading-relaxed text-white/65">
+            <p className="mt-1.5 max-w-sm text-[13px] font-normal leading-relaxed tracking-[-0.015em] text-white/65">
               Book by period. Track fleet health. Keep every class ready.
             </p>
           </div>

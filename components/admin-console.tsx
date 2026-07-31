@@ -1309,7 +1309,7 @@ function ReportsPanel({
       <div className="flex flex-col gap-3 rounded-xl border border-[var(--hairline-strong)] bg-white p-4 shadow-[var(--shadow-surface)] sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold tracking-tight text-neutral-950">
+            <h2 className="text-[15px] font-light tracking-[-0.02em] text-neutral-950">
               Reports
             </h2>
             <p className="mt-0.5 text-[12.5px] text-neutral-400">

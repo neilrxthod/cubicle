@@ -50,7 +50,7 @@ export function AppleIcon(props: React.SVGProps<SVGSVGElement>) {
 }
 
 const ssoButtonBase =
-  "relative flex w-full items-center justify-center gap-2.5 rounded-xl px-3 font-medium tracking-[-0.011em] transition-[background-color,border-color,box-shadow,transform,opacity] duration-150 active:scale-[0.985] disabled:pointer-events-none disabled:opacity-50";
+  "relative flex w-full items-center justify-center gap-2.5 rounded-xl px-3 font-normal tracking-[-0.015em] transition-[background-color,border-color,box-shadow,transform,opacity] duration-150 active:scale-[0.985] disabled:pointer-events-none disabled:opacity-50";
 
 type SocialSignInButtonProps = {
   provider: AuthProvider;
@@ -466,7 +466,7 @@ export function AuthPageHeader({
     <header className={cn(compact ? "space-y-1" : "space-y-2")}>
       <h1
         className={cn(
-          "font-semibold leading-[1.15] tracking-[-0.03em] text-neutral-950",
+          "font-extralight leading-[1.15] tracking-[-0.035em] text-neutral-950",
           compact
             ? "text-[1.35rem] sm:text-[1.45rem]"
             : "text-[1.625rem] sm:text-[1.75rem]",
@@ -477,7 +477,7 @@ export function AuthPageHeader({
       {description ? (
         <p
           className={cn(
-            "leading-relaxed text-neutral-500",
+            "font-normal leading-relaxed tracking-[-0.015em] text-neutral-500",
             compact ? "text-[13px]" : "text-[14.5px]",
           )}
         >

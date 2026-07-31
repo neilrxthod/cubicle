@@ -1,6 +1,5 @@
 "use client"
 
-import { useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
@@ -10,6 +9,7 @@ import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { usePlatformStore } from "@/lib/data/platform-store"
 import { isVerifiedStaff } from "@/lib/staff/employment"
+import { AnimatedCancelButton } from "@/components/animated-cancel-button"
 import { VerifiedBadge } from "@/components/verified-badge"
 
 export function BookingsList({
@@ -28,7 +28,6 @@ export function BookingsList({
   canCancel?: boolean
 }) {
   const router = useRouter()
-  const [pending, startTransition] = useTransition()
   const cartMap = new Map(carts.map((c) => [c.id, c]))
   const platform = usePlatformStore()
   const verifiedIds = new Set(
@@ -104,28 +103,24 @@ export function BookingsList({
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                   {canCancel ? (
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() =>
-                        startTransition(async () => {
-                          const res = await cancelBooking(b.id)
-                          if (res && "error" in res && res.error) {
-                            toast({
-                              title: "Could not cancel",
-                              description: res.error,
-                              variant: "destructive",
-                            })
-                            return
-                          }
-                          toast({ title: "Canceled" })
-                          router.refresh()
+                    <AnimatedCancelButton
+                      idleLabel="Cancel"
+                      successLabel="Canceled"
+                      size="small"
+                      className="min-w-[6.75rem] shrink-0"
+                      onConfirm={() => cancelBooking(b.id)}
+                      onError={(message) =>
+                        toast({
+                          title: "Could not cancel",
+                          description: message,
+                          variant: "destructive",
                         })
                       }
-                      className="h-8 shrink-0 rounded-lg bg-neutral-950 px-3 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
+                      onSuccess={() => {
+                        toast({ title: "Canceled" })
+                        router.refresh()
+                      }}
+                    />
                   ) : null}
                 </div>
               </li>

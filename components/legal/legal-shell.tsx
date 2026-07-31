@@ -74,7 +74,7 @@ export function LegalShell({
               <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-neutral-400">
                 {variant === "index" ? "Policies" : "Document"}
               </p>
-              <h1 className="mt-2 text-[1.875rem] font-light leading-[1.05] tracking-[-0.04em] text-neutral-950 sm:text-[2.25rem]">
+              <h1 className="type-page-title mt-2 text-neutral-950">
                 {title}
               </h1>
               <p className="mt-3 max-w-xl text-[13.5px] font-normal leading-relaxed tracking-[-0.005em] text-neutral-400 sm:text-[14px]">

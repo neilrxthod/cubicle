@@ -4,7 +4,12 @@ import { Geist } from "next/font/google";
 import { SITE_ORIGIN } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+/** Platform typeface — thin / sleek product UI (display 200–300, body 400). */
+const geist = Geist({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_ORIGIN),

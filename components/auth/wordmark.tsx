@@ -6,10 +6,10 @@ import { cn } from "@/lib/utils";
  * No icon — the name is the logo.
  */
 const sizeStyles = {
-  sm: "text-[11px] tracking-[0.32em]",
-  md: "text-[12px] tracking-[0.36em]",
-  lg: "text-[14px] tracking-[0.4em]",
-  hero: "text-[clamp(1.75rem,4vw,2.75rem)] tracking-[0.42em] leading-none",
+  sm: "text-[11px] tracking-[0.34em]",
+  md: "text-[12px] tracking-[0.38em]",
+  lg: "text-[14px] tracking-[0.42em]",
+  hero: "text-[clamp(1.85rem,4.4vw,2.85rem)] tracking-[0.48em] leading-none",
 } as const;
 
 type WordmarkSize = keyof typeof sizeStyles;
@@ -37,7 +37,7 @@ export function CubicleWordmark({
   const mark = (
     <span
       className={cn(
-        "inline-block select-none font-medium uppercase",
+        "inline-block select-none font-extralight uppercase antialiased",
         sizeStyles[size],
         toneStyles[tone],
         className,

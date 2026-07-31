@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { RequirePlatformAuth } from "@/components/app/require-platform-auth";
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 import {
-  isOnboardingComplete,
+  needsOnboarding,
   onboardingHomeForRole,
 } from "@/lib/onboarding/storage";
 import type { SessionUser } from "@/lib/types";
@@ -20,18 +20,17 @@ export default function OnboardingPage() {
 
 function OnboardingGate({ user }: { user: SessionUser }) {
   const router = useRouter();
-
-  const key = user.id || user.email;
+  const mustSetup = needsOnboarding(user.role, user.id, user.email);
 
   useEffect(() => {
-    if (isOnboardingComplete(key)) {
+    if (!mustSetup) {
       router.replace(onboardingHomeForRole(user.role));
     }
-  }, [key, user.role, router]);
+  }, [mustSetup, user.role, router]);
 
-  if (isOnboardingComplete(key)) {
+  if (!mustSetup) {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-[#fafafa]">
+      <div className="flex h-svh max-h-svh items-center justify-center overflow-hidden bg-[#ececef]">
         <div className="size-6 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
       </div>
     );

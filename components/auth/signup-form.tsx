@@ -8,7 +8,8 @@ import { AUTH_ROUTES } from "@/lib/auth/constants";
 import { authContainerVariants, authItemVariants } from "@/lib/auth/motion";
 import { authenticate, DEMO_ACCOUNTS } from "@/lib/auth/credentials";
 import type { DemoAccount } from "@/lib/auth/types";
-import { getDashboardPath, setSession } from "@/lib/auth/session";
+import { setSession } from "@/lib/auth/session";
+import { prepareOnboardingAfterAuth } from "@/lib/onboarding/storage";
 import { isSchoolEmail, passwordsMatch } from "@/lib/auth/validation";
 import { cn } from "@/lib/utils";
 import { AuthLayout } from "./auth-layout";
@@ -30,7 +31,7 @@ const fieldClass =
   "w-full h-10 rounded-lg border border-black/[0.08] bg-[#fafafa] px-3 text-[14px] tracking-[-0.011em] text-neutral-900 placeholder:text-neutral-400 outline-none transition-[background-color,border-color,box-shadow] duration-150 hover:bg-white hover:border-black/[0.12] focus:bg-white focus:border-neutral-900 focus:ring-[3px] focus:ring-neutral-900/[0.08]";
 
 const ctaClass =
-  "inline-flex h-10 w-full items-center justify-center rounded-lg bg-neutral-950 px-5 text-[14px] font-medium tracking-[-0.011em] text-white transition-[background-color,opacity] duration-150 hover:bg-neutral-800 disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex h-10 w-full items-center justify-center rounded-lg bg-neutral-950 px-5 text-[14px] font-normal tracking-[-0.015em] text-white transition-[background-color,opacity] duration-150 hover:bg-neutral-800 disabled:pointer-events-none disabled:opacity-50";
 
 function passwordScore(password: string): number {
   if (!password) return 0;
@@ -132,7 +133,8 @@ export function SignupForm() {
       return;
     }
     setSession(user);
-    router.push(getDashboardPath(user.role));
+    prepareOnboardingAfterAuth(user.id, user.email);
+    router.push("/onboarding");
   }
 
   const accountOptions = DEMO_ACCOUNTS.map((account) => ({

@@ -113,7 +113,7 @@ function DialogTitle({
       data-slot="dialog-title"
       className={cn(
         // Matches app StatBar / page titles: light weight, tight tracking
-        'text-[1.375rem] font-light leading-tight tracking-tight text-foreground sm:text-[1.5rem]',
+        'text-[1.375rem] font-extralight leading-tight tracking-[-0.03em] text-foreground sm:text-[1.5rem]',
         className,
       )}
       {...props}

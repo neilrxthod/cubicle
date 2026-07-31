@@ -38,7 +38,7 @@ export function DashboardShell({
           <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-400">
             {user.role}
           </p>
-          <h1 className="mt-2 text-[1.625rem] font-semibold tracking-[-0.03em] text-neutral-950">
+          <h1 className="type-heading mt-2 text-neutral-950">
             {title}
           </h1>
           <p className="mt-2.5 max-w-lg text-[15px] leading-relaxed text-neutral-500">

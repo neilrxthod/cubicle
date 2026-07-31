@@ -11,7 +11,7 @@ import {
 import { isSchoolEmail } from "@/lib/auth/school-domain";
 import { toPlatformSession } from "@/lib/auth/map-session";
 import { PlatformBootstrap } from "@/components/app/platform-bootstrap";
-import { isOnboardingComplete } from "@/lib/onboarding/storage";
+import { needsOnboarding } from "@/lib/onboarding/storage";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { Role, SessionUser } from "@/lib/types";
 import type { UserRole } from "@/lib/auth/types";
@@ -200,11 +200,14 @@ export function RequirePlatformAuth({
       return;
     }
 
-    // First-run workspace setup for teachers and admins.
+    // First-run teaching setup (subject / grades / periods) after sign-in.
     if (!skipOnboarding) {
-      const key = session.id || session.email;
-      const done = isOnboardingComplete(key);
-      if (!done && pathname !== "/onboarding") {
+      const mustSetup = needsOnboarding(
+        session.role,
+        session.id,
+        session.email,
+      );
+      if (mustSetup && pathname !== "/onboarding") {
         router.replace("/onboarding");
       }
     }
@@ -222,11 +225,9 @@ export function RequirePlatformAuth({
     return <LoadingScreen />;
   }
 
-  const onboardingKey = session.id || session.email;
-
   if (
     !skipOnboarding &&
-    !isOnboardingComplete(onboardingKey) &&
+    needsOnboarding(session.role, session.id, session.email) &&
     pathname !== "/onboarding"
   ) {
     return <LoadingScreen />;

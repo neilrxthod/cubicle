@@ -84,7 +84,7 @@ function NavLink({
       aria-current={active ? "page" : undefined}
       className={cn(
         "group relative inline-flex h-full items-center justify-center px-3",
-        "text-[12px] font-medium tracking-[0.08em] uppercase",
+        "text-[12px] font-normal tracking-[0.12em] uppercase",
         "transition-colors duration-200 ease-out",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10 focus-visible:ring-offset-2",
         active

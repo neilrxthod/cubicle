@@ -163,7 +163,7 @@ export function SettingsForm({
 
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5">
-            <h2 className="truncate text-[15px] font-semibold tracking-[-0.02em] text-neutral-950">
+            <h2 className="truncate text-[15px] font-light tracking-[-0.02em] text-neutral-950">
               {displayName}
             </h2>
             {verified ? <VerifiedBadge size="sm" /> : null}

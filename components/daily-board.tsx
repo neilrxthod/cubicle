@@ -166,7 +166,7 @@ export function DailyBoard({
           <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-neutral-400">
             {isViewingToday ? "Today" : "Board"}
           </p>
-          <h2 className="mt-1.5 text-[1.375rem] font-light leading-none tracking-[-0.035em] text-neutral-950 sm:text-[1.5rem]">
+          <h2 className="type-heading mt-1.5 leading-none text-neutral-950">
             {heading}
           </h2>
           <p className="mt-2 max-w-md text-[12.5px] font-normal leading-relaxed tracking-[-0.005em] text-neutral-400">

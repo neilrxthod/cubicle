@@ -5,7 +5,7 @@ export function RemoteRequiredScreen({ message }: { message: string }) {
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-4 bg-[#f6f6f7] px-6 text-center">
       <div className="max-w-md space-y-2">
-        <p className="text-[15px] font-semibold tracking-tight text-neutral-950">
+        <p className="text-[15px] font-light tracking-[-0.02em] text-neutral-950">
           Database not connected
         </p>
         <p className="text-[13.5px] leading-relaxed text-neutral-500">

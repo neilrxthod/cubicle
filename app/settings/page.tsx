@@ -18,7 +18,7 @@ function SettingsView({ user }: { user: SessionUser }) {
     <DashboardFrame user={user}>
       <div className="mx-auto w-full max-w-md sm:max-w-[28rem]">
         <header className="mb-8">
-          <h1 className="text-[1.375rem] font-semibold tracking-[-0.035em] text-neutral-950">
+          <h1 className="type-heading text-neutral-950">
             Settings
           </h1>
         </header>

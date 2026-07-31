@@ -7,6 +7,7 @@ import { DashboardFrame } from "@/components/app/dashboard-frame";
 import { PageShell } from "@/components/app/page-shell";
 import { RequirePlatformAuth } from "@/components/app/require-platform-auth";
 import { DailyBoard } from "@/components/daily-board";
+import { FirstRunCoach } from "@/components/onboarding/first-run-coach";
 import {
   StatsDisplay,
   type StatItem,
@@ -218,6 +219,7 @@ function HomeBoard({ user }: { user: SessionUser }) {
         description="Laptop carts by period. Book free slots and manage your day."
       >
         <div className="flex flex-col gap-5 sm:gap-6">
+          <FirstRunCoach user={user} />
           <StatsDisplay
             id="schedule-stats"
             className="w-full max-w-none"

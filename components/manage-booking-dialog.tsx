@@ -1,6 +1,5 @@
 "use client"
 
-import { useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
 import {
@@ -10,12 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { AnimatedCancelButton } from "@/components/animated-cancel-button"
 import { cancelBooking } from "@/lib/actions"
 import { toast } from "@/hooks/use-toast"
 import type { Booking, Cart } from "@/lib/types"
 
 /**
- * Booking detail — cancel is explicit, not a surprise one-click on the board.
+ * Minimal booking sheet — identity + cancel. No form chrome.
  */
 export function ManageBookingDialog({
   booking,
@@ -27,9 +27,8 @@ export function ManageBookingDialog({
   onClose: () => void
 }) {
   const router = useRouter()
-  const [pending, startTransition] = useTransition()
 
-  const classLabel = booking.className?.trim() || "Booking"
+  const cartName = cart?.name ?? "Cart"
   const dateLabel = (() => {
     try {
       return format(parseISO(booking.date), "EEE, MMM d")
@@ -38,67 +37,79 @@ export function ManageBookingDialog({
     }
   })()
 
+  const classLabel = booking.className?.trim()
+  const subjectLabel = booking.subject?.trim()
+  const notesLabel = booking.notes?.trim()
+  // One soft line only — no field labels
+  const detailParts = [
+    booking.teacherName?.trim(),
+    classLabel,
+    subjectLabel,
+  ].filter(Boolean)
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="gap-0 overflow-hidden rounded-2xl border-border/60 bg-white p-0 shadow-xl sm:max-w-sm">
-        <DialogHeader className="space-y-1.5 border-b border-border/60 px-5 py-5 text-left sm:px-6">
-          <DialogTitle>{classLabel}</DialogTitle>
-          <DialogDescription>
-            {cart?.name ?? "Cart"} · {booking.period} · {dateLabel}
+      <DialogContent
+        showCloseButton
+        className="w-[min(100%,20rem)] gap-0 overflow-hidden rounded-2xl border border-[var(--hairline-strong)] bg-white p-0 shadow-[var(--shadow-surface)] sm:max-w-xs"
+      >
+        <DialogHeader className="space-y-0 px-5 pb-0 pt-5 text-left sm:px-5">
+          <DialogTitle className="text-[15px] font-light tracking-[-0.02em] text-neutral-950">
+            Cancel booking?
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Cancel {cartName} {booking.period} on {dateLabel}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6">
-          <dl className="space-y-2.5 rounded-xl border border-border/60 bg-muted/10 px-3.5 py-3">
-            <div>
-              <dt className="type-label">Teacher</dt>
-              <dd className="type-body-strong mt-0.5">{booking.teacherName}</dd>
-            </div>
-            {booking.subject?.trim() ? (
-              <div>
-                <dt className="type-label">Subject</dt>
-                <dd className="type-body-strong mt-0.5">{booking.subject}</dd>
-              </div>
-            ) : null}
-            {booking.notes?.trim() ? (
-              <div>
-                <dt className="type-label">Notes</dt>
-                <dd className="type-body mt-0.5 text-neutral-700">{booking.notes}</dd>
-              </div>
-            ) : null}
-          </dl>
+        <div className="px-5 pb-5 pt-3">
+          <p className="text-[13px] leading-snug text-neutral-950">
+            <span className="font-semibold">{cartName}</span>
+            <span className="text-neutral-300"> · </span>
+            <span className="font-medium tabular-nums">{booking.period}</span>
+            <span className="text-neutral-300"> · </span>
+            <span className="text-neutral-500">{dateLabel}</span>
+          </p>
 
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          {detailParts.length > 0 ? (
+            <p className="mt-1 truncate text-[12px] text-neutral-400">
+              {detailParts.join(" · ")}
+            </p>
+          ) : null}
+
+          {notesLabel ? (
+            <p className="mt-0.5 line-clamp-2 text-[12px] text-neutral-400">
+              {notesLabel}
+            </p>
+          ) : null}
+
+          <div className="mt-5 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="h-9 rounded-lg px-4 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="h-9 px-1 text-[13px] font-medium text-neutral-400 transition-colors hover:text-neutral-900"
             >
               Keep
             </button>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                startTransition(async () => {
-                  const res = await cancelBooking(booking.id)
-                  if (res && "error" in res && res.error) {
-                    toast({
-                      title: "Could not cancel",
-                      description: res.error,
-                      variant: "destructive",
-                    })
-                    return
-                  }
-                  toast({ title: "Canceled" })
-                  router.refresh()
-                  onClose()
+            <AnimatedCancelButton
+              idleLabel="Cancel"
+              successLabel="Done"
+              size="small"
+              className="min-w-[6.5rem]"
+              onConfirm={() => cancelBooking(booking.id)}
+              onError={(message) =>
+                toast({
+                  title: "Could not cancel",
+                  description: message,
+                  variant: "destructive",
                 })
+              }
+              onSuccess={() => {
+                toast({ title: "Canceled" })
+                router.refresh()
+                onClose()
               }}
-              className="h-9 rounded-lg bg-red-600 px-5 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {pending ? "Canceling…" : "Cancel"}
-            </button>
+            />
           </div>
         </div>
       </DialogContent>

@@ -1,116 +1,699 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "motion/react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarDays,
+  Camera,
+  Check,
+  GraduationCap,
+  Loader2,
+  Minus,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import Link from "next/link";
 import { CubicleWordmark } from "@/components/auth/wordmark";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  authPrimaryButtonClassName,
+  authSecondaryButtonClassName,
+} from "@/lib/auth/constants";
 import {
   completeOnboarding,
+  conflictingPeriodsForAssignment,
+  filterSubjectSuggestions,
+  getOnboardingDraft,
+  GRADES,
+  hasPeriodConflicts,
+  isAssignmentComplete,
+  markFirstRunCoach,
+  newTeachingAssignment,
   onboardingHomeForRole,
+  periodsFromAssignments,
+  saveOnboardingDraft,
+  type Grade,
   type OnboardingPrefs,
+  type TeachingAssignment,
 } from "@/lib/onboarding/storage";
-import { PERIODS, type SessionUser } from "@/lib/types";
+import { fileToAvatarDataUrl } from "@/lib/profile/image";
+import { PERIODS, type Period, type SessionUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { usePlatformStore, mutate } from "@/lib/data/platform-store";
 import { updateProfile } from "@/lib/actions";
+import { setSession, getSession } from "@/lib/auth/session";
+import { toast } from "@/hooks/use-toast";
 
-const fieldClass =
-  "h-11 w-full rounded-xl border border-black/[0.08] bg-[#fafafa] px-3.5 text-[14px] tracking-[-0.011em] text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-neutral-900 focus:bg-white focus:ring-[3px] focus:ring-neutral-900/[0.08]";
+/**
+ * Psychology-led flow (3 steps only):
+ * 1. Easy win — identity (low effort, personal)
+ * 2. Real work — teaching / workspace (core value)
+ * 3. Peak-end — confirm + one clear action (defaults on)
+ */
+type StepId = "welcome" | "setup" | "ready";
 
-function StepDots({ step, total }: { step: number; total: number }) {
+const TEACHER_STEPS: { id: StepId; label: string }[] = [
+  { id: "welcome", label: "You" },
+  { id: "setup", label: "Teach" },
+  { id: "ready", label: "Go" },
+];
+
+const ADMIN_STEPS: { id: StepId; label: string }[] = [
+  { id: "welcome", label: "You" },
+  { id: "setup", label: "School" },
+  { id: "ready", label: "Go" },
+];
+
+const stepTransition = {
+  initial: { opacity: 0, y: 10 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: { type: "spring" as const, stiffness: 420, damping: 34 },
+  },
+  exit: {
+    opacity: 0,
+    y: -8,
+    transition: { duration: 0.14 },
+  },
+};
+
+/* ─── Brand panel ────────────────────────────────────────── */
+
+function FeatureLaunchPanel() {
   return (
-    <div className="flex items-center gap-1.5" aria-hidden>
-      {Array.from({ length: total }).map((_, i) => (
-        <span
-          key={i}
-          className={cn(
-            "h-1 rounded-full transition-all",
-            i === step ? "w-6 bg-neutral-950" : "w-1.5 bg-neutral-200",
-          )}
+    <aside
+      aria-hidden
+      className="relative hidden h-full min-h-0 w-[42%] shrink-0 overflow-hidden md:block"
+    >
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `
+            radial-gradient(ellipse 100% 80% at 20% 0%, rgba(255,255,255,0.22) 0%, transparent 55%),
+            radial-gradient(ellipse 70% 60% at 100% 30%, rgba(255,255,255,0.08) 0%, transparent 50%),
+            radial-gradient(ellipse 80% 70% at 50% 100%, rgba(255,255,255,0.06) 0%, transparent 55%),
+            linear-gradient(160deg, #1a1a1a 0%, #0a0a0a 40%, #000000 72%, #111111 100%)
+          `,
+        }}
+      />
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.09)_0%,transparent_42%,transparent_58%,rgba(255,255,255,0.04)_100%)]" />
+      <motion.div
+        className="absolute -top-1/3 left-[-10%] h-[75%] w-[75%] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.14)_0%,transparent_65%)] blur-3xl"
+        animate={{ x: [0, 28, 0], y: [0, 18, 0] }}
+        transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <div className="absolute inset-0 z-10 flex items-center justify-center px-6">
+        <CubicleWordmark
+          size="hero"
+          href={null}
+          tone="light"
+          className="font-extralight tracking-[0.52em] text-white/92 drop-shadow-[0_1px_24px_rgba(255,255,255,0.12)]"
         />
-      ))}
+      </div>
+    </aside>
+  );
+}
+
+/* ─── Progress: continuous bar (endowed progress feel) ───── */
+
+function ProgressBar({
+  currentIndex,
+  total,
+}: {
+  currentIndex: number;
+  total: number;
+}) {
+  // Start partially filled so step 1 already feels “underway”
+  const pct = ((currentIndex + 1) / total) * 100;
+  return (
+    <div className="w-full" aria-label={`Step ${currentIndex + 1} of ${total}`}>
+      <div className="h-1 overflow-hidden rounded-full bg-neutral-100">
+        <motion.div
+          className="h-full rounded-full bg-neutral-950"
+          initial={false}
+          animate={{ width: `${pct}%` }}
+          transition={{ type: "spring", stiffness: 280, damping: 28 }}
+        />
+      </div>
     </div>
   );
 }
+
+function SelectChip({
+  selected,
+  onClick,
+  children,
+  warn,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  warn?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={cn(
+        "inline-flex h-9 min-w-9 items-center justify-center rounded-full px-3.5 text-[13px] font-normal transition-all duration-150 active:scale-[0.96]",
+        selected &&
+          !warn &&
+          "bg-neutral-950 text-white shadow-sm shadow-neutral-950/15",
+        selected && warn && "bg-amber-600 text-white shadow-sm",
+        !selected &&
+          "border border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-900",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function TeachingLoadBlock({
+  assignment,
+  index,
+  canRemove,
+  conflicts,
+  onChange,
+  onRemove,
+  onDuplicate,
+}: {
+  assignment: TeachingAssignment;
+  index: number;
+  canRemove: boolean;
+  conflicts: Period[];
+  onChange: (next: TeachingAssignment) => void;
+  onRemove: () => void;
+  onDuplicate: () => void;
+}) {
+  const complete = isAssignmentComplete(assignment);
+  const [focused, setFocused] = useState(false);
+  const suggestions = useMemo(
+    () => filterSubjectSuggestions(assignment.subject, 6),
+    [assignment.subject],
+  );
+  const showSuggestions =
+    focused &&
+    suggestions.length > 0 &&
+    !suggestions.some(
+      (s) => s.toLowerCase() === assignment.subject.trim().toLowerCase(),
+    );
+
+  function toggleGrade(g: Grade) {
+    const grades = assignment.grades.includes(g)
+      ? assignment.grades.filter((x) => x !== g)
+      : [...assignment.grades, g].sort((a, b) => a - b);
+    onChange({ ...assignment, grades });
+  }
+
+  function togglePeriod(p: Period) {
+    const periods = assignment.periods.includes(p)
+      ? assignment.periods.filter((x) => x !== p)
+      : ([...assignment.periods, p] as Period[]).sort((a, b) =>
+          a.localeCompare(b),
+        );
+    onChange({ ...assignment, periods });
+  }
+
+  return (
+    <div
+      className={cn(
+        "relative space-y-3.5 rounded-2xl border p-4 text-left transition-all duration-200",
+        complete
+          ? "border-emerald-200/80 bg-emerald-50/30 shadow-sm"
+          : "border-neutral-200/90 bg-white",
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "flex size-6 items-center justify-center rounded-full text-[11px] font-medium transition-colors",
+              complete
+                ? "bg-emerald-600 text-white"
+                : "bg-neutral-100 text-neutral-500",
+            )}
+          >
+            {complete ? (
+              <Check className="size-3" strokeWidth={2.5} />
+            ) : (
+              index + 1
+            )}
+          </span>
+          <p className="text-[13px] font-medium tracking-[-0.01em] text-neutral-900">
+            {assignment.subject.trim() || `Subject ${index + 1}`}
+          </p>
+        </div>
+        <div className="flex items-center gap-0.5">
+          {complete ? (
+            <button
+              type="button"
+              onClick={onDuplicate}
+              className="rounded-lg px-2 py-1.5 text-[11px] font-medium text-neutral-500 transition hover:bg-white hover:text-neutral-800"
+            >
+              + Same grades
+            </button>
+          ) : null}
+          {canRemove ? (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="inline-flex size-8 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-white hover:text-neutral-700"
+              aria-label={`Remove subject ${index + 1}`}
+            >
+              <Trash2 className="size-3.5" strokeWidth={1.75} />
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Subject first — recognition over recall */}
+      <div className="relative">
+        <input
+          value={assignment.subject}
+          onChange={(e) =>
+            onChange({ ...assignment, subject: e.target.value })
+          }
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            window.setTimeout(() => setFocused(false), 150);
+          }}
+          placeholder="e.g. Biology"
+          className="h-11 w-full rounded-xl border border-black/[0.08] bg-white px-3.5 text-[15px] tracking-[-0.015em] text-neutral-900 placeholder:text-neutral-400 outline-none transition hover:border-black/[0.12] focus:border-neutral-900 focus:ring-[3px] focus:ring-neutral-900/[0.08]"
+          autoComplete="off"
+          autoFocus={index === 0}
+        />
+        {showSuggestions ? (
+          <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-20 overflow-hidden rounded-xl border border-neutral-200 bg-white py-1 shadow-lg">
+            {suggestions.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className="flex w-full px-3.5 py-2.5 text-left text-[14px] text-neutral-800 transition hover:bg-neutral-50"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange({ ...assignment, subject: s });
+                  setFocused(false);
+                }}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {!focused && !assignment.subject.trim() ? (
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {filterSubjectSuggestions("", 6).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => onChange({ ...assignment, subject: s })}
+                className="h-8 rounded-full border border-neutral-200 bg-white px-3 text-[12px] text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Grades — only after subject started (progressive disclosure feel) */}
+      <div className="space-y-2">
+        <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-[0.1em] text-neutral-400 uppercase">
+          <GraduationCap className="size-3 opacity-70" strokeWidth={1.75} />
+          Grades
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {GRADES.map((g) => (
+            <SelectChip
+              key={g}
+              selected={assignment.grades.includes(g)}
+              onClick={() => toggleGrade(g)}
+            >
+              {g}
+            </SelectChip>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-[0.1em] text-neutral-400 uppercase">
+          <CalendarDays className="size-3 opacity-70" strokeWidth={1.75} />
+          Periods
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {PERIODS.map((p) => (
+            <SelectChip
+              key={p}
+              selected={assignment.periods.includes(p)}
+              warn={conflicts.includes(p)}
+              onClick={() => togglePeriod(p)}
+            >
+              {p}
+            </SelectChip>
+          ))}
+        </div>
+        {conflicts.length > 0 ? (
+          <p className="text-[12px] text-amber-700">
+            {conflicts.join(", ")} already on another subject
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+const ADVANCE_PRESETS = [7, 14, 21, 30] as const;
+
+/** Admin booking window — large stepper + presets (recognition > raw input). */
+function BookingWindowControl({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  const days = Math.min(60, Math.max(1, value || 14));
+
+  function setDays(n: number) {
+    onChange(Math.min(60, Math.max(1, Math.round(n))));
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-neutral-200/90 bg-white">
+      <div className="px-5 pt-5 pb-4 text-center sm:px-6 sm:pt-6">
+        <p className="text-[11px] font-medium tracking-[0.12em] text-neutral-400 uppercase">
+          Booking window
+        </p>
+
+        {/* Big number + stepper */}
+        <div className="mt-5 flex items-center justify-center gap-4 sm:gap-5">
+          <button
+            type="button"
+            onClick={() => setDays(days - 1)}
+            disabled={days <= 1}
+            aria-label="Fewer days"
+            className={cn(
+              "flex size-11 items-center justify-center rounded-full border border-neutral-200 bg-neutral-50 text-neutral-700 transition",
+              "hover:border-neutral-300 hover:bg-white active:scale-95",
+              "disabled:pointer-events-none disabled:opacity-30",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+            )}
+          >
+            <Minus className="size-4" strokeWidth={2} />
+          </button>
+
+          <div className="min-w-[7.5rem] tabular-nums">
+            <p className="text-[3.25rem] font-extralight leading-none tracking-[-0.05em] text-neutral-950 sm:text-[3.5rem]">
+              {days}
+            </p>
+            <p className="mt-1.5 text-[13px] font-normal text-neutral-400">
+              {days === 1 ? "day ahead" : "days ahead"}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setDays(days + 1)}
+            disabled={days >= 60}
+            aria-label="More days"
+            className={cn(
+              "flex size-11 items-center justify-center rounded-full border border-neutral-200 bg-neutral-50 text-neutral-700 transition",
+              "hover:border-neutral-300 hover:bg-white active:scale-95",
+              "disabled:pointer-events-none disabled:opacity-30",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+            )}
+          >
+            <Plus className="size-4" strokeWidth={2} />
+          </button>
+        </div>
+
+        <p className="mx-auto mt-4 max-w-[16rem] text-[13px] leading-relaxed text-neutral-500">
+          Teachers can reserve carts this far into the future.
+        </p>
+      </div>
+
+      {/* Quick picks */}
+      <div className="border-t border-neutral-100 bg-neutral-50/70 px-4 py-3.5 sm:px-5">
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {ADVANCE_PRESETS.map((preset) => {
+            const active = days === preset;
+            return (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setDays(preset)}
+                className={cn(
+                  "h-9 min-w-[3.25rem] rounded-full px-3.5 text-[13px] font-medium tabular-nums transition-all active:scale-[0.97]",
+                  active
+                    ? "bg-neutral-950 text-white shadow-sm shadow-neutral-950/15"
+                    : "border border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:text-neutral-900",
+                )}
+              >
+                {preset}d
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuietToggle({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className="flex flex-1 items-center justify-between gap-2 rounded-xl border border-neutral-200/90 bg-neutral-50/80 px-3.5 py-3 text-left transition hover:bg-neutral-50"
+    >
+      <span className="text-[13px] text-neutral-700">{label}</span>
+      <span
+        className={cn(
+          "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+          checked ? "bg-neutral-950" : "bg-neutral-200",
+        )}
+      >
+        <span
+          className={cn(
+            "absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform",
+            checked ? "translate-x-4" : "translate-x-0.5",
+          )}
+        />
+      </span>
+    </button>
+  );
+}
+
+/* ─── main wizard ────────────────────────────────────────── */
 
 export function OnboardingWizard({ user }: { user: SessionUser }) {
   const router = useRouter();
   const platform = usePlatformStore();
   const isAdmin = user.role === "admin";
-  const totalSteps = 4;
-  const [step, setStep] = useState(0);
+  const steps = isAdmin ? ADMIN_STEPS : TEACHER_STEPS;
+  const fileRef = useRef<HTMLInputElement>(null);
+  const draftHydrated = useRef(false);
+
+  const [stepIndex, setStepIndex] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [avatarSrc, setAvatarSrc] = useState(user.avatarUrl);
+  const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
 
-  const [title, setTitle] = useState(user.title ?? "");
-  const [department, setDepartment] = useState(user.department ?? "");
-  const [preferredPeriods, setPreferredPeriods] = useState<string[]>(["P2", "P3"]);
-  const [notifyEmail, setNotifyEmail] = useState(user.notifyEmail ?? true);
-  const [notifyIssues, setNotifyIssues] = useState(user.notifyIssues ?? true);
+  const [assignments, setAssignments] = useState<TeachingAssignment[]>([
+    newTeachingAssignment(),
+  ]);
   const [maxAdvanceDays, setMaxAdvanceDays] = useState(
     platform.bookingPolicy.maxAdvanceDays ?? 14,
   );
-  const [confirmedFleet, setConfirmedFleet] = useState(false);
-  const [patternNote, setPatternNote] = useState("");
+  const [notifyEmail, setNotifyEmail] = useState(true);
+  const [notifyIssues, setNotifyIssues] = useState(true);
 
-  const suggestions = useMemo(() => {
-    if (isAdmin) {
-      const active = platform.carts.filter((c) => c.status === "active").length;
-      const open = platform.issues.filter((i) => i.status === "open").length;
-      return [
-        `${active} carts ready for the board`,
-        `${platform.users.filter((u) => u.role === "teacher").length} teachers on the roster`,
-        open > 0 ? `${open} open maintenance issues to triage` : "No open issues — fleet looks healthy",
-      ];
+  useEffect(() => {
+    if (draftHydrated.current) return;
+    draftHydrated.current = true;
+    const draft = getOnboardingDraft(user.id, user.email);
+    if (!draft) return;
+    // Map older 4-step drafts onto 3 steps
+    if (typeof draft.stepIndex === "number") {
+      const mapped = draft.stepIndex >= 2 ? 2 : draft.stepIndex;
+      setStepIndex(Math.min(Math.max(0, mapped), steps.length - 1));
     }
-    const mine = platform.bookings.filter((b) => b.teacherId === user.id);
-    const periods = preferredPeriods.length
-      ? preferredPeriods.join(", ")
-      : "any period";
-    return [
-      mine.length
-        ? `${mine.length} existing booking${mine.length === 1 ? "" : "s"} in demo data`
-        : "Board is clear — book your first cart from Schedule",
-      `We’ll surface free slots first around ${periods}`,
-      patternNote.trim()
-        ? `Noted: “${patternNote.trim().slice(0, 48)}${patternNote.length > 48 ? "…" : ""}”`
-        : "Patterns learn from your bookings over the week",
-    ];
-  }, [isAdmin, platform, user.id, preferredPeriods, patternNote]);
+    if (draft.avatarDataUrl) {
+      setAvatarDataUrl(draft.avatarDataUrl);
+      setAvatarSrc(draft.avatarDataUrl);
+    }
+    if (draft.assignments?.length) setAssignments(draft.assignments);
+    if (typeof draft.maxAdvanceDays === "number") {
+      setMaxAdvanceDays(draft.maxAdvanceDays);
+    }
+    if (typeof draft.notifyEmail === "boolean") {
+      setNotifyEmail(draft.notifyEmail);
+    }
+    if (typeof draft.notifyIssues === "boolean") {
+      setNotifyIssues(draft.notifyIssues);
+    }
+  }, [user.id, user.email, steps.length]);
 
-  function togglePeriod(p: string) {
-    setPreferredPeriods((prev) =>
-      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p].sort(),
-    );
+  useEffect(() => {
+    if (!draftHydrated.current) return;
+    const t = window.setTimeout(() => {
+      saveOnboardingDraft(
+        {
+          stepIndex,
+          avatarDataUrl,
+          assignments: isAdmin ? undefined : assignments,
+          maxAdvanceDays: isAdmin ? maxAdvanceDays : undefined,
+          notifyEmail,
+          notifyIssues,
+        },
+        user.id,
+        user.email,
+      );
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [
+    stepIndex,
+    avatarDataUrl,
+    assignments,
+    maxAdvanceDays,
+    notifyEmail,
+    notifyIssues,
+    isAdmin,
+    user.id,
+    user.email,
+  ]);
+
+  const step = steps[stepIndex]?.id ?? "welcome";
+  const firstName = user.firstName || user.name.split(" ")[0] || "there";
+  const initials = (user.name || "U")
+    .split(/\s+/)
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  const validAssignments = useMemo(
+    () => assignments.filter(isAssignmentComplete),
+    [assignments],
+  );
+
+  const teachingOk = useMemo(() => {
+    if (validAssignments.length === 0) return false;
+    return assignments.every((a) => {
+      const empty =
+        !a.subject.trim() && a.grades.length === 0 && a.periods.length === 0;
+      return empty || isAssignmentComplete(a);
+    });
+  }, [assignments, validAssignments.length]);
+
+  const setupOk = isAdmin ? true : teachingOk;
+  const periodConflict = !isAdmin && hasPeriodConflicts(assignments);
+
+  const canContinueFromStep =
+    step === "welcome" ? true : step === "setup" ? setupOk : true;
+
+  const primaryLabel =
+    step === "welcome"
+      ? "Next"
+      : step === "setup"
+        ? "Looks good"
+        : isAdmin
+          ? "Open Cubicle"
+          : "Start booking";
+
+  async function onPickAvatar(file: File | undefined) {
+    if (!file) return;
+    try {
+      const dataUrl = await fileToAvatarDataUrl(file);
+      setAvatarDataUrl(dataUrl);
+      setAvatarSrc(dataUrl);
+    } catch (err) {
+      toast({
+        title: "Could not use that image",
+        description: err instanceof Error ? err.message : "Try another file.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  function goNext() {
+    setError(null);
+    if (step === "setup" && !setupOk) {
+      setError("Add one complete subject.");
+      return;
+    }
+    if (stepIndex < steps.length - 1) {
+      setStepIndex((i) => i + 1);
+    }
+  }
+
+  function goBack() {
+    setError(null);
+    if (stepIndex > 0) setStepIndex((i) => i - 1);
   }
 
   async function finish() {
+    if (!setupOk) {
+      setError("Add one complete subject.");
+      setStepIndex(1);
+      return;
+    }
+
     setPending(true);
     setError(null);
     try {
+      const cleaned = assignments
+        .filter(isAssignmentComplete)
+        .map((a) => ({ ...a, subject: a.subject.trim() }));
+
       const prefs: Omit<OnboardingPrefs, "completed" | "completedAt"> = {
-        title: title.trim() || undefined,
-        department: department.trim() || undefined,
-        preferredPeriods: isAdmin ? undefined : preferredPeriods,
+        department: cleaned[0]?.subject.trim() || undefined,
+        preferredPeriods: isAdmin
+          ? undefined
+          : periodsFromAssignments(cleaned),
+        teachingAssignments: isAdmin ? undefined : cleaned,
         notifyEmail,
         notifyIssues,
         maxAdvanceDays: isAdmin ? maxAdvanceDays : undefined,
-        confirmedFleet: isAdmin ? confirmedFleet : undefined,
-        patternNote: patternNote.trim() || undefined,
       };
 
-      // Persist profile fields when possible (demo / remote) — non-blocking.
       try {
         await updateProfile({
           name: user.name,
-          title: title.trim() || undefined,
-          department: department.trim() || undefined,
+          department: cleaned[0]?.subject.trim() || user.department,
           phone: user.phone,
           bio: user.bio,
+          avatarUrl: avatarDataUrl ?? undefined,
           notifyEmail,
           notifyIssues,
         });
+        if (avatarDataUrl) {
+          const s = getSession();
+          if (s) setSession({ ...s, avatarUrl: avatarDataUrl });
+        }
       } catch {
-        // Local onboarding prefs still apply if profile API is unavailable.
+        // Local onboarding still completes.
       }
 
       if (isAdmin) {
@@ -122,249 +705,389 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
         });
       }
 
-      completeOnboarding(user.id || user.email, prefs);
-      router.replace(onboardingHomeForRole(user.role));
+      completeOnboarding(user.id || user.email, prefs, [user.id, user.email]);
+      markFirstRunCoach(user.id, user.email);
+      router.replace(
+        onboardingHomeForRole(user.role, { firstRun: true }),
+      );
     } catch {
-      setError("Could not save setup. Try again.");
+      setError("Could not save. Try again.");
     } finally {
       setPending(false);
     }
   }
 
-  function next() {
-    if (step >= totalSteps - 1) {
-      void finish();
-      return;
-    }
-    setStep((s) => s + 1);
-  }
-
-  function back() {
-    setStep((s) => Math.max(0, s - 1));
-  }
+  const subjectSummary = validAssignments
+    .map((a) => a.subject.trim())
+    .filter(Boolean)
+    .join(", ");
 
   return (
-    <div className="flex min-h-svh flex-col bg-[#f6f6f7]">
-      <header className="flex items-center justify-between px-6 py-5 sm:px-10">
-        <CubicleWordmark size="sm" href={null} />
-        <StepDots step={step} total={totalSteps} />
-      </header>
+    <div className="flex h-svh max-h-svh items-center justify-center overflow-hidden bg-[#ececef] p-3 sm:p-5 md:p-6">
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          void onPickAvatar(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
 
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-6 pb-10 sm:px-8">
-        <div className="flex flex-1 flex-col justify-center py-6">
-          {step === 0 && (
-            <div className="space-y-5">
-              <p className="type-label text-neutral-400">
-                {isAdmin ? "Admin setup" : "Teacher setup"}
-              </p>
-              <h1 className="text-[1.75rem] font-medium tracking-[-0.04em] text-neutral-950 sm:text-[2rem]">
-                {isAdmin
-                  ? "Set up your school workspace"
-                  : "Set up how you book carts"}
-              </h1>
-              <p className="text-[15px] leading-relaxed text-neutral-500">
-                {isAdmin
-                  ? "One short pass to align booking policy, fleet, and staff patterns — so the board stays fast all year."
-                  : "Tell Cubicle your role, preferred periods, and habits. We use that plus board patterns to surface free slots faster."}
-              </p>
-              <ul className="space-y-2 rounded-2xl border border-[var(--hairline-strong)] bg-white p-4 shadow-[var(--shadow-surface)]">
-                {suggestions.map((line) => (
-                  <li
-                    key={line}
-                    className="flex gap-2.5 text-[13.5px] text-neutral-700"
-                  >
-                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-neutral-900" />
-                    {line}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+      <div
+        className={cn(
+          "flex w-full max-w-[900px] overflow-hidden rounded-[1.75rem] border border-black/[0.06] bg-white",
+          "h-[min(38rem,calc(100svh-1.5rem))] sm:h-[min(40rem,calc(100svh-2.5rem))]",
+          "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_24px_48px_-12px_rgba(0,0,0,0.12)]",
+        )}
+      >
+        <FeatureLaunchPanel />
 
-          {step === 1 && (
-            <div className="space-y-5">
-              <h1 className="text-[1.5rem] font-medium tracking-[-0.035em] text-neutral-950">
-                Your profile
-              </h1>
-              <p className="text-[14px] text-neutral-500">
-                Shown on bookings and the staff directory.
-              </p>
-              <div className="space-y-3">
-                <label className="block space-y-1.5">
-                  <span className="type-label">Title</span>
-                  <input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className={fieldClass}
-                    placeholder={isAdmin ? "IT coordinator" : "Science teacher"}
-                  />
-                </label>
-                <label className="block space-y-1.5">
-                  <span className="type-label">Department</span>
-                  <input
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                    className={fieldClass}
-                    placeholder={isAdmin ? "Technology" : "Science"}
-                  />
-                </label>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* Header: logo mobile + progress (always visible) */}
+          <header className="shrink-0 space-y-3 px-5 pt-5 sm:px-7 sm:pt-6">
+            <div className="flex items-center justify-between gap-3">
+              <div className="md:hidden">
+                <CubicleWordmark size="sm" href={null} />
               </div>
-            </div>
-          )}
-
-          {step === 2 && !isAdmin && (
-            <div className="space-y-5">
-              <h1 className="text-[1.5rem] font-medium tracking-[-0.035em] text-neutral-950">
-                Booking patterns
-              </h1>
-              <p className="text-[14px] text-neutral-500">
-                Prefer periods you teach with laptops most often. Cubicle ranks
-                free slots around these.
+              <p className="ml-auto text-[12px] tabular-nums text-neutral-400">
+                {stepIndex + 1}
+                <span className="text-neutral-300"> / </span>
+                {steps.length}
               </p>
-              <div className="flex flex-wrap gap-2">
-                {PERIODS.map((p) => {
-                  const on = preferredPeriods.includes(p);
-                  return (
+            </div>
+            <ProgressBar currentIndex={stepIndex} total={steps.length} />
+          </header>
+
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7">
+            <AnimatePresence mode="wait">
+              {/* ── 1. Easy win: you ── */}
+              {step === "welcome" ? (
+                <motion.div
+                  key="welcome"
+                  {...stepTransition}
+                  className="flex h-full flex-col"
+                >
+                  <div className="mb-6">
+                    <h1 className="text-[1.5rem] font-extralight tracking-[-0.035em] text-neutral-950 sm:text-[1.65rem]">
+                      Hey {firstName}
+                    </h1>
+                    <p className="mt-1.5 text-[14px] leading-relaxed text-neutral-500">
+                      Add a face so colleagues know it&apos;s you.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-1 flex-col items-center justify-center pb-4">
                     <button
-                      key={p}
                       type="button"
-                      onClick={() => togglePeriod(p)}
-                      className={cn(
-                        "h-9 rounded-lg px-3.5 text-[13px] font-medium transition-colors",
-                        on
-                          ? "bg-neutral-950 text-white"
-                          : "border border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300",
-                      )}
+                      onClick={() => fileRef.current?.click()}
+                      className="group relative outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/15 focus-visible:ring-offset-4"
+                      aria-label="Upload profile photo"
                     >
-                      {p}
+                      <Avatar className="size-28 ring-4 ring-white shadow-[0_12px_40px_rgba(0,0,0,0.1)] sm:size-32">
+                        {avatarSrc ? (
+                          <AvatarImage
+                            src={avatarSrc}
+                            alt={user.name}
+                            className="object-cover"
+                          />
+                        ) : null}
+                        <AvatarFallback className="bg-gradient-to-br from-neutral-100 to-neutral-200 text-2xl font-extralight text-neutral-400">
+                          {initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="absolute inset-0 rounded-full bg-black/0 transition group-hover:bg-black/15" />
+                      <span className="absolute right-1 bottom-1 flex size-10 items-center justify-center rounded-full border-[3px] border-white bg-neutral-950 text-white shadow-lg transition group-hover:scale-105">
+                        <Camera className="size-4" strokeWidth={1.75} />
+                      </span>
                     </button>
-                  );
-                })}
-              </div>
-              <label className="block space-y-1.5">
-                <span className="type-label">Anything we should know?</span>
-                <textarea
-                  value={patternNote}
-                  onChange={(e) => setPatternNote(e.target.value)}
-                  rows={3}
-                  maxLength={160}
-                  placeholder="e.g. Lab days Tue/Thu · need carts near Room 214"
-                  className={cn(fieldClass, "h-auto min-h-[88px] resize-none py-3")}
-                />
-              </label>
-              <div className="space-y-3 rounded-2xl border border-[var(--hairline-strong)] bg-white p-4">
-                <label className="flex items-center justify-between gap-3 text-[13.5px] text-neutral-800">
-                  Email when booking changes
-                  <input
-                    type="checkbox"
-                    checked={notifyEmail}
-                    onChange={(e) => setNotifyEmail(e.target.checked)}
-                    className="size-4 rounded border-neutral-300"
-                  />
-                </label>
-                <label className="flex items-center justify-between gap-3 text-[13.5px] text-neutral-800">
-                  Alerts for cart issues
-                  <input
-                    type="checkbox"
-                    checked={notifyIssues}
-                    onChange={(e) => setNotifyIssues(e.target.checked)}
-                    className="size-4 rounded border-neutral-300"
-                  />
-                </label>
-              </div>
-            </div>
-          )}
-
-          {step === 2 && isAdmin && (
-            <div className="space-y-5">
-              <h1 className="text-[1.5rem] font-medium tracking-[-0.035em] text-neutral-950">
-                Booking policy
-              </h1>
-              <p className="text-[14px] text-neutral-500">
-                How far ahead teachers may reserve carts.
-              </p>
-              <label className="block space-y-1.5">
-                <span className="type-label">Max advance days</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={60}
-                  value={maxAdvanceDays}
-                  onChange={(e) =>
-                    setMaxAdvanceDays(Number(e.target.value) || 14)
-                  }
-                  className={fieldClass}
-                />
-              </label>
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[var(--hairline-strong)] bg-white p-4">
-                <input
-                  type="checkbox"
-                  checked={confirmedFleet}
-                  onChange={(e) => setConfirmedFleet(e.target.checked)}
-                  className="mt-1 size-4 rounded border-neutral-300"
-                />
-                <span>
-                  <span className="block text-[14px] font-medium text-neutral-900">
-                    Confirm demo fleet ({platform.carts.length} carts)
-                  </span>
-                  <span className="mt-0.5 block text-[12.5px] text-neutral-500">
-                    You can rename, retire, or add carts anytime in Admin.
-                  </span>
-                </span>
-              </label>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="space-y-5">
-              <h1 className="text-[1.5rem] font-medium tracking-[-0.035em] text-neutral-950">
-                You&apos;re ready
-              </h1>
-              <p className="text-[14px] leading-relaxed text-neutral-500">
-                {isAdmin
-                  ? "Open Admin to manage staff, restrictions, and fleet health. The Schedule board reflects live demo data so you can walk through a full day."
-                  : "Open Schedule, pick a free cell, and book. Cubicle will keep learning from your preferred periods and class patterns."}
-              </p>
-              <ul className="space-y-2.5 rounded-2xl border border-[var(--hairline-strong)] bg-white p-4 shadow-[var(--shadow-surface)]">
-                {suggestions.map((line) => (
-                  <li
-                    key={line}
-                    className="text-[13.5px] leading-snug text-neutral-700"
-                  >
-                    {line}
-                  </li>
-                ))}
-              </ul>
-              {error ? (
-                <p className="text-[13px] text-red-600">{error}</p>
+                    <p className="mt-5 text-[15px] font-normal tracking-[-0.02em] text-neutral-900">
+                      {user.name}
+                    </p>
+                    <p className="mt-0.5 text-[13px] text-neutral-400">
+                      {user.email}
+                    </p>
+                    {avatarSrc ? (
+                      <p className="mt-3 flex items-center gap-1.5 text-[12.5px] font-medium text-emerald-700">
+                        <Check className="size-3.5" strokeWidth={2.5} />
+                        Looking good
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => fileRef.current?.click()}
+                        className="mt-4 text-[13px] font-medium text-neutral-600 underline-offset-4 hover:text-neutral-950 hover:underline"
+                      >
+                        Choose photo
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
               ) : null}
-            </div>
-          )}
-        </div>
 
-        <div className="flex items-center justify-between gap-3 pt-4">
-          <button
-            type="button"
-            onClick={back}
-            disabled={step === 0 || pending}
-            className="h-11 rounded-xl px-4 text-[14px] font-medium text-neutral-500 transition hover:text-neutral-900 disabled:opacity-0"
-          >
-            Back
-          </button>
-          <button
-            type="button"
-            onClick={next}
-            disabled={pending || (isAdmin && step === 2 && !confirmedFleet)}
-            className="h-11 min-w-[8.5rem] rounded-xl bg-neutral-950 px-6 text-[14px] font-medium text-white transition hover:bg-neutral-800 disabled:opacity-50"
-          >
-            {pending
-              ? "Saving…"
-              : step === totalSteps - 1
-                ? "Enter Cubicle"
-                : "Continue"}
-          </button>
+              {/* ── 2. Core work: setup ── */}
+              {step === "setup" ? (
+                <motion.div
+                  key="setup"
+                  {...stepTransition}
+                  className="space-y-4"
+                >
+                  <div>
+                    <h1 className="text-[1.5rem] font-extralight tracking-[-0.035em] text-neutral-950 sm:text-[1.65rem]">
+                      {isAdmin ? "Booking window" : "What do you teach?"}
+                    </h1>
+                    <p className="mt-1.5 text-[14px] leading-relaxed text-neutral-500">
+                      {isAdmin
+                        ? "Set how far ahead teachers can plan."
+                        : "We use this so free carts match your periods."}
+                    </p>
+                  </div>
+
+                  {isAdmin ? (
+                    <BookingWindowControl
+                      value={maxAdvanceDays}
+                      onChange={setMaxAdvanceDays}
+                    />
+                  ) : (
+                    <div className="space-y-3">
+                      {assignments.map((a, i) => (
+                        <TeachingLoadBlock
+                          key={a.id}
+                          assignment={a}
+                          index={i}
+                          canRemove={assignments.length > 1}
+                          conflicts={conflictingPeriodsForAssignment(
+                            assignments,
+                            a.id,
+                          )}
+                          onChange={(next) =>
+                            setAssignments((prev) =>
+                              prev.map((x) => (x.id === a.id ? next : x)),
+                            )
+                          }
+                          onRemove={() =>
+                            setAssignments((prev) =>
+                              prev.length <= 1
+                                ? prev
+                                : prev.filter((x) => x.id !== a.id),
+                            )
+                          }
+                          onDuplicate={() =>
+                            setAssignments((prev) => [
+                              ...prev,
+                              {
+                                ...newTeachingAssignment(),
+                                grades: [...a.grades],
+                              },
+                            ])
+                          }
+                        />
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAssignments((prev) => [
+                            ...prev,
+                            newTeachingAssignment(),
+                          ])
+                        }
+                        className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-neutral-300 text-[13px] font-medium text-neutral-500 transition hover:border-neutral-400 hover:bg-neutral-50 hover:text-neutral-800"
+                      >
+                        <Plus className="size-3.5" strokeWidth={2} />
+                        Another subject
+                      </button>
+
+                      {periodConflict ? (
+                        <p className="text-center text-[12px] text-amber-700">
+                          Some periods are on more than one subject
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+                </motion.div>
+              ) : null}
+
+              {/* ── 3. Peak-end: go ── */}
+              {step === "ready" ? (
+                <motion.div
+                  key="ready"
+                  {...stepTransition}
+                  className="flex h-full flex-col"
+                >
+                  <div className="mb-5">
+                    <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-neutral-950 text-white shadow-lg shadow-neutral-950/15">
+                      <Check className="size-5" strokeWidth={2} />
+                    </div>
+                    <h1 className="text-[1.5rem] font-extralight tracking-[-0.035em] text-neutral-950 sm:text-[1.65rem]">
+                      You&apos;re set
+                    </h1>
+                    <p className="mt-1.5 text-[14px] leading-relaxed text-neutral-500">
+                      {isAdmin
+                        ? "Manage carts and staff from Admin."
+                        : subjectSummary
+                          ? `${subjectSummary} — book carts that fit.`
+                          : "Book a free cart for your next period."}
+                    </p>
+                  </div>
+
+                  {/* Quiet defaults — default bias, low friction */}
+                  <div className="mb-4 space-y-2">
+                    <p className="text-[11px] font-medium tracking-[0.1em] text-neutral-400 uppercase">
+                      Notify me
+                    </p>
+                    <div className="flex gap-2">
+                      <QuietToggle
+                        checked={notifyEmail}
+                        onChange={setNotifyEmail}
+                        label="Email"
+                      />
+                      <QuietToggle
+                        checked={notifyIssues}
+                        onChange={setNotifyIssues}
+                        label="Issues"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-auto space-y-3">
+                    <div className="flex items-center gap-3 rounded-2xl border border-neutral-100 bg-neutral-50/90 px-3.5 py-3">
+                      <Avatar className="size-9 ring-2 ring-white">
+                        {avatarSrc ? (
+                          <AvatarImage src={avatarSrc} alt="" />
+                        ) : null}
+                        <AvatarFallback className="text-[11px]">
+                          {initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="truncate text-[13.5px] font-medium tracking-[-0.01em] text-neutral-900">
+                          {user.name}
+                        </p>
+                        <p className="truncate text-[12px] text-neutral-400">
+                          {isAdmin
+                            ? `${maxAdvanceDays}-day booking window`
+                            : periodSummaryLine(validAssignments)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="text-center text-[11.5px] text-neutral-400">
+                      <Link
+                        href="/legal/privacy"
+                        className="hover:text-neutral-600 hover:underline"
+                      >
+                        Privacy
+                      </Link>
+                      <span className="mx-1.5">·</span>
+                      <Link
+                        href="/legal/acceptable-use"
+                        className="hover:text-neutral-600 hover:underline"
+                      >
+                        Use
+                      </Link>
+                    </p>
+                  </div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+
+            {error ? (
+              <p
+                role="alert"
+                className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-[13px] text-red-700"
+              >
+                {error}
+              </p>
+            ) : null}
+          </div>
+
+          {/* Sticky actions — one primary path */}
+          <footer className="shrink-0 border-t border-neutral-100 bg-white/95 px-5 py-4 backdrop-blur-sm sm:px-7">
+            <div className="flex items-center gap-2.5">
+              {stepIndex > 0 ? (
+                <button
+                  type="button"
+                  onClick={goBack}
+                  disabled={pending}
+                  className={cn(
+                    authSecondaryButtonClassName,
+                    "h-12 w-auto shrink-0 rounded-xl px-4 text-[14px]",
+                  )}
+                  aria-label="Back"
+                >
+                  <ArrowLeft className="size-4" strokeWidth={1.75} />
+                </button>
+              ) : null}
+
+              {step === "welcome" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={goNext}
+                    className={cn(
+                      authPrimaryButtonClassName,
+                      "h-12 flex-1 rounded-xl text-[15px]",
+                    )}
+                  >
+                    {avatarSrc ? "Next" : "Continue"}
+                    <ArrowRight className="size-4 opacity-80" strokeWidth={1.75} />
+                  </button>
+                </>
+              ) : step === "setup" ? (
+                <button
+                  type="button"
+                  disabled={!canContinueFromStep}
+                  onClick={goNext}
+                  className={cn(
+                    authPrimaryButtonClassName,
+                    "h-12 flex-1 rounded-xl text-[15px]",
+                    !canContinueFromStep && "opacity-40",
+                  )}
+                >
+                  Looks good
+                  <ArrowRight className="size-4 opacity-80" strokeWidth={1.75} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={pending || !setupOk}
+                  onClick={() => void finish()}
+                  className={cn(
+                    authPrimaryButtonClassName,
+                    "h-12 flex-1 rounded-xl text-[15px]",
+                  )}
+                >
+                  {pending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : null}
+                  {pending ? "Opening…" : primaryLabel}
+                  {!pending ? (
+                    <ArrowRight className="size-4 opacity-80" strokeWidth={1.75} />
+                  ) : null}
+                </button>
+              )}
+            </div>
+
+            {step === "welcome" && !avatarSrc ? (
+              <button
+                type="button"
+                onClick={goNext}
+                className="mt-2.5 w-full text-center text-[12.5px] text-neutral-400 transition hover:text-neutral-600"
+              >
+                Skip photo
+              </button>
+            ) : null}
+          </footer>
         </div>
-      </main>
+      </div>
     </div>
   );
+}
+
+function periodSummaryLine(assignments: TeachingAssignment[]): string {
+  const periods = periodsFromAssignments(assignments);
+  if (periods.length === 0) return "No periods yet";
+  return periods.join(" · ");
 }

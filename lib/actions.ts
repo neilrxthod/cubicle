@@ -149,9 +149,6 @@ export async function createBooking(
   if (!cartId || !date || !period) {
     return { ok: false, error: "Missing booking details." };
   }
-  if (!className) {
-    return { ok: false, error: "Class name is required." };
-  }
 
   const state = getState();
   const cart = state.carts.find((entry) => entry.id === cartId);
@@ -191,7 +188,7 @@ export async function createBooking(
       period,
       teacherId: session.id,
       teacherName: session.name,
-      className,
+      className: className || undefined,
       subject: subject || undefined,
       notes: notes || undefined,
     });
@@ -245,7 +242,7 @@ export async function createBooking(
       period,
       teacherId: session.id,
       teacherName: session.name,
-      className,
+      className: className || undefined,
       subject: subject || undefined,
       notes: notes || undefined,
       createdAt: new Date().toISOString(),

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { isSchoolEmail } from "@/lib/auth/school-domain";
 import { setSession } from "@/lib/auth/session";
 import { syncOAuthProfileFromGoogle } from "@/lib/auth/sync-oauth-profile";
+import { prepareOnboardingAfterAuth } from "@/lib/onboarding/storage";
 import { createClient } from "@/lib/supabase/client";
 
 /**
@@ -68,9 +69,9 @@ function CompleteInner() {
           lastName: synced.lastName,
         });
 
-        const next =
-          params.get("next") || (synced.role === "admin" ? "/admin" : "/");
-        router.replace(next.startsWith("/") ? next : "/");
+        // Local dev: always re-prompt teaching card after Google auth.
+        prepareOnboardingAfterAuth(synced.id, synced.email);
+        router.replace("/onboarding");
       } catch {
         if (!cancelled) {
           setMessage("Could not finish sign-in.");

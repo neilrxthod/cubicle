@@ -5,11 +5,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authenticate, DEMO_ACCOUNTS } from "@/lib/auth/credentials";
 import type { DemoAccount } from "@/lib/auth/types";
-import {
-  getDashboardPath,
-  getSession,
-  setSession,
-} from "@/lib/auth/session";
+import { getSession, setSession } from "@/lib/auth/session";
+import { prepareOnboardingAfterAuth } from "@/lib/onboarding/storage";
 import { authContainerVariants, authItemVariants } from "@/lib/auth/motion";
 import {
   GOOGLE_HOSTED_DOMAIN,
@@ -73,7 +70,7 @@ export default function LoginForm() {
 
   useEffect(() => {
     const existing = getSession();
-    if (existing) router.replace(getDashboardPath(existing.role));
+    if (existing) router.replace("/onboarding");
   }, [router]);
 
   function requireLegal(): boolean {
@@ -136,7 +133,9 @@ export default function LoginForm() {
       return;
     }
     setSession(user);
-    router.push(getDashboardPath(user.role));
+    // Local dev: always re-prompt the Morphin-style teaching card after auth.
+    prepareOnboardingAfterAuth(user.id, user.email);
+    router.push("/onboarding");
   }
 
   function handleGoogleClick() {
@@ -171,7 +170,7 @@ export default function LoginForm() {
         className="w-full"
       >
         <motion.div variants={authItemVariants} className="mb-8">
-          <h1 className="text-[1.875rem] font-semibold tracking-[-0.045em] text-neutral-950">
+          <h1 className="type-page-title text-neutral-950">
             Sign in
           </h1>
           <p className="mt-2 text-[13.5px] text-neutral-500">
