@@ -50,6 +50,14 @@ import { StaffPanel } from "@/components/staff-panel"
 import { RestrictionsPanel } from "@/components/restrictions-panel"
 import { ManageBookingDialog } from "@/components/manage-booking-dialog"
 import { CartPauseConflictDialog } from "@/components/admin/cart-pause-conflict-dialog"
+import {
+  ActivityAreaChart,
+  CartUsageBarChart,
+  ChartCard,
+  IssueSeverityPieChart,
+  PeriodBarChart,
+  TeacherUsageBarChart,
+} from "@/components/admin/reports-charts"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
@@ -1911,7 +1919,7 @@ function ReportsPanel({
       subjectRows: [...bookingsBySubject.entries()].sort((a, b) => b[1] - a[1]),
       issueSeverityCounts,
       issueRowsTop,
-      recentIssues: [...issues].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6),
+      recentIssues: [...issues].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 8),
       reporterRows: [...issuesByReporter.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4),
       activityData: last7Days.map(date => ({ date, day: format(parseISO(date), "EEE"), count: bookingsByDate.get(date) ?? 0 }))
     }
@@ -1929,7 +1937,6 @@ function ReportsPanel({
     recentIssues,
     activityData
   } = stats
-  const maxActivity = Math.max(...activityData.map(d => d.count), 1)
   const rangeLabel = range?.from
     ? range.to
       ? `${format(range.from, "MMM d, yyyy")} - ${format(range.to, "MMM d, yyyy")}`
@@ -2296,239 +2303,217 @@ function ReportsPanel({
         </div>
       </div>
 
+      {/* Charts — EvilCharts (Recharts) */}
+      <ChartCard title="Last 7 days">
+        <ActivityAreaChart data={activityData} />
+      </ChartCard>
+
       <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-xl border border-[var(--hairline-strong)] bg-white p-4 shadow-[var(--shadow-surface)]">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h3 className="type-section-title">Teacher usage</h3>
-              <button
-                type="button"
-                onClick={() => onOpenTab("bookings")}
-                className="text-[12px] font-medium text-neutral-400 transition-colors hover:text-neutral-800"
-              >
-                Reservations
-              </button>
-            </div>
-            <div className="overflow-hidden rounded-lg border border-neutral-100">
-              {topTeachers.length === 0 ? (
-                <p className="px-4 py-8 text-center text-[13px] text-neutral-400">
-                  No bookings yet.
-                </p>
-              ) : (
-                <ul>
-                  {topTeachers.map((row, index) => {
-                    const topCart = row.topCartEntry
-                      ? cartMap.get(row.topCartEntry[0])?.name ?? "Cart"
-                      : "—"
-                    return (
-                      <li
-                        key={row.teacherId}
-                        className={cn(
-                          "flex items-center justify-between gap-3 px-3.5 py-2.5",
-                          index > 0 && "border-t border-neutral-100",
-                        )}
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-[13px] font-medium text-neutral-950">
-                            {row.teacherName}
-                          </p>
-                          <p className="truncate text-[12px] text-neutral-400">
-                            Top: {topCart}
-                            {row.share > 0 ? ` · ${row.share}%` : null}
-                          </p>
-                        </div>
-                        <span className="shrink-0 text-[13px] font-semibold tabular-nums text-neutral-900">
-                          {row.total}
-                        </span>
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-            </div>
-          </div>
+        <ChartCard
+          title="Teacher usage"
+          action={
+            <button
+              type="button"
+              onClick={() => onOpenTab("bookings")}
+              className="text-[12px] font-medium text-neutral-400 transition-colors hover:text-neutral-800"
+            >
+              Reservations
+            </button>
+          }
+        >
+          <TeacherUsageBarChart rows={topTeachers} />
+        </ChartCard>
 
-          <div className="rounded-xl border border-[var(--hairline-strong)] bg-white p-4 shadow-[var(--shadow-surface)]">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h3 className="type-section-title">Cart utilization</h3>
-              <button
-                type="button"
-                onClick={() => onOpenTab("carts")}
-                className="text-[12px] font-medium text-neutral-400 transition-colors hover:text-neutral-800"
-              >
-                Inventory
-              </button>
-            </div>
-            <div className="overflow-hidden rounded-lg border border-neutral-100">
-              {topCartUsageRows.length === 0 ? (
-                <p className="px-4 py-8 text-center text-[13px] text-neutral-400">
-                  No cart activity yet.
-                </p>
-              ) : (
-                <ul>
-                  {topCartUsageRows.map((row, index) => (
-                    <li
-                      key={row.cartId}
-                      className={cn(
-                        "flex items-center justify-between gap-3 px-3.5 py-2.5",
-                        index > 0 && "border-t border-neutral-100",
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-medium text-neutral-950">
-                          {row.cartName}
-                        </p>
-                        <p className="text-[12px] text-neutral-400">
-                          {row.teachers.size} teacher
-                          {row.teachers.size === 1 ? "" : "s"}
-                          {row.share > 0 ? ` · ${row.share}%` : null}
-                        </p>
-                      </div>
-                      <span className="shrink-0 text-[13px] font-semibold tabular-nums text-neutral-900">
-                        {row.total}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
+        <ChartCard
+          title="Cart utilization"
+          action={
+            <button
+              type="button"
+              onClick={() => onOpenTab("carts")}
+              className="text-[12px] font-medium text-neutral-400 transition-colors hover:text-neutral-800"
+            >
+              Inventory
+            </button>
+          }
+        >
+          <CartUsageBarChart rows={topCartUsageRows} />
+        </ChartCard>
 
-          <div className="rounded-xl border border-[var(--hairline-strong)] bg-white p-4 shadow-[var(--shadow-surface)]">
-            <h3 className="type-section-title mb-3">Reservations by period & subject</h3>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-neutral-100 p-3">
-                <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
-                  By period
-                </p>
-                {periodRows.length === 0 ? (
-                  <p className="text-[13px] text-neutral-400">No reservations yet</p>
-                ) : (
-                  <ul className="space-y-1.5">
-                    {periodRows.slice(0, 5).map(([period, count]) => (
-                      <li
-                        key={period}
-                        className="flex items-center justify-between gap-2 text-[13px]"
-                      >
-                        <span className="text-neutral-800">{period}</span>
-                        <span className="tabular-nums text-neutral-400">{count}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <div className="rounded-lg border border-neutral-100 p-3">
-                <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
-                  By subject
-                </p>
-                {subjectRows.length === 0 ? (
-                  <p className="text-[13px] text-neutral-400">No subjects yet</p>
-                ) : (
-                  <ul className="space-y-1.5">
-                    {subjectRows.slice(0, 5).map(([subject, count]) => (
-                      <li
-                        key={subject}
-                        className="flex items-center justify-between gap-2 text-[13px]"
-                      >
-                        <span className="truncate text-neutral-800">{subject}</span>
-                        <span className="shrink-0 tabular-nums text-neutral-400">
-                          {count}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </div>
+        <ChartCard title="By period">
+          <PeriodBarChart periodRows={periodRows} />
+        </ChartCard>
 
-          <div className="rounded-xl border border-[var(--hairline-strong)] bg-white p-4 shadow-[var(--shadow-surface)]">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h3 className="type-section-title">Issues</h3>
-              <Link
-                href="/issues"
-                className="text-[12px] font-medium text-neutral-400 transition-colors hover:text-neutral-800"
-              >
-                Open issues
-              </Link>
-            </div>
-            <div className="mb-3 grid grid-cols-3 gap-2">
-              {(["high", "medium", "low"] as const).map((severity) => (
-                <div
-                  key={severity}
-                  className="rounded-lg bg-neutral-50 px-2.5 py-2 text-center"
-                >
-                  <p className="text-[10px] font-medium capitalize text-neutral-400">
-                    {severity}
-                  </p>
-                  <p className="text-[15px] font-semibold tabular-nums text-neutral-900">
-                    {issueSeverityCounts[severity]}
-                  </p>
-                </div>
-              ))}
-            </div>
-            {recentIssues.length === 0 ? (
-              <p className="text-[13px] text-neutral-400">No issues reported.</p>
-            ) : (
-              <ul className="space-y-2">
-                {recentIssues.slice(0, 4).map((issue) => (
-                  <li
-                    key={issue.id}
-                    className="flex items-start justify-between gap-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-medium text-neutral-950">
-                        {cartMap.get(issue.cartId)?.name ?? "Cart"}
-                      </p>
-                      <p className="truncate text-[12px] text-neutral-400">
-                        {issue.description}
-                      </p>
-                    </div>
-                    <span
-                      className={cn(
-                        "shrink-0 text-[11px] font-medium capitalize",
-                        issue.status === "open"
-                          ? "text-red-600"
-                          : "text-neutral-400",
-                      )}
-                    >
-                      {issue.status}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+        <ChartCard
+          title="Issues by severity"
+          action={
+            <Link
+              href="/issues"
+              className="text-[12px] font-medium text-neutral-400 transition-colors hover:text-neutral-800"
+            >
+              Open issues
+            </Link>
+          }
+        >
+          <IssueSeverityPieChart counts={issueSeverityCounts} />
+        </ChartCard>
       </div>
 
+      {/* Top subjects — compact strip */}
       <div className="rounded-xl border border-[var(--hairline-strong)] bg-white p-4 shadow-[var(--shadow-surface)]">
-        <h3 className="type-section-title mb-3">Last 7 days</h3>
-        <div className="grid grid-cols-7 gap-2">
-          {activityData.map((day) => (
-            <div
-              key={day.date}
-              className="flex flex-col items-center gap-2 rounded-lg border border-neutral-100 px-1 py-2.5"
-            >
-              <span className="text-[11px] font-medium text-neutral-400">
-                {day.day}
-              </span>
-              <div className="flex h-14 w-full items-end justify-center px-1">
-                <div
-                  className="w-full max-w-[1.1rem] rounded-sm bg-neutral-900"
-                  style={{
-                    height: `${Math.max(
-                      (day.count / maxActivity) * 100,
-                      day.count > 0 ? 12 : 4,
-                    )}%`,
-                  }}
-                  title={`${day.count} bookings`}
-                />
-              </div>
-              <span className="text-[12px] font-semibold tabular-nums text-neutral-900">
-                {day.count}
-              </span>
-            </div>
-          ))}
+        <h3 className="type-section-title mb-3">Top subjects</h3>
+        {subjectRows.length === 0 ? (
+          <p className="text-[13px] text-neutral-400">No subjects yet</p>
+        ) : (
+          <ul className="flex flex-wrap gap-2">
+            {subjectRows.slice(0, 8).map(([subject, count]) => (
+              <li
+                key={subject}
+                className="inline-flex h-8 items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3"
+              >
+                <span className="text-[12.5px] font-medium text-neutral-800">
+                  {subject}
+                </span>
+                <span className="text-[12px] tabular-nums text-neutral-400">
+                  {count}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Recent issues — full table */}
+      <div className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white shadow-[var(--shadow-surface)]">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--hairline)] px-4 py-3 sm:px-5">
+          <div className="min-w-0">
+            <h3 className="type-section-title">Recent issues</h3>
+            <p className="mt-0.5 text-[12px] text-neutral-400">
+              {recentIssues.length === 0
+                ? "No reports yet"
+                : `${Math.min(recentIssues.length, 8)} latest · ${openIssues.length} open`}
+            </p>
+          </div>
+          <Link
+            href="/issues"
+            className="shrink-0 text-[12.5px] font-medium text-neutral-600 transition-colors hover:text-neutral-950"
+          >
+            View all
+          </Link>
         </div>
+
+        {recentIssues.length === 0 ? (
+          <p className="px-5 py-12 text-center text-[13px] text-neutral-400">
+            No issues reported.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] table-fixed border-collapse text-left">
+              <colgroup>
+                <col className="w-[14%]" />
+                <col className="w-[34%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[16%]" />
+                <col className="w-[12%]" />
+              </colgroup>
+              <thead>
+                <tr className="border-b border-[var(--hairline)] bg-neutral-50/60">
+                  {(
+                    [
+                      "Cart",
+                      "Description",
+                      "Severity",
+                      "Status",
+                      "Reporter",
+                      "Reported",
+                    ] as const
+                  ).map((label) => (
+                    <th
+                      key={label}
+                      className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-400 sm:px-5"
+                    >
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {recentIssues.slice(0, 8).map((issue) => {
+                  const cart = cartMap.get(issue.cartId)
+                  const isOpen = issue.status === "open"
+                  return (
+                    <tr
+                      key={issue.id}
+                      className="border-t border-[var(--hairline)] transition-colors hover:bg-neutral-50/60"
+                    >
+                      <td className="px-4 py-3.5 align-middle sm:px-5">
+                        <div className="min-w-0 leading-tight">
+                          <p className="truncate text-[13px] font-medium tracking-[-0.01em] text-neutral-950">
+                            {cart?.name ?? "Cart"}
+                          </p>
+                          {cart?.location ? (
+                            <p className="mt-0.5 truncate text-[12px] text-neutral-400">
+                              {cart.location}
+                            </p>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 align-middle sm:px-5">
+                        <p className="line-clamp-2 text-[12.5px] leading-relaxed text-neutral-600">
+                          {issue.description}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3.5 align-middle sm:px-5">
+                        <span
+                          className={cn(
+                            "inline-flex items-center rounded-full px-2 py-0.5",
+                            "text-[11px] font-medium capitalize tracking-[-0.01em]",
+                            issue.severity === "high" &&
+                              "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200/80",
+                            issue.severity === "medium" &&
+                              "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200/80",
+                            issue.severity === "low" &&
+                              "bg-neutral-100 text-neutral-600 ring-1 ring-inset ring-neutral-200/80",
+                          )}
+                        >
+                          {issue.severity}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 align-middle sm:px-5">
+                        <span
+                          className={cn(
+                            "inline-flex items-center rounded-full px-2 py-0.5",
+                            "text-[11px] font-medium capitalize tracking-[-0.01em]",
+                            isOpen
+                              ? "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200/80"
+                              : "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200/80",
+                          )}
+                        >
+                          {issue.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 align-middle sm:px-5">
+                        <p className="truncate text-[12.5px] font-medium text-neutral-800">
+                          {issue.reporterName}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3.5 align-middle sm:px-5">
+                        <div className="leading-tight">
+                          <p className="text-[12.5px] font-medium tabular-nums text-neutral-800">
+                            {format(parseISO(issue.createdAt), "MMM d")}
+                          </p>
+                          <p className="mt-0.5 text-[11.5px] tabular-nums text-neutral-400">
+                            {format(parseISO(issue.createdAt), "h:mm a")}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </section>
   )

@@ -1,7 +1,6 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { format } from "date-fns";
 import { localWriteBlockReason } from "@/lib/data/durability";
 import type {
   Booking,
@@ -18,25 +17,11 @@ import type {
  * Browser cache only. Source of truth in production is Supabase Postgres.
  * Re-deploying the Next.js app never clears Supabase — only this local cache.
  */
-/** Bump when seed shape / demo dataset changes so clients rehydrate fresh sample data. */
-const STORAGE_KEY = "cubicle_platform_v6";
+/** Bump when seed shape changes so clients drop stale browser caches. */
+const STORAGE_KEY = "cubicle_platform_v8";
 const CHANGE_EVENT = "cubicle_platform_change";
 
-function today() {
-  return format(new Date(), "yyyy-MM-dd");
-}
-
-function dayOffset(days: number) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return format(d, "yyyy-MM-dd");
-}
-
-function hoursAgo(h: number) {
-  return new Date(Date.now() - 1000 * 60 * 60 * h).toISOString();
-}
-
-/** 22 school laptop carts — tree names + home locations around campus. */
+/** 22 school laptop carts — catalog only (no demo bookings/issues). */
 const SEED_CARTS: Cart[] = [
   { id: "cart-01", name: "Oak", status: "active", laptopCount: 30, location: "Library" },
   { id: "cart-02", name: "Maple", status: "active", laptopCount: 28, location: "Room 102" },
@@ -47,7 +32,7 @@ const SEED_CARTS: Cart[] = [
   { id: "cart-07", name: "Aspen", status: "active", laptopCount: 28, location: "Science wing" },
   { id: "cart-08", name: "Redwood", status: "active", laptopCount: 32, location: "Lab 1" },
   { id: "cart-09", name: "Elm", status: "active", laptopCount: 30, location: "Lab 2" },
-  { id: "cart-10", name: "Spruce", status: "maintenance", laptopCount: 26, location: "Media center" },
+  { id: "cart-10", name: "Spruce", status: "active", laptopCount: 26, location: "Media center" },
   { id: "cart-11", name: "Juniper", status: "active", laptopCount: 30, location: "Room 301" },
   { id: "cart-12", name: "Cypress", status: "active", laptopCount: 28, location: "Room 308" },
   { id: "cart-13", name: "Poplar", status: "active", laptopCount: 30, location: "Room 312" },
@@ -58,134 +43,19 @@ const SEED_CARTS: Cart[] = [
   { id: "cart-18", name: "Alder", status: "active", laptopCount: 30, location: "Math wing" },
   { id: "cart-19", name: "Beech", status: "active", laptopCount: 26, location: "Room 508" },
   { id: "cart-20", name: "Hemlock", status: "active", laptopCount: 30, location: "Room 514" },
-  { id: "cart-21", name: "Fir", status: "maintenance", laptopCount: 28, location: "IT closet" },
+  { id: "cart-21", name: "Fir", status: "active", laptopCount: 28, location: "IT closet" },
   { id: "cart-22", name: "Yew", status: "active", laptopCount: 24, location: "Counseling suite" },
 ];
 
 /**
- * Demo platform: fleet + staff + sample issues/locks.
- * Bookings start empty — real reservations come from users or Supabase.
+ * Local demo scaffold: cart catalog + demo staff accounts only.
+ * Bookings, issues, and restrictions start empty.
  */
 function seed(): PlatformState {
-  const d = today();
-  const d1 = dayOffset(1);
-  const d2 = dayOffset(2);
-  const d3 = dayOffset(3);
-
   return {
     carts: SEED_CARTS,
     bookings: [],
-    issues: [
-      {
-        id: "iss-1",
-        cartId: "cart-10",
-        description:
-          "Three laptops won't charge in slots 4, 11, and 18. Battery LEDs stay dark after overnight charge.",
-        severity: "high",
-        status: "open",
-        reportedById: "teacher-1",
-        reporterName: "Sarah Chen",
-        createdAt: hoursAgo(5),
-      },
-      {
-        id: "iss-2",
-        cartId: "cart-04",
-        description:
-          "Wobbly front-left wheel — hard to roll between floors. Still usable on one level.",
-        severity: "low",
-        status: "open",
-        reportedById: "teacher-2",
-        reporterName: "Maria Lopez",
-        createdAt: hoursAgo(20),
-      },
-      {
-        id: "iss-3",
-        cartId: "cart-08",
-        description:
-          "Two keyboards missing letters; students couldn't finish login on time for P3.",
-        severity: "medium",
-        status: "resolved",
-        reportedById: "teacher-3",
-        reporterName: "James Park",
-        createdAt: hoursAgo(48),
-      },
-      {
-        id: "iss-4",
-        cartId: "cart-21",
-        description:
-          "Cart lock code sticky; staff needed ~5 extra minutes to open before P2.",
-        severity: "medium",
-        status: "open",
-        reportedById: "teacher-5",
-        reporterName: "Chris Ortiz",
-        createdAt: hoursAgo(8),
-      },
-      {
-        id: "iss-5",
-        cartId: "cart-07",
-        description:
-          "Trackpad unresponsive on 4 machines after Windows update. Students used external mice.",
-        severity: "medium",
-        status: "open",
-        reportedById: "teacher-6",
-        reporterName: "David Kim",
-        createdAt: hoursAgo(3),
-      },
-      {
-        id: "iss-6",
-        cartId: "cart-15",
-        description:
-          "Power brick missing from slot 22. Cart still charges other units fine.",
-        severity: "low",
-        status: "open",
-        reportedById: "teacher-5",
-        reporterName: "Chris Ortiz",
-        createdAt: hoursAgo(30),
-      },
-      {
-        id: "iss-7",
-        cartId: "cart-01",
-        description:
-          "Library Wi‑Fi dropped for ~12 min during P2 — not cart hardware. Logged for IT.",
-        severity: "low",
-        status: "resolved",
-        reportedById: "teacher-1",
-        reporterName: "Sarah Chen",
-        createdAt: hoursAgo(26),
-      },
-      {
-        id: "iss-8",
-        cartId: "cart-09",
-        description:
-          "Two screens show pink vertical lines. Still bootable; swapped out for CS class.",
-        severity: "high",
-        status: "open",
-        reportedById: "teacher-7",
-        reporterName: "Aisha Rahman",
-        createdAt: hoursAgo(14),
-      },
-      {
-        id: "iss-9",
-        cartId: "cart-18",
-        description:
-          "Door latch doesn't stay closed when cart is full — safety tape for now.",
-        severity: "medium",
-        status: "open",
-        reportedById: "teacher-4",
-        reporterName: "Priya Shah",
-        createdAt: hoursAgo(40),
-      },
-      {
-        id: "iss-10",
-        cartId: "cart-12",
-        description: "Student reported sticky spacebar on unit 07. Cleaned; monitoring.",
-        severity: "low",
-        status: "resolved",
-        reportedById: "teacher-10",
-        reporterName: "Elena Vasquez",
-        createdAt: hoursAgo(55),
-      },
-    ],
+    issues: [],
     users: [
       {
         id: "teacher-1",
@@ -344,56 +214,7 @@ function seed(): PlatformState {
         allowlisted: true,
       },
     ],
-    slotRestrictions: [
-      {
-        id: "sr-1",
-        cartId: "cart-08",
-        date: d1,
-        period: "P1",
-        category: "ap_exam",
-        reason: "AP Chemistry digital exam block — Lab 1 reserved",
-      },
-      {
-        id: "sr-2",
-        cartId: "cart-09",
-        date: d1,
-        period: "P1",
-        category: "ap_exam",
-        reason: "AP Chemistry overflow seating",
-      },
-      {
-        id: "sr-3",
-        cartId: "cart-01",
-        date: d2,
-        period: "P3",
-        category: "general",
-        reason: "Library orientation — Oak staged in lobby",
-      },
-      {
-        id: "sr-4",
-        cartId: "cart-02",
-        date: d2,
-        period: "P3",
-        category: "general",
-        reason: "Library orientation overflow",
-      },
-      {
-        id: "sr-5",
-        cartId: "cart-15",
-        date: d,
-        period: "P5",
-        category: "other",
-        reason: "IEP assessment — counselor priority hold",
-      },
-      {
-        id: "sr-6",
-        cartId: "cart-18",
-        date: d3,
-        period: "P1",
-        category: "ap_exam",
-        reason: "AP Precalculus practice exam",
-      },
-    ],
+    slotRestrictions: [],
     bookingPolicy: { maxAdvanceDays: 14 },
     swapRequests: [],
   };

@@ -23,6 +23,7 @@
   },
   "registries": {
     "@reui": "https://reui.io/r/{style}/{name}.json",
-    "@tool-ui": "https://www.tool-ui.com/r/{name}.json"
+    "@tool-ui": "https://www.tool-ui.com/r/{name}.json",
+    "@evilcharts": "https://evilcharts.com/r/{name}.json"
   }
 }
