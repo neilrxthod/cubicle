@@ -31,7 +31,6 @@ import {
   ArrowUp,
   ArrowUpDown,
   Calendar as CalendarIcon,
-  ChevronDown,
   Download,
   MoreHorizontal,
   Search,
@@ -169,7 +168,7 @@ export function AdminConsole({
       </nav>
 
       {tab === "carts" ? (
-        <CartsGrid carts={carts} bookings={bookings} />
+        <CartsGrid carts={carts} bookings={bookings} users={users} />
       ) : tab === "bookings" ? (
         <BookingsTable bookings={filteredBookings} carts={carts} users={users} />
       ) : tab === "reports" ? (
@@ -204,9 +203,11 @@ export function AdminConsole({
 function CartsGrid({
   carts,
   bookings,
+  users,
 }: {
   carts: Cart[]
   bookings: Booking[]
+  users: User[]
 }) {
   const router = useRouter()
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
@@ -398,6 +399,7 @@ function CartsGrid({
           cart={pauseConflictCart}
           bookings={bookings}
           carts={carts}
+          users={users}
           onClose={() => setPauseConflictCart(null)}
           onResolvedAndPaused={() => router.refresh()}
         />
@@ -1068,7 +1070,7 @@ function BookingsTable({
     "h-8 gap-1.5 rounded-md border border-[var(--hairline-strong)] bg-white px-2.5",
     "text-[12.5px] font-medium text-neutral-700 shadow-none",
     "hover:bg-neutral-50 focus:ring-0 data-[state=open]:border-neutral-400",
-    "data-[placeholder]:text-neutral-400 [&_svg]:size-3.5 [&_svg]:opacity-45",
+    "data-[placeholder]:text-neutral-400",
   )
 
   const dateLabel = rangeFilter?.from
@@ -1162,15 +1164,41 @@ function BookingsTable({
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className={cn(filterTrigger, "inline-flex min-w-[120px] items-center justify-between")}
+                  className={cn(
+                    filterTrigger,
+                    "group inline-flex min-w-[120px] items-center justify-between gap-2",
+                    "data-[state=open]:[&_svg.chevron]:rotate-180",
+                    "data-[state=open]:[&_svg.chevron]:text-neutral-600",
+                  )}
                 >
-                  <span className="inline-flex items-center gap-1.5 truncate">
-                    <CalendarIcon className="size-3.5 shrink-0 text-neutral-400" />
-                    <span className={cn(!(dateFilter || rangeFilter) && "text-neutral-400")}>
+                  <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
+                    <CalendarIcon
+                      className="size-3.5 shrink-0 text-neutral-400"
+                      strokeWidth={1.75}
+                    />
+                    <span
+                      className={cn(
+                        "truncate leading-none",
+                        !(dateFilter || rangeFilter) && "text-neutral-400",
+                      )}
+                    >
                       {dateLabel}
                     </span>
                   </span>
-                  <ChevronDown className="size-3.5 shrink-0 text-neutral-400" />
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    className="chevron size-3 shrink-0 origin-center text-neutral-400 transition-[transform,color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                  >
+                    <path
+                      d="M4.75 6.5 8 9.75 11.25 6.5"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                 </button>
               </PopoverTrigger>
               <PopoverContent
@@ -1281,13 +1309,32 @@ function BookingsTable({
                   <button
                     type="button"
                     className={cn(
-                      "inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--hairline-strong)] bg-white px-2.5",
-                      "text-[12.5px] font-medium text-neutral-700 transition-colors hover:bg-neutral-50",
+                      "group inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--hairline-strong)] bg-white px-2.5",
+                      "text-[12.5px] font-medium leading-none text-neutral-700 transition-colors hover:bg-neutral-50",
+                      "data-[state=open]:border-neutral-400",
+                      "data-[state=open]:[&_svg.chevron]:rotate-180",
+                      "data-[state=open]:[&_svg.chevron]:text-neutral-600",
                     )}
                   >
-                    <Download className="size-3.5 text-neutral-400" />
-                    Export
-                    <ChevronDown className="size-3.5 text-neutral-400" />
+                    <Download
+                      className="size-3.5 shrink-0 text-neutral-400"
+                      strokeWidth={1.75}
+                    />
+                    <span>Export</span>
+                    <svg
+                      aria-hidden
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      className="chevron size-3 shrink-0 origin-center text-neutral-400 transition-[transform,color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                    >
+                      <path
+                        d="M4.75 6.5 8 9.75 11.25 6.5"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent

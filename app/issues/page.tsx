@@ -182,15 +182,12 @@ function IssuesView({ user }: { user: SessionUser }) {
                 size="sm"
                 aria-label="Severity"
                 className={cn(
-                  "h-8 min-w-[8.75rem] gap-1.5 rounded-md border-[var(--hairline-strong)] bg-white px-2.5",
+                  "h-8 min-w-[8.75rem] gap-2 rounded-md border-[var(--hairline-strong)] bg-white px-2.5",
                   "text-[12.5px] font-medium text-neutral-700 shadow-none",
                   "transition-[background-color,border-color,color] duration-150 ease-out",
                   "hover:border-neutral-300 hover:bg-neutral-50",
                   "data-[state=open]:border-neutral-400 data-[state=open]:bg-neutral-50",
                   "focus-visible:border-neutral-400 focus-visible:ring-0",
-                  "[&_svg]:size-3.5 [&_svg]:opacity-45",
-                  "[&_svg]:transition-transform [&_svg]:duration-200 [&_svg]:ease-[cubic-bezier(0.22,1,0.36,1)]",
-                  "data-[state=open]:[&_svg]:rotate-180",
                 )}
               >
                 <SelectValue placeholder="All severity" />
