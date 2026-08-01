@@ -1085,13 +1085,30 @@ function BookingsTable({
       ? format(parseISO(dateFilter), "MMM d, yyyy")
       : "Date"
 
-  const chipClass = (on: boolean) =>
-    cn(
-      "inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[12px] font-medium tracking-[-0.01em] transition-colors",
-      on
-        ? "bg-neutral-950 text-white"
-        : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900",
+  /** Soft corporate accents — muted fills, solid on select. */
+  const chipClass = (
+    on: boolean,
+    tone: "slate" | "blue" | "teal" | "red" = "slate",
+  ) => {
+    const tones = {
+      slate: on
+        ? "border-neutral-800 bg-neutral-800 text-white"
+        : "border-neutral-200 bg-neutral-100 text-neutral-700 hover:bg-neutral-200/80",
+      blue: on
+        ? "border-blue-800 bg-blue-800 text-white"
+        : "border-blue-100 bg-blue-50 text-blue-800 hover:bg-blue-100/80",
+      teal: on
+        ? "border-teal-800 bg-teal-800 text-white"
+        : "border-teal-100 bg-teal-50 text-teal-800 hover:bg-teal-100/80",
+      red: on
+        ? "border-red-700 bg-red-700 text-white"
+        : "border-red-100 bg-red-50 text-red-700 hover:bg-red-100/80",
+    } as const
+    return cn(
+      "inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[12px] font-medium tracking-[-0.01em] transition-colors",
+      tones[tone],
     )
+  }
 
   return (
     <section className="flex flex-col gap-4">
@@ -1407,14 +1424,17 @@ function BookingsTable({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
             onClick={() => {
               clearFilters()
               setDateFilter(todayKey)
             }}
-            className={chipClass(dateFilter === todayKey && !showConflicts && !rangeFilter)}
+            className={chipClass(
+              dateFilter === todayKey && !showConflicts && !rangeFilter,
+              "slate",
+            )}
           >
             Today
           </button>
@@ -1424,7 +1444,10 @@ function BookingsTable({
               clearFilters()
               setDateFilter(tomorrowKey)
             }}
-            className={chipClass(dateFilter === tomorrowKey && !showConflicts && !rangeFilter)}
+            className={chipClass(
+              dateFilter === tomorrowKey && !showConflicts && !rangeFilter,
+              "blue",
+            )}
           >
             Tomorrow
           </button>
@@ -1444,6 +1467,7 @@ function BookingsTable({
                   format(rangeFilter.from, "yyyy-MM-dd") === todayKey &&
                   format(rangeFilter.to, "yyyy-MM-dd") === weekEndKey,
               ),
+              "teal",
             )}
           >
             This week
@@ -1454,12 +1478,7 @@ function BookingsTable({
               clearFilters()
               setShowConflicts(true)
             }}
-            className={cn(
-              chipClass(showConflicts),
-              !showConflicts &&
-                conflictsCount > 0 &&
-                "text-red-600 hover:bg-red-50 hover:text-red-700",
-            )}
+            className={chipClass(showConflicts, "red")}
           >
             On paused carts
             {conflictsCount > 0 ? (
