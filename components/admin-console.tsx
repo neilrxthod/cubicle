@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import type { Booking, BookingPolicy, Cart, Issue, User, Period, SlotRestriction, SwapRequest } from "@/lib/types"
-import { setCartStatus, deleteBookings, reassignBooking, cancelBooking } from "@/lib/actions"
+import { setCartStatus, deleteBookings, reassignBooking } from "@/lib/actions"
 import { toast } from "@/hooks/use-toast"
 import {
   DropdownMenu,
@@ -49,6 +49,8 @@ import type { DateRange } from "react-day-picker"
 import { cn } from "@/lib/utils"
 import { StaffPanel } from "@/components/staff-panel"
 import { RestrictionsPanel } from "@/components/restrictions-panel"
+import { ManageBookingDialog } from "@/components/manage-booking-dialog"
+import { CartPauseConflictDialog } from "@/components/admin/cart-pause-conflict-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
@@ -167,7 +169,7 @@ export function AdminConsole({
       </nav>
 
       {tab === "carts" ? (
-        <CartsGrid carts={carts} />
+        <CartsGrid carts={carts} bookings={bookings} />
       ) : tab === "bookings" ? (
         <BookingsTable bookings={filteredBookings} carts={carts} users={users} />
       ) : tab === "reports" ? (
@@ -199,15 +201,27 @@ export function AdminConsole({
   )
 }
 
-function CartsGrid({ carts }: { carts: Cart[] }) {
+function CartsGrid({
+  carts,
+  bookings,
+}: {
+  carts: Cart[]
+  bookings: Booking[]
+}) {
   const router = useRouter()
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
-  const [optimisticStatusById, setOptimisticStatusById] = useState<Record<string, Cart["status"]>>({})
+  const [optimisticStatusById, setOptimisticStatusById] = useState<
+    Record<string, Cart["status"]>
+  >({})
+  const [pauseConflictCart, setPauseConflictCart] = useState<Cart | null>(null)
   const [, startTransition] = useTransition()
 
-  function toggle(cart: Cart) {
-    const current = optimisticStatusById[cart.id] ?? cart.status
-    const next = current === "maintenance" ? "active" : "maintenance"
+  function futureCount(cartId: string) {
+    const today = format(new Date(), "yyyy-MM-dd")
+    return bookings.filter((b) => b.cartId === cartId && b.date >= today).length
+  }
+
+  function applyStatus(cart: Cart, next: Cart["status"]) {
     setPendingIds((prev) => {
       const s = new Set(prev)
       s.add(cart.id)
@@ -229,7 +243,11 @@ function CartsGrid({ carts }: { carts: Cart[] }) {
           s.delete(cart.id)
           return s
         })
-        toast({ title: "Could not update", description: res.error, variant: "destructive" })
+        toast({
+          title: "Could not update",
+          description: res.error,
+          variant: "destructive",
+        })
         return
       }
 
@@ -238,7 +256,6 @@ function CartsGrid({ carts }: { carts: Cart[] }) {
         s.delete(cart.id)
         return s
       })
-      // Drop optimistic once store has refreshed; keep until then for snappy UI
       setOptimisticStatusById((prev) => {
         const m = { ...prev }
         delete m[cart.id]
@@ -250,6 +267,20 @@ function CartsGrid({ carts }: { carts: Cart[] }) {
       })
       router.refresh()
     })
+  }
+
+  function toggle(cart: Cart) {
+    const current = optimisticStatusById[cart.id] ?? cart.status
+    if (current === "active") {
+      // Pausing: block immediately if upcoming bookings exist
+      if (futureCount(cart.id) > 0) {
+        setPauseConflictCart(cart)
+        return
+      }
+      applyStatus(cart, "maintenance")
+      return
+    }
+    applyStatus(cart, "active")
   }
 
   const activeCount = carts.filter((c) => {
@@ -361,6 +392,16 @@ function CartsGrid({ carts }: { carts: Cart[] }) {
           })}
         </div>
       )}
+
+      {pauseConflictCart ? (
+        <CartPauseConflictDialog
+          cart={pauseConflictCart}
+          bookings={bookings}
+          carts={carts}
+          onClose={() => setPauseConflictCart(null)}
+          onResolvedAndPaused={() => router.refresh()}
+        />
+      ) : null}
     </section>
   )
 }
@@ -400,6 +441,7 @@ function BookingsTable({
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [reassigningBooking, setReassigningBooking] = useState<Booking | null>(null)
+  const [cancelingBooking, setCancelingBooking] = useState<Booking | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isReassigning, setIsReassigning] = useState(false)
 
@@ -1556,28 +1598,7 @@ function BookingsTable({
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="cursor-pointer gap-2 rounded-md text-[12.5px] text-red-600 focus:bg-red-50 focus:text-red-700"
-                                onClick={async () => {
-                                  if (
-                                    !window.confirm(
-                                      `Cancel ${b.teacherName}'s reservation on ${format(date, "MMM d")}?`,
-                                    )
-                                  ) {
-                                    return
-                                  }
-                                  const res = await cancelBooking(b.id)
-                                  if (!res.ok) {
-                                    toast({
-                                      title: "Error",
-                                      description: res.error,
-                                      variant: "destructive",
-                                    })
-                                  } else {
-                                    toast({
-                                      title: "Canceled",
-                                      description: `Reservation for ${b.teacherName} removed.`,
-                                    })
-                                  }
-                                }}
+                                onClick={() => setCancelingBooking(b)}
                               >
                                 <Trash2 className="size-3.5" />
                                 Cancel booking
@@ -1599,6 +1620,14 @@ function BookingsTable({
           <DailyBoardLite bookings={filtered} carts={carts} />
         </div>
       )}
+
+      {cancelingBooking ? (
+        <ManageBookingDialog
+          booking={cancelingBooking}
+          cart={cartMap.get(cancelingBooking.cartId)}
+          onClose={() => setCancelingBooking(null)}
+        />
+      ) : null}
 
       <Dialog open={!!reassigningBooking} onOpenChange={(open) => !open && setReassigningBooking(null)}>
         <DialogContent className="flex max-h-[85vh] w-[95vw] flex-col overflow-hidden rounded-2xl border-border/60 p-0 shadow-2xl sm:max-w-xl">
