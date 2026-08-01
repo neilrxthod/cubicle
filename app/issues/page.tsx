@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
-import { AnimatePresence, motion } from "motion/react";
 import { DashboardFrame } from "@/components/app/dashboard-frame";
 import { PageShell } from "@/components/app/page-shell";
 import { RequirePlatformAuth } from "@/components/app/require-platform-auth";
@@ -47,10 +46,6 @@ function IssuesView({ user }: { user: SessionUser }) {
   const [reportOpen, setReportOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [allowIssueDelete, setAllowIssueDelete] = useState(false);
-  /** Keep rows mounted through the delete success flash. */
-  const [pendingDelete, setPendingDelete] = useState<Record<string, Issue>>(
-    {},
-  );
 
   useEffect(() => {
     const sync = () => {
@@ -95,33 +90,19 @@ function IssuesView({ user }: { user: SessionUser }) {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const byId = new Map<string, Issue>();
-
-    for (const issue of issues) {
-      if (tab === "open" && issue.status !== "open") continue;
-      if (tab === "resolved" && issue.status !== "resolved") continue;
-      if (severity !== "all" && issue.severity !== severity) continue;
-      if (q) {
-        const cart = cartMap.get(issue.cartId);
-        const hay = [issue.description, issue.reporterName, cart?.name, cart?.location]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        if (!hay.includes(q)) continue;
-      }
-      byId.set(issue.id, issue);
-    }
-
-    // Hold rows that already left store while the success animation plays.
-    for (const issue of Object.values(pendingDelete)) {
-      if (!byId.has(issue.id)) byId.set(issue.id, issue);
-    }
-
-    return [...byId.values()].sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
-  }, [issues, tab, severity, query, cartMap, pendingDelete]);
+    return issues.filter((issue) => {
+      if (tab === "open" && issue.status !== "open") return false;
+      if (tab === "resolved" && issue.status !== "resolved") return false;
+      if (severity !== "all" && issue.severity !== severity) return false;
+      if (!q) return true;
+      const cart = cartMap.get(issue.cartId);
+      return [issue.description, issue.reporterName, cart?.name, cart?.location]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [issues, tab, severity, query, cartMap]);
 
   async function setStatus(issue: Issue, next: IssueStatus) {
     setBusyId(issue.id);
@@ -336,137 +317,83 @@ function IssuesView({ user }: { user: SessionUser }) {
           </div>
         ) : (
           <ul className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white">
-            <AnimatePresence initial={false}>
-              {filtered.map((issue, index) => {
-                const cart = cartMap.get(issue.cartId);
-                const busy = busyId === issue.id;
-                const isOpen = issue.status === "open";
-                const meta = [
-                  severityLabel(issue.severity),
-                  issue.reporterName,
-                  format(parseISO(issue.createdAt), "MMM d"),
-                  cart?.location,
-                ]
-                  .filter(Boolean)
-                  .join(" · ");
+            {filtered.map((issue, index) => {
+              const cart = cartMap.get(issue.cartId);
+              const busy = busyId === issue.id;
+              const isOpen = issue.status === "open";
+              const meta = [
+                severityLabel(issue.severity),
+                issue.reporterName,
+                format(parseISO(issue.createdAt), "MMM d"),
+                cart?.location,
+              ]
+                .filter(Boolean)
+                .join(" · ");
 
-                return (
-                  <motion.li
-                    key={issue.id}
-                    layout
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{
-                      opacity: 0,
-                      height: 0,
-                      marginTop: 0,
-                      marginBottom: 0,
-                      paddingTop: 0,
-                      paddingBottom: 0,
-                      y: -4,
-                      transition: {
-                        duration: 0.28,
-                        ease: [0.22, 1, 0.36, 1],
-                      },
-                    }}
-                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                    className={cn(
-                      "flex items-start gap-4 overflow-hidden px-4 py-3.5 sm:items-center sm:px-5",
-                      index > 0 && "border-t border-[var(--hairline)]",
-                    )}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                        <p className="truncate text-[13px] font-medium tracking-[-0.01em] text-neutral-950">
-                          {cart?.name ?? "Cart"}
-                        </p>
-                        <StatusBadge status={issue.status} />
-                      </div>
-                      <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-relaxed text-neutral-600 sm:line-clamp-1">
-                        {issue.description}
+              return (
+                <li
+                  key={issue.id}
+                  className={cn(
+                    "flex items-start gap-4 px-4 py-3.5 sm:items-center sm:px-5",
+                    index > 0 && "border-t border-[var(--hairline)]",
+                  )}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                      <p className="truncate text-[13px] font-medium tracking-[-0.01em] text-neutral-950">
+                        {cart?.name ?? "Cart"}
                       </p>
-                      <p className="mt-0.5 truncate text-[12px] text-neutral-400">
-                        {meta}
-                      </p>
+                      <StatusBadge status={issue.status} />
                     </div>
+                    <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-relaxed text-neutral-600 sm:line-clamp-1">
+                      {issue.description}
+                    </p>
+                    <p className="mt-0.5 truncate text-[12px] text-neutral-400">
+                      {meta}
+                    </p>
+                  </div>
 
-                    {isAdmin || canDeleteIssue(issue) ? (
-                      <div className="flex shrink-0 flex-col items-stretch gap-1.5 sm:flex-row sm:items-center">
-                        {isAdmin ? (
-                          <button
-                            type="button"
-                            disabled={busy || Boolean(pendingDelete[issue.id])}
-                            onClick={() =>
-                              setStatus(issue, isOpen ? "resolved" : "open")
-                            }
-                            className={cn(
-                              "rounded-md border px-2.5 py-1.5 text-[12.5px] font-medium",
-                              "transition-colors duration-150",
-                              "focus-visible:outline-none focus-visible:ring-2",
-                              "disabled:pointer-events-none disabled:opacity-40",
-                              isOpen
-                                ? cn(
-                                    "border-emerald-200/90 bg-emerald-50 text-emerald-800",
-                                    "hover:border-emerald-300 hover:bg-emerald-100",
-                                    "focus-visible:ring-emerald-600/20",
-                                  )
-                                : cn(
-                                    "border-red-200/90 bg-red-50 text-red-700",
-                                    "hover:border-red-300 hover:bg-red-100",
-                                    "focus-visible:ring-red-600/20",
-                                  ),
-                            )}
-                          >
-                            {busy
-                              ? "…"
-                              : isOpen
-                                ? "Mark resolved"
-                                : "Reopen issue"}
-                          </button>
-                        ) : null}
-                        {canDeleteIssue(issue) ? (
-                          <IssueDeleteButton
-                            disabled={busy || Boolean(pendingDelete[issue.id])}
-                            onConfirm={async () => {
-                              const res = await deleteIssue(issue.id);
-                              if (res.ok) {
-                                setPendingDelete((prev) => ({
-                                  ...prev,
-                                  [issue.id]: issue,
-                                }));
-                              }
-                              return res;
-                            }}
-                            onError={(message) => {
-                              setPendingDelete((prev) => {
-                                if (!prev[issue.id]) return prev;
-                                const next = { ...prev };
-                                delete next[issue.id];
-                                return next;
-                              });
-                              toast({
-                                title: "Could not delete issue",
-                                description: message,
-                                variant: "destructive",
-                              });
-                            }}
-                            onSuccess={() => {
-                              setPendingDelete((prev) => {
-                                if (!prev[issue.id]) return prev;
-                                const next = { ...prev };
-                                delete next[issue.id];
-                                return next;
-                              });
-                              toast({ title: "Issue deleted" });
-                            }}
-                          />
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </motion.li>
-                );
-              })}
-            </AnimatePresence>
+                  {isAdmin || canDeleteIssue(issue) ? (
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            setStatus(issue, isOpen ? "resolved" : "open")
+                          }
+                          className={cn(
+                            "h-7 rounded-md px-2 text-[12.5px] font-medium tracking-[-0.01em]",
+                            "text-neutral-600 transition-colors",
+                            "hover:bg-neutral-50 hover:text-neutral-950",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+                            "disabled:pointer-events-none disabled:opacity-40",
+                          )}
+                        >
+                          {busy ? "…" : isOpen ? "Resolve" : "Reopen"}
+                        </button>
+                      ) : null}
+                      {canDeleteIssue(issue) ? (
+                        <IssueDeleteButton
+                          disabled={busy}
+                          onConfirm={() => deleteIssue(issue.id)}
+                          onError={(message) => {
+                            toast({
+                              title: "Could not delete issue",
+                              description: message,
+                              variant: "destructive",
+                            });
+                          }}
+                          onSuccess={() => {
+                            toast({ title: "Issue deleted" });
+                          }}
+                        />
+                      ) : null}
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
       </PageShell>
