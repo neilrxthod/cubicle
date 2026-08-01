@@ -10,6 +10,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -75,19 +77,23 @@ function SortableHeader({
   sortConfig: { key: string; direction: "asc" | "desc" } | null
   onSort: (key: string) => void
 }) {
+  const active = sortConfig?.key === sortKey
   return (
-    <th className="px-3 py-3 text-left">
+    <th className="px-3 py-2.5 text-left">
       <button
         type="button"
         onClick={() => onSort(sortKey)}
-        className="group inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+        className={cn(
+          "group inline-flex items-center gap-1 text-[11.5px] font-medium tracking-[-0.01em] transition-colors",
+          active ? "text-neutral-950" : "text-neutral-400 hover:text-neutral-700",
+        )}
       >
         {label}
-        {sortConfig?.key === sortKey ? (
+        {active ? (
           sortConfig.direction === "asc" ? (
-            <ArrowUp className="size-3 text-foreground" />
+            <ArrowUp className="size-3 text-neutral-500" />
           ) : (
-            <ArrowDown className="size-3 text-foreground" />
+            <ArrowDown className="size-3 text-neutral-500" />
           )
         ) : (
           <ArrowUpDown className="size-3 opacity-0 transition-opacity group-hover:opacity-40" />
@@ -525,15 +531,21 @@ function BookingsTable({
     setSortConfig({ key, direction })
   }
 
-  function handleExportCSV() {
-    const headers = ["Date", "Day", "Period", "Cart", "Class", "Subject", "Teacher"]
-    const rows = filtered.map((b) => {
+  function downloadCsv(filename: string, list: Booking[], emptyMessage: string) {
+    if (list.length === 0) {
+      toast({ title: "Nothing to export", description: emptyMessage })
+      return
+    }
+    const headers = ["Date", "Day", "Period", "Cart", "Location", "Class", "Subject", "Teacher"]
+    const rows = list.map((b) => {
       const date = parseISO(b.date)
+      const cart = cartMap.get(b.cartId)
       return [
-        format(date, "MMM d, yyyy"),
+        format(date, "yyyy-MM-dd"),
         format(date, "EEEE"),
         b.period,
-        cartMap.get(b.cartId)?.name ?? "-",
+        cart?.name ?? "-",
+        cart?.location ?? "",
         b.className ?? "",
         b.subject ?? "",
         b.teacherName,
@@ -546,11 +558,443 @@ function BookingsTable({
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.setAttribute("href", url)
-    link.setAttribute("download", `bookings-export-${format(new Date(), "yyyy-MM-dd")}.csv`)
+    link.setAttribute("download", filename)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    toast({ title: "Exported" })
+    URL.revokeObjectURL(url)
+    toast({
+      title: "Exported",
+      description: `${list.length} reservation${list.length === 1 ? "" : "s"} · CSV`,
+    })
+  }
+
+  function exportVisibleCsv() {
+    downloadCsv(
+      `reservations-filtered-${format(new Date(), "yyyy-MM-dd")}.csv`,
+      filtered,
+      "No reservations match the current filters.",
+    )
+  }
+
+  function exportAllCsv() {
+    downloadCsv(
+      `reservations-all-${format(new Date(), "yyyy-MM-dd")}.csv`,
+      sorted,
+      "No reservations to export.",
+    )
+  }
+
+  function exportTodayCsv() {
+    const list = sorted.filter((b) => b.date === todayKey)
+    downloadCsv(
+      `reservations-today-${todayKey}.csv`,
+      list,
+      "No reservations scheduled for today.",
+    )
+  }
+
+  function exportWeekCsv() {
+    const list = sorted.filter((b) => b.date >= todayKey && b.date <= weekEndKey)
+    downloadCsv(
+      `reservations-week-${todayKey}.csv`,
+      list,
+      "No reservations in the next 7 days.",
+    )
+  }
+
+  function exportConflictsCsv() {
+    const list = sorted.filter((b) => cartMap.get(b.cartId)?.status === "maintenance")
+    downloadCsv(
+      `reservations-conflicts-${format(new Date(), "yyyy-MM-dd")}.csv`,
+      list,
+      "No conflict reservations (bookings on paused carts).",
+    )
+  }
+
+  function exportByTeacherCsv() {
+    const counts = new Map<string, number>()
+    for (const b of filtered) {
+      counts.set(b.teacherName, (counts.get(b.teacherName) ?? 0) + 1)
+    }
+    const rows = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([name, count]) =>
+        [`"${name.replaceAll('"', '""')}"`, count].join(","),
+      )
+    if (rows.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No reservations match the current filters.",
+      })
+      return
+    }
+    const csvContent = ["Teacher,Reservations", ...rows].join("\n")
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `reservations-by-teacher-${format(new Date(), "yyyy-MM-dd")}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    toast({
+      title: "Exported",
+      description: `${rows.length} teacher${rows.length === 1 ? "" : "s"} · CSV`,
+    })
+  }
+
+  function printTodaySchedule() {
+    const list = sorted
+      .filter((b) => b.date === todayKey)
+      .sort(
+        (a, b) =>
+          a.period.localeCompare(b.period) ||
+          (cartMap.get(a.cartId)?.name ?? "").localeCompare(
+            cartMap.get(b.cartId)?.name ?? "",
+          ),
+      )
+
+    const esc = (s: string) =>
+      s
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+
+    const conflictCount = list.filter(
+      (b) => cartMap.get(b.cartId)?.status === "maintenance",
+    ).length
+    const generatedAt = format(new Date(), "MMM d, yyyy · HH:mm")
+    const dateLabel = format(parseISO(todayKey), "EEEE, MMMM d, yyyy")
+
+    const bodyRows =
+      list.length === 0
+        ? `<tr class="empty">
+            <td colspan="6">No reservations scheduled for this day.</td>
+          </tr>`
+        : list
+            .map((b) => {
+              const c = cartMap.get(b.cartId)
+              const conflict = c?.status === "maintenance"
+              return `<tr class="${conflict ? "conflict" : ""}">
+                <td class="period">${esc(b.period)}</td>
+                <td class="cart">
+                  <span class="primary">${esc(c?.name ?? "—")}</span>
+                  ${conflict ? `<span class="flag">Paused</span>` : ""}
+                </td>
+                <td class="muted">${esc(c?.location?.trim() || "—")}</td>
+                <td class="teacher">${esc(b.teacherName)}</td>
+                <td class="muted">${esc(b.className?.trim() || "—")}</td>
+                <td class="muted">${esc(b.subject?.trim() || "—")}</td>
+              </tr>`
+            })
+            .join("")
+
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cubicle · Schedule · ${todayKey}</title>
+  <style>
+    @page {
+      size: letter portrait;
+      margin: 0.6in 0.65in 0.7in;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #0a0a0a;
+      -webkit-font-smoothing: antialiased;
+      font-family: "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    }
+    .sheet {
+      width: 100%;
+      max-width: 8.5in;
+      margin: 0 auto;
+    }
+    .top {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      padding-bottom: 18px;
+      border-bottom: 1.5px solid #0a0a0a;
+    }
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .wordmark {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #0a0a0a;
+    }
+    .title {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: -0.035em;
+      line-height: 1.15;
+      color: #0a0a0a;
+    }
+    .meta-block {
+      text-align: right;
+      font-size: 11.5px;
+      line-height: 1.45;
+      color: #737373;
+    }
+    .meta-block strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #171717;
+      letter-spacing: -0.01em;
+    }
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 20px;
+      margin: 16px 0 22px;
+      padding: 0;
+      list-style: none;
+      font-size: 11.5px;
+      color: #525252;
+    }
+    .stats li {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .stats .n {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: #0a0a0a;
+      letter-spacing: -0.02em;
+    }
+    .stats .warn {
+      color: #b91c1c;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    thead th {
+      padding: 0 10px 10px 0;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #a3a3a3;
+      text-align: left;
+      border-bottom: 1px solid #e5e5e5;
+    }
+    thead th:last-child { padding-right: 0; }
+    tbody td {
+      padding: 11px 10px 11px 0;
+      font-size: 12px;
+      line-height: 1.35;
+      vertical-align: middle;
+      border-bottom: 1px solid #f0f0f0;
+      color: #171717;
+    }
+    tbody td:last-child { padding-right: 0; }
+    tbody tr:last-child td { border-bottom: none; }
+    .period {
+      width: 9%;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+      color: #404040;
+    }
+    .cart { width: 16%; }
+    .cart .primary {
+      font-weight: 600;
+      letter-spacing: -0.015em;
+    }
+    .cart .flag {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 5px;
+      border-radius: 999px;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #b91c1c;
+      background: #fef2f2;
+      vertical-align: middle;
+    }
+    .teacher {
+      width: 20%;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+    .muted {
+      color: #737373;
+      font-weight: 400;
+    }
+    tr.conflict td { background: #fffafa; }
+    tr.empty td {
+      padding: 36px 0;
+      text-align: center;
+      color: #a3a3a3;
+      font-size: 12.5px;
+      border-bottom: none;
+    }
+    col.c-period { width: 9%; }
+    col.c-cart { width: 16%; }
+    col.c-loc { width: 16%; }
+    col.c-teacher { width: 20%; }
+    col.c-class { width: 20%; }
+    col.c-subj { width: 19%; }
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-top: 28px;
+      padding-top: 14px;
+      border-top: 1px solid #e5e5e5;
+      font-size: 10px;
+      letter-spacing: 0.02em;
+      color: #a3a3a3;
+    }
+    .footer .confidential {
+      font-weight: 500;
+      color: #737373;
+    }
+    @media print {
+      html, body { background: #fff; }
+      .sheet { max-width: none; }
+      thead { display: table-header-group; }
+      tr { break-inside: avoid; }
+      .no-print { display: none !important; }
+    }
+    @media screen {
+      body {
+        background: #f4f4f5;
+        padding: 32px 16px 48px;
+      }
+      .sheet {
+        background: #fff;
+        padding: 40px 44px 36px;
+        border-radius: 4px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 12px 40px rgba(0,0,0,0.06);
+      }
+      .toolbar {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        max-width: 8.5in;
+        margin: 0 auto 14px;
+      }
+      .toolbar button {
+        height: 32px;
+        padding: 0 12px;
+        border-radius: 6px;
+        border: 1px solid #e5e5e5;
+        background: #fff;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: #404040;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .toolbar button.primary {
+        background: #0a0a0a;
+        border-color: #0a0a0a;
+        color: #fff;
+      }
+      .toolbar button:hover { border-color: #d4d4d4; }
+      .toolbar button.primary:hover { background: #262626; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar no-print">
+    <button type="button" onclick="window.close()">Close</button>
+    <button type="button" class="primary" onclick="window.print()">Save as PDF / Print</button>
+  </div>
+  <div class="sheet">
+    <header class="top">
+      <div class="brand">
+        <div class="wordmark">Cubicle</div>
+        <h1 class="title">Daily cart schedule</h1>
+      </div>
+      <div class="meta-block">
+        <strong>${esc(dateLabel)}</strong>
+        Generated ${esc(generatedAt)}
+      </div>
+    </header>
+
+    <ul class="stats">
+      <li><span class="n">${list.length}</span> reservation${list.length === 1 ? "" : "s"}</li>
+      <li><span class="n">${new Set(list.map((b) => b.teacherId || b.teacherName)).size}</span> teachers</li>
+      <li><span class="n">${new Set(list.map((b) => b.cartId)).size}</span> carts</li>
+      ${
+        conflictCount > 0
+          ? `<li class="warn"><span class="n warn">${conflictCount}</span> on paused carts</li>`
+          : ""
+      }
+    </ul>
+
+    <table>
+      <colgroup>
+        <col class="c-period" />
+        <col class="c-cart" />
+        <col class="c-loc" />
+        <col class="c-teacher" />
+        <col class="c-class" />
+        <col class="c-subj" />
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Period</th>
+          <th>Cart</th>
+          <th>Location</th>
+          <th>Teacher</th>
+          <th>Class</th>
+          <th>Subject</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${bodyRows}
+      </tbody>
+    </table>
+
+    <footer class="footer">
+      <span class="confidential">Internal use · authorized staff only</span>
+      <span>Cubicle operations</span>
+    </footer>
+  </div>
+  <script>
+    window.onload = function () {
+      setTimeout(function () { window.print(); }, 250);
+    };
+  </script>
+</body>
+</html>`
+
+    const w = window.open("", "_blank")
+    if (!w) {
+      toast({
+        title: "Popup blocked",
+        description: "Allow popups to export the PDF schedule.",
+        variant: "destructive",
+      })
+      return
+    }
+    w.document.write(html)
+    w.document.close()
   }
 
   async function handleBatchDelete() {
@@ -576,8 +1020,12 @@ function BookingsTable({
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length
   const someSelected = selectedIds.size > 0 && !allSelected
 
-  const filterTrigger =
-    "h-9 gap-2 rounded-lg border border-neutral-200 bg-white px-2.5 text-[12.5px] font-medium text-neutral-800 shadow-none hover:bg-neutral-50 focus:ring-0 data-[state=open]:border-neutral-400 data-[placeholder]:text-neutral-400"
+  const filterTrigger = cn(
+    "h-8 gap-1.5 rounded-md border border-[var(--hairline-strong)] bg-white px-2.5",
+    "text-[12.5px] font-medium text-neutral-700 shadow-none",
+    "hover:bg-neutral-50 focus:ring-0 data-[state=open]:border-neutral-400",
+    "data-[placeholder]:text-neutral-400 [&_svg]:size-3.5 [&_svg]:opacity-45",
+  )
 
   const dateLabel = rangeFilter?.from
     ? rangeFilter.to
@@ -587,19 +1035,82 @@ function BookingsTable({
       ? format(parseISO(dateFilter), "MMM d, yyyy")
       : "Date"
 
+  const chipClass = (on: boolean) =>
+    cn(
+      "inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[12px] font-medium tracking-[-0.01em] transition-colors",
+      on
+        ? "bg-neutral-950 text-white"
+        : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900",
+    )
+
   return (
-    <section className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white shadow-[var(--shadow-surface)]">
-      <div className="flex flex-col gap-3 border-b border-neutral-100 px-4 py-3 sm:px-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <section className="flex flex-col gap-4">
+      {/* Summary + view */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] tracking-[-0.01em]">
+          <p className="tabular-nums text-neutral-950">
+            <span className="font-medium">{filtered.length}</span>
+            <span className="ml-1 font-normal text-neutral-400">shown</span>
+          </p>
+          <span aria-hidden className="hidden h-3 w-px bg-neutral-200 sm:block" />
+          <p className="tabular-nums text-neutral-500">
+            Total <span className="font-medium text-neutral-700">{sorted.length}</span>
+          </p>
+          {conflictsCount > 0 ? (
+            <>
+              <span aria-hidden className="hidden h-3 w-px bg-neutral-200 sm:block" />
+              <p className="tabular-nums text-neutral-500">
+                Conflicts{" "}
+                <span className="font-medium text-red-600">{conflictsCount}</span>
+              </p>
+            </>
+          ) : null}
+        </div>
+
+        <div className="inline-flex h-8 items-center rounded-md border border-[var(--hairline-strong)] bg-white p-0.5">
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            className={cn(
+              "rounded-[5px] px-2.5 text-[12px] font-medium transition-colors",
+              view === "list"
+                ? "bg-neutral-950 text-white"
+                : "text-neutral-400 hover:text-neutral-800",
+            )}
+          >
+            List
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("board")}
+            className={cn(
+              "rounded-[5px] px-2.5 text-[12px] font-medium transition-colors",
+              view === "board"
+                ? "bg-neutral-950 text-white"
+                : "text-neutral-400 hover:text-neutral-800",
+            )}
+          >
+            Grid
+          </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
+            <div className="relative min-w-[160px] flex-1 sm:max-w-[200px]">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" />
               <input
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search…"
-                className="h-9 w-full rounded-lg border border-neutral-200 bg-white pl-8 pr-3 text-[13px] text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-0"
+                placeholder="Search"
+                className={cn(
+                  "h-8 w-full rounded-md border border-[var(--hairline-strong)] bg-white pl-8 pr-2.5",
+                  "text-[12.5px] text-neutral-900 outline-none placeholder:text-neutral-400",
+                  "focus:border-neutral-400",
+                )}
               />
             </div>
 
@@ -607,18 +1118,21 @@ function BookingsTable({
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className={cn(filterTrigger, "inline-flex min-w-[132px] items-center justify-between")}
+                  className={cn(filterTrigger, "inline-flex min-w-[120px] items-center justify-between")}
                 >
-                  <span className="inline-flex items-center gap-2 truncate">
-                    <CalendarIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                    <span className={cn(!(dateFilter || rangeFilter) && "text-muted-foreground")}>
+                  <span className="inline-flex items-center gap-1.5 truncate">
+                    <CalendarIcon className="size-3.5 shrink-0 text-neutral-400" />
+                    <span className={cn(!(dateFilter || rangeFilter) && "text-neutral-400")}>
                       {dateLabel}
                     </span>
                   </span>
-                  <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+                  <ChevronDown className="size-3.5 shrink-0 text-neutral-400" />
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto rounded-xl border-border p-0 shadow-lg" align="start">
+              <PopoverContent
+                className="w-auto rounded-xl border-[var(--hairline-strong)] p-0 shadow-[var(--shadow-soft)]"
+                align="start"
+              >
                 <Calendar
                   mode="range"
                   selected={rangeFilter}
@@ -634,10 +1148,10 @@ function BookingsTable({
               value={teacherFilter || "all"}
               onValueChange={(v) => setTeacherFilter(v === "all" ? "" : (v ?? ""))}
             >
-              <SelectTrigger className={cn(filterTrigger, "w-auto min-w-[130px]")}>
+              <SelectTrigger className={cn(filterTrigger, "w-auto min-w-[120px]")}>
                 <SelectValue placeholder="Teacher" />
               </SelectTrigger>
-              <SelectContent className="rounded-xl" align="start">
+              <SelectContent className="rounded-lg" align="start">
                 <SelectItem value="all">All teachers</SelectItem>
                 {teachers.map((t) => (
                   <SelectItem key={t} value={t}>
@@ -651,10 +1165,10 @@ function BookingsTable({
               value={cartFilter || "all"}
               onValueChange={(v) => setCartFilter(v === "all" ? "" : (v ?? ""))}
             >
-              <SelectTrigger className={cn(filterTrigger, "w-auto min-w-[120px]")}>
+              <SelectTrigger className={cn(filterTrigger, "w-auto min-w-[110px]")}>
                 <SelectValue placeholder="Cart" />
               </SelectTrigger>
-              <SelectContent className="rounded-xl" align="start">
+              <SelectContent className="rounded-lg" align="start">
                 <SelectItem value="all">All carts</SelectItem>
                 {cartNames.map((c) => (
                   <SelectItem key={c} value={c}>
@@ -668,10 +1182,10 @@ function BookingsTable({
               value={periodFilter || "all"}
               onValueChange={(v) => setPeriodFilter(v === "all" ? "" : (v ?? ""))}
             >
-              <SelectTrigger className={cn(filterTrigger, "w-auto min-w-[110px]")}>
+              <SelectTrigger className={cn(filterTrigger, "w-auto min-w-[100px]")}>
                 <SelectValue placeholder="Period" />
               </SelectTrigger>
-              <SelectContent className="rounded-xl" align="start">
+              <SelectContent className="rounded-lg" align="start">
                 <SelectItem value="all">All periods</SelectItem>
                 {periods.map((p) => (
                   <SelectItem key={p} value={p}>
@@ -685,7 +1199,7 @@ function BookingsTable({
               <button
                 type="button"
                 onClick={clearFilters}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-neutral-100 hover:text-foreground"
+                className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-[12.5px] font-medium text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
               >
                 <X className="size-3.5" />
                 Clear
@@ -695,362 +1209,390 @@ function BookingsTable({
 
           <div className="flex shrink-0 items-center gap-2">
             {selectedIds.size > 0 ? (
-              <div className="inline-flex h-9 items-center gap-1 rounded-lg border border-neutral-900 bg-neutral-950 pl-3 pr-1 text-white">
-                <span className="text-[12px] font-medium tabular-nums">{selectedIds.size} selected</span>
+              <div className="inline-flex h-8 items-center gap-1 rounded-md border border-neutral-200 bg-white pl-2.5 pr-1">
+                <span className="text-[12px] font-medium tabular-nums text-neutral-700">
+                  {selectedIds.size} selected
+                </span>
                 <button
                   type="button"
                   onClick={handleBatchDelete}
                   disabled={isDeleting}
-                  className="ml-1 inline-flex h-7 items-center gap-1 rounded-md bg-white/10 px-2.5 text-[11px] font-semibold uppercase tracking-wide transition-colors hover:bg-red-500 disabled:opacity-50"
+                  className="inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11.5px] font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
                 >
                   <Trash2 className="size-3" />
-                  {isDeleting ? "..." : "Delete"}
+                  {isDeleting ? "…" : "Delete"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectedIds(new Set())}
-                  className="flex size-7 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                  className="flex size-6 items-center justify-center rounded-md text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-800"
                   aria-label="Clear selection"
                 >
                   <X className="size-3.5" />
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={handleExportCSV}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-neutral-50"
-              >
-                <Download className="size-3.5" />
-                Export
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--hairline-strong)] bg-white px-2.5",
+                      "text-[12.5px] font-medium text-neutral-700 transition-colors hover:bg-neutral-50",
+                    )}
+                  >
+                    <Download className="size-3.5 text-neutral-400" />
+                    Export
+                    <ChevronDown className="size-3.5 text-neutral-400" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="w-56 rounded-lg border-[var(--hairline-strong)] p-1 shadow-[var(--shadow-soft)]"
+                >
+                  <DropdownMenuLabel className="px-2 py-1.5 text-[11px] font-medium text-neutral-400">
+                    CSV
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-md text-[12.5px]"
+                    onSelect={exportVisibleCsv}
+                  >
+                    Visible list
+                    <span className="ml-auto tabular-nums text-[11px] text-neutral-400">
+                      {filtered.length}
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-md text-[12.5px]"
+                    onSelect={exportAllCsv}
+                  >
+                    All reservations
+                    <span className="ml-auto tabular-nums text-[11px] text-neutral-400">
+                      {sorted.length}
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-md text-[12.5px]"
+                    onSelect={exportTodayCsv}
+                  >
+                    Today only
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-md text-[12.5px]"
+                    onSelect={exportWeekCsv}
+                  >
+                    Next 7 days
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-md text-[12.5px]"
+                    onSelect={exportConflictsCsv}
+                  >
+                    Conflicts only
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-md text-[12.5px]"
+                    onSelect={exportByTeacherCsv}
+                  >
+                    By teacher
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="my-1" />
+                  <DropdownMenuLabel className="px-2 py-1.5 text-[11px] font-medium text-neutral-400">
+                    PDF
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-md text-[12.5px]"
+                    onSelect={printTodaySchedule}
+                  >
+                    Today&apos;s schedule
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                clearFilters()
-                setDateFilter(todayKey)
-              }}
-              className={cn(
-                "h-8 rounded-full px-3 text-[12px] font-medium transition-colors",
-                dateFilter === todayKey && !showConflicts && !rangeFilter
-                  ? "bg-neutral-950 text-white"
-                  : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900",
-              )}
-            >
-              Today
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                clearFilters()
-                setDateFilter(tomorrowKey)
-              }}
-              className={cn(
-                "h-8 rounded-full px-3 text-[12px] font-medium transition-colors",
-                dateFilter === tomorrowKey && !showConflicts && !rangeFilter
-                  ? "bg-neutral-950 text-white"
-                  : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900",
-              )}
-            >
-              Tomorrow
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                clearFilters()
-                setRangeFilter({ from: startOfDay(new Date()), to: endOfDay(addDays(new Date(), 6)) })
-              }}
-              className={cn(
-                "h-8 rounded-full px-3 text-[12px] font-medium transition-colors",
+        <div className="flex flex-wrap items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              clearFilters()
+              setDateFilter(todayKey)
+            }}
+            className={chipClass(dateFilter === todayKey && !showConflicts && !rangeFilter)}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              clearFilters()
+              setDateFilter(tomorrowKey)
+            }}
+            className={chipClass(dateFilter === tomorrowKey && !showConflicts && !rangeFilter)}
+          >
+            Tomorrow
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              clearFilters()
+              setRangeFilter({
+                from: startOfDay(new Date()),
+                to: endOfDay(addDays(new Date(), 6)),
+              })
+            }}
+            className={chipClass(
+              Boolean(
                 rangeFilter?.from &&
                   rangeFilter?.to &&
                   format(rangeFilter.from, "yyyy-MM-dd") === todayKey &&
-                  format(rangeFilter.to, "yyyy-MM-dd") === weekEndKey
-                  ? "bg-neutral-950 text-white"
-                  : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900",
-              )}
-            >
-              This week
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                clearFilters()
-                setShowConflicts(true)
-              }}
-              className={cn(
-                "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors",
-                showConflicts ? "bg-red-600 text-white" : "bg-red-50 text-red-700 hover:bg-red-100",
-              )}
-            >
-              Conflicts
-              {conflictsCount > 0 ? (
-                <span
-                  className={cn(
-                    "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold",
-                    showConflicts ? "bg-white/20 text-white" : "bg-red-600 text-white",
-                  )}
-                >
-                  {conflictsCount}
-                </span>
-              ) : null}
-            </button>
-          </div>
-
-          <div className="ml-auto flex items-center gap-3">
-            <span className="text-[12px] tabular-nums text-muted-foreground">
-              {filtered.length}
-              <span className="text-neutral-300"> / </span>
-              {sorted.length}
-            </span>
-            <div className="inline-flex h-8 rounded-lg border border-border bg-neutral-50 p-0.5">
-              <button
-                type="button"
-                onClick={() => setView("list")}
-                className={cn(
-                  "rounded-md px-3 text-[12px] font-medium transition-colors",
-                  view === "list"
-                    ? "bg-white text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                List
-              </button>
-              <button
-                type="button"
-                onClick={() => setView("board")}
-                className={cn(
-                  "rounded-md px-3 text-[12px] font-medium transition-colors",
-                  view === "board"
-                    ? "bg-white text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                Grid
-              </button>
-            </div>
-          </div>
+                  format(rangeFilter.to, "yyyy-MM-dd") === weekEndKey,
+              ),
+            )}
+          >
+            This week
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              clearFilters()
+              setShowConflicts(true)
+            }}
+            className={cn(
+              chipClass(showConflicts),
+              !showConflicts &&
+                conflictsCount > 0 &&
+                "text-red-600 hover:bg-red-50 hover:text-red-700",
+            )}
+          >
+            Conflicts
+            {conflictsCount > 0 ? (
+              <span className="tabular-nums opacity-80">{conflictsCount}</span>
+            ) : null}
+          </button>
         </div>
       </div>
 
       {view === "list" ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] border-collapse text-left">
-            <thead>
-              <tr className="border-b border-border/70 bg-neutral-50/80">
-                <th className="w-11 px-4 py-3">
-                  <Checkbox
-                    checked={allSelected}
-                    indeterminate={someSelected && !allSelected}
-                    onCheckedChange={(checked) => {
-                      if (checked) setSelectedIds(new Set(filtered.map((b) => b.id)))
-                      else setSelectedIds(new Set())
-                    }}
-                    aria-label="Select all"
-                  />
-                </th>
-                <SortableHeader label="Date" sortKey="date" sortConfig={sortConfig} onSort={handleSort} />
-                <SortableHeader label="Period" sortKey="period" sortConfig={sortConfig} onSort={handleSort} />
-                <SortableHeader label="Cart" sortKey="cart" sortConfig={sortConfig} onSort={handleSort} />
-                <SortableHeader label="Class" sortKey="class" sortConfig={sortConfig} onSort={handleSort} />
-                <SortableHeader label="Teacher" sortKey="teacher" sortConfig={sortConfig} onSort={handleSort} />
-                <th className="w-12 px-3 py-3" aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-16">
-                    <div className="flex flex-col items-center text-center">
-                      <div className="mb-3 flex size-11 items-center justify-center rounded-full bg-neutral-100 text-neutral-500">
-                        <CalendarIcon className="size-5" />
-                      </div>
-                      <p className="text-[14px] font-semibold tracking-tight text-foreground">
-                        {hasFilters ? "No matching reservations" : "No reservations yet"}
-                      </p>
-                      <p className="mt-1 max-w-sm text-[13px] text-muted-foreground">
-                        {hasFilters
-                          ? "Try clearing filters or adjusting the date range."
-                          : "When teachers book carts, they will show up here."}
-                      </p>
-                      {hasFilters ? (
-                        <button
-                          type="button"
-                          onClick={clearFilters}
-                          className="mt-4 h-9 rounded-lg bg-neutral-950 px-4 text-[13px] font-medium text-white hover:bg-neutral-800"
-                        >
-                          Clear filters
-                        </button>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((b) => {
-                  const cart = cartMap.get(b.cartId)
-                  const date = parseISO(b.date)
-                  const isConflict = cart?.status === "maintenance"
-                  const selected = selectedIds.has(b.id)
-                  const teacher =
-                    userById.get(b.teacherId) ??
-                    userByName.get(b.teacherName.toLowerCase())
-                  const avatarUrl = teacher?.avatarUrl
+        filtered.length === 0 ? (
+          <div className="rounded-xl border border-[var(--hairline)] bg-white px-5 py-12 text-center">
+            <p className="text-[13px] text-neutral-400">
+              {hasFilters ? "No matching reservations." : "No reservations yet."}
+            </p>
+            {hasFilters ? (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="mt-3 text-[13px] font-medium text-neutral-950 underline-offset-4 hover:underline"
+              >
+                Clear filters
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[820px] border-collapse text-left">
+                <thead>
+                  <tr className="border-b border-[var(--hairline)]">
+                    <th className="w-11 px-4 py-2.5 sm:px-5">
+                      <Checkbox
+                        checked={allSelected}
+                        indeterminate={someSelected && !allSelected}
+                        onCheckedChange={(checked) => {
+                          if (checked) setSelectedIds(new Set(filtered.map((b) => b.id)))
+                          else setSelectedIds(new Set())
+                        }}
+                        aria-label="Select all"
+                      />
+                    </th>
+                    <SortableHeader label="Date" sortKey="date" sortConfig={sortConfig} onSort={handleSort} />
+                    <SortableHeader label="Period" sortKey="period" sortConfig={sortConfig} onSort={handleSort} />
+                    <SortableHeader label="Cart" sortKey="cart" sortConfig={sortConfig} onSort={handleSort} />
+                    <SortableHeader label="Class" sortKey="class" sortConfig={sortConfig} onSort={handleSort} />
+                    <SortableHeader label="Teacher" sortKey="teacher" sortConfig={sortConfig} onSort={handleSort} />
+                    <th className="w-12 px-3 py-2.5" aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((b) => {
+                    const cart = cartMap.get(b.cartId)
+                    const date = parseISO(b.date)
+                    const isConflict = cart?.status === "maintenance"
+                    const selected = selectedIds.has(b.id)
+                    const teacher =
+                      userById.get(b.teacherId) ??
+                      userByName.get(b.teacherName.toLowerCase())
+                    const avatarUrl = teacher?.avatarUrl
 
-                  return (
-                    <tr
-                      key={b.id}
-                      className={cn(
-                        "group border-b border-border/60 transition-colors last:border-b-0",
-                        selected
-                          ? "bg-neutral-50"
-                          : isConflict
-                            ? "bg-red-50/40 hover:bg-red-50/70"
-                            : "hover:bg-neutral-50/80",
-                      )}
-                    >
-                      <td className="px-4 py-3.5">
-                        <Checkbox
-                          checked={selected}
-                          onCheckedChange={(checked) => {
-                            const next = new Set(selectedIds)
-                            if (checked) next.add(b.id)
-                            else next.delete(b.id)
-                            setSelectedIds(next)
-                          }}
-                          aria-label={`Select booking for ${b.teacherName}`}
-                        />
-                      </td>
-                      <td className="px-3 py-3.5">
-                        <div className="flex flex-col">
-                          <span className="text-[13px] font-semibold tracking-tight text-foreground">
-                            {format(date, "MMM d, yyyy")}
+                    return (
+                      <tr
+                        key={b.id}
+                        className={cn(
+                          "group border-t border-[var(--hairline)] transition-colors first:border-t-0",
+                          selected ? "bg-neutral-50/80" : "hover:bg-neutral-50/50",
+                        )}
+                      >
+                        <td className="px-4 py-3.5 sm:px-5">
+                          <Checkbox
+                            checked={selected}
+                            onCheckedChange={(checked) => {
+                              const next = new Set(selectedIds)
+                              if (checked) next.add(b.id)
+                              else next.delete(b.id)
+                              setSelectedIds(next)
+                            }}
+                            aria-label={`Select booking for ${b.teacherName}`}
+                          />
+                        </td>
+                        <td className="px-3 py-3.5">
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-medium tracking-[-0.01em] text-neutral-950">
+                              {format(date, "MMM d, yyyy")}
+                            </p>
+                            <p className="mt-0.5 text-[12px] text-neutral-400">
+                              {format(date, "EEE")}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3.5">
+                          <span className="text-[12.5px] font-medium tabular-nums text-neutral-700">
+                            {b.period}
                           </span>
-                          <span className="text-[12px] text-muted-foreground">{format(date, "EEEE")}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3.5">
-                        <span className="inline-flex h-6 items-center rounded-md bg-neutral-100 px-2 text-[11px] font-semibold tracking-wide text-neutral-800">
-                          {b.period}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3.5">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={cn(
-                              "text-[13px] font-semibold tracking-tight",
-                              isConflict ? "text-red-700" : "text-foreground",
-                            )}
-                          >
-                            {cart?.name ?? "-"}
-                          </span>
-                          {isConflict ? <AlertTriangle className="size-3.5 text-red-600" /> : null}
-                        </div>
-                        {cart?.location ? (
-                          <p className="mt-0.5 text-[11px] text-muted-foreground">{cart.location}</p>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-3.5">
-                        <div className="min-w-0">
-                          <p className="truncate text-[13px] font-medium text-foreground">
-                            {b.className?.trim() || "-"}
-                          </p>
-                          {b.subject?.trim() ? (
-                            <p className="truncate text-[11px] text-muted-foreground">{b.subject}</p>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3.5">
-                        <div className="flex min-w-0 items-center gap-2.5">
-                          {avatarUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={avatarUrl}
-                              alt=""
-                              referrerPolicy="no-referrer"
-                              className="size-8 shrink-0 rounded-full object-cover ring-1 ring-black/[0.06]"
-                            />
-                          ) : (
-                            <span
-                              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-semibold tracking-wide text-neutral-600 ring-1 ring-black/[0.04]"
-                              aria-hidden
+                        </td>
+                        <td className="px-3 py-3.5">
+                          <div className="min-w-0">
+                            <p
+                              className={cn(
+                                "truncate text-[13px] font-medium tracking-[-0.01em]",
+                                isConflict ? "text-red-600" : "text-neutral-950",
+                              )}
                             >
-                              {bookingTeacherInitials(b.teacherName)}
-                            </span>
-                          )}
-                          <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
-                            {b.teacherName}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3.5 text-right">
-                        <DropdownMenu modal={false}>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground opacity-70 transition-all hover:bg-neutral-100 hover:text-foreground group-hover:opacity-100 data-[state=open]:bg-neutral-100 data-[state=open]:opacity-100"
-                            >
-                              <MoreHorizontal className="size-4" />
-                              <span className="sr-only">Open options</span>
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48 rounded-xl p-1.5 shadow-lg">
-                            <DropdownMenuItem
-                              className="cursor-pointer gap-2 rounded-lg text-[13px]"
-                              onClick={() => setReassigningBooking(b)}
-                            >
-                              <ArrowRightLeft className="size-4 text-muted-foreground" />
-                              Reassign cart
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer gap-2 rounded-lg text-[13px]" asChild>
-                              <a
-                                href={`mailto:${b.teacherName.toLowerCase().replace(/\s/g, ".")}@school.edu?subject=Regarding your cart booking for ${format(date, "MMM d")}`}
+                              {cart?.name ?? "—"}
+                              {isConflict ? (
+                                <AlertTriangle className="ml-1.5 inline size-3.5 -translate-y-px text-red-500" />
+                              ) : null}
+                            </p>
+                            {cart?.location ? (
+                              <p className="mt-0.5 truncate text-[12px] text-neutral-400">
+                                {cart.location}
+                              </p>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3.5">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-medium tracking-[-0.01em] text-neutral-950">
+                              {b.className?.trim() || "—"}
+                            </p>
+                            {b.subject?.trim() ? (
+                              <p className="mt-0.5 truncate text-[12px] text-neutral-400">
+                                {b.subject}
+                              </p>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3.5">
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            {avatarUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={avatarUrl}
+                                alt=""
+                                referrerPolicy="no-referrer"
+                                className="size-7 shrink-0 rounded-full object-cover ring-1 ring-black/[0.05]"
+                              />
+                            ) : (
+                              <span
+                                className="flex size-7 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[10px] font-semibold tracking-wide text-neutral-500 ring-1 ring-black/[0.04]"
+                                aria-hidden
                               >
-                                <Mail className="size-4 text-muted-foreground" />
-                                Contact teacher
-                              </a>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="mt-0.5 cursor-pointer gap-2 rounded-lg text-[13px] text-red-600 focus:bg-red-50 focus:text-red-700"
-                              onClick={async () => {
-                                if (
-                                  !window.confirm(
-                                    `Cancel ${b.teacherName}'s reservation on ${format(date, "MMM d")}?`,
-                                  )
-                                ) {
-                                  return
-                                }
-                                const res = await cancelBooking(b.id)
-                                if (!res.ok) {
-                                  toast({ title: "Error", description: res.error, variant: "destructive" })
-                                } else {
-                                  toast({
-                                    title: "Canceled",
-                                    description: `Reservation for ${b.teacherName} removed.`,
-                                  })
-                                }
-                              }}
+                                {bookingTeacherInitials(b.teacherName)}
+                              </span>
+                            )}
+                            <span className="min-w-0 truncate text-[13px] tracking-[-0.01em] text-neutral-800">
+                              {b.teacherName}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3.5 text-right">
+                          <DropdownMenu modal={false}>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                className={cn(
+                                  "inline-flex size-8 items-center justify-center rounded-md text-neutral-400",
+                                  "opacity-0 transition-all hover:bg-neutral-100 hover:text-neutral-900",
+                                  "group-hover:opacity-100 data-[state=open]:bg-neutral-100 data-[state=open]:opacity-100 data-[state=open]:text-neutral-900",
+                                )}
+                              >
+                                <MoreHorizontal className="size-4" />
+                                <span className="sr-only">Open options</span>
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-44 rounded-lg border-[var(--hairline-strong)] p-1 shadow-[var(--shadow-soft)]"
                             >
-                              <Trash2 className="size-4" />
-                              Cancel booking
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                              <DropdownMenuItem
+                                className="cursor-pointer gap-2 rounded-md text-[12.5px]"
+                                onClick={() => setReassigningBooking(b)}
+                              >
+                                <ArrowRightLeft className="size-3.5 text-neutral-400" />
+                                Reassign cart
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="cursor-pointer gap-2 rounded-md text-[12.5px]"
+                                asChild
+                              >
+                                <a
+                                  href={`mailto:${b.teacherName.toLowerCase().replace(/\s/g, ".")}@school.edu?subject=Regarding your cart booking for ${format(date, "MMM d")}`}
+                                >
+                                  <Mail className="size-3.5 text-neutral-400" />
+                                  Contact teacher
+                                </a>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="cursor-pointer gap-2 rounded-md text-[12.5px] text-red-600 focus:bg-red-50 focus:text-red-700"
+                                onClick={async () => {
+                                  if (
+                                    !window.confirm(
+                                      `Cancel ${b.teacherName}'s reservation on ${format(date, "MMM d")}?`,
+                                    )
+                                  ) {
+                                    return
+                                  }
+                                  const res = await cancelBooking(b.id)
+                                  if (!res.ok) {
+                                    toast({
+                                      title: "Error",
+                                      description: res.error,
+                                      variant: "destructive",
+                                    })
+                                  } else {
+                                    toast({
+                                      title: "Canceled",
+                                      description: `Reservation for ${b.teacherName} removed.`,
+                                    })
+                                  }
+                                }}
+                              >
+                                <Trash2 className="size-3.5" />
+                                Cancel booking
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
       ) : (
-        <div className="bg-neutral-50/50 p-4 sm:p-5">
+        <div className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white p-4 sm:p-5">
           <DailyBoardLite bookings={filtered} carts={carts} />
         </div>
       )}
