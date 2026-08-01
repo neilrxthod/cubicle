@@ -47,7 +47,6 @@ import { format, parseISO, isWithinInterval, startOfDay, endOfDay, addDays } fro
 import type { DateRange } from "react-day-picker"
 import { cn } from "@/lib/utils"
 import { StaffPanel } from "@/components/staff-panel"
-import { RestrictionsPanel } from "@/components/restrictions-panel"
 import { ManageBookingDialog } from "@/components/manage-booking-dialog"
 import { CartPauseConflictDialog } from "@/components/admin/cart-pause-conflict-dialog"
 import {
@@ -67,7 +66,7 @@ import {
 } from "@/components/ui/dialog"
 import { LiquidMetalButton } from "@/components/ui/liquid-metal"
 
-type Tab = "carts" | "bookings" | "staff" | "reports" | "restrictions"
+type Tab = "carts" | "bookings" | "staff" | "reports"
 
 function isDateInRange(date: Date, range: DateRange | undefined) {
   if (!range?.from) return true
@@ -119,16 +118,15 @@ export function AdminConsole({
   bookings,
   users,
   issues,
-  slotRestrictions,
-  bookingPolicy,
   swapRequests = [],
 }: {
   carts: Cart[]
   bookings: Booking[]
   users: User[]
   issues: Issue[]
-  slotRestrictions: SlotRestriction[]
-  bookingPolicy: BookingPolicy
+  /** Kept for API stability; Restrictions tab is deferred. */
+  slotRestrictions?: SlotRestriction[]
+  bookingPolicy?: BookingPolicy
   swapRequests?: SwapRequest[]
 }) {
   const [tab, setTab] = useState<Tab>("carts")
@@ -144,7 +142,6 @@ export function AdminConsole({
     { id: "bookings", label: "Reservations" },
     { id: "reports", label: "Reports" },
     { id: "staff", label: "Staff" },
-    { id: "restrictions", label: "Restrictions" },
   ]
 
   return (
@@ -189,20 +186,13 @@ export function AdminConsole({
           range={range}
           onOpenTab={setTab}
         />
-      ) : tab === "staff" ? (
+      ) : (
         <StaffPanel
           users={users}
           bookings={bookings}
           issues={issues}
           carts={carts}
           swapRequests={swapRequests}
-        />
-      ) : (
-        <RestrictionsPanel
-          carts={carts}
-          bookings={bookings}
-          slotRestrictions={slotRestrictions}
-          bookingPolicy={bookingPolicy}
         />
       )}
     </div>
