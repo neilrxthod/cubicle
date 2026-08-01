@@ -2026,104 +2026,161 @@ function ReportsPanel({
   const highPriorityIssues = issues.filter(i => i.status === "open" && i.severity === "high")
   const topTeachers = usageRowsWithCarts.filter((row) => row.total > 0).slice(0, 6)
 
+  const reportStatCell = cn(
+    "flex min-h-[6.5rem] flex-col justify-between gap-3 px-4 py-4 sm:min-h-[7rem] sm:px-5 sm:py-5",
+    "text-left transition-colors hover:bg-white/[0.04]",
+  )
+  const reportStatLabel =
+    "text-[10px] font-medium uppercase tracking-[0.16em] text-white/45"
+  const reportStatValue =
+    "text-[1.875rem] font-light leading-none tracking-[-0.04em] text-white tabular-nums sm:text-[2.125rem]"
+
   return (
     <section className="print-root flex flex-col gap-4">
-      <div className="flex flex-col gap-3 rounded-xl border border-[var(--hairline-strong)] bg-white p-4 shadow-[var(--shadow-surface)] sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <h2 className="text-[15px] font-light tracking-[-0.02em] text-neutral-950">
-              Reports
-            </h2>
-            <p className="mt-0.5 text-[12.5px] text-neutral-400">
-              {rangeLabel ? `${rangeLabel} · ` : ""}
-              {format(new Date(), "MMM d, yyyy")}
-            </p>
-          </div>
+      {/* Toolbar — no card chrome */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[12.5px] tabular-nums tracking-[-0.01em] text-neutral-400">
+          {rangeLabel ? (
+            <>
+              <span className="font-medium text-neutral-600">{rangeLabel}</span>
+              <span className="mx-1.5 text-neutral-300">·</span>
+            </>
+          ) : null}
+          {format(new Date(), "MMM d, yyyy")}
+        </p>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                className="h-9 rounded-lg px-3.5 text-[12.5px] font-medium"
-              >
-                <Download className="size-3.5" />
-                Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44 rounded-xl">
-              <DropdownMenuItem className="gap-2 text-[13px]" onSelect={exportBookingsCsv}>
-                Bookings
-              </DropdownMenuItem>
-              <DropdownMenuItem className="gap-2 text-[13px]" onSelect={exportTeacherUsageCsv}>
-                Teacher usage
-              </DropdownMenuItem>
-              <DropdownMenuItem className="gap-2 text-[13px]" onSelect={exportIssuesCsv}>
-                Issues
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        {highPriorityIssues.length > 0 ? (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-red-200/80 bg-red-50/50 px-3.5 py-2.5">
-            <div className="flex min-w-0 items-center gap-2">
-              <AlertTriangle className="size-3.5 shrink-0 text-red-600" />
-              <span className="text-[12.5px] font-medium text-red-800">
-                {highPriorityIssues.length} high-priority issue
-                {highPriorityIssues.length === 1 ? "" : "s"} open
-              </span>
-            </div>
-            <Link
-              href="/issues"
-              className="shrink-0 text-[12px] font-medium text-red-700 hover:text-red-900"
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--hairline-strong)] bg-white px-2.5",
+                "text-[12.5px] font-medium leading-none text-neutral-700 transition-colors hover:bg-neutral-50",
+                "data-[state=open]:border-neutral-400",
+              )}
             >
-              View
-            </Link>
-          </div>
-        ) : null}
+              <Download
+                className="size-3.5 shrink-0 text-neutral-400"
+                strokeWidth={1.75}
+              />
+              Export
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="w-44 rounded-lg border-[var(--hairline-strong)] p-1 shadow-[var(--shadow-soft)]"
+          >
+            <DropdownMenuItem
+              className="cursor-pointer rounded-md text-[12.5px]"
+              onSelect={exportBookingsCsv}
+            >
+              Bookings
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer rounded-md text-[12.5px]"
+              onSelect={exportTeacherUsageCsv}
+            >
+              Teacher usage
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer rounded-md text-[12.5px]"
+              onSelect={exportIssuesCsv}
+            >
+              Issues
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-5">
+      {highPriorityIssues.length > 0 ? (
+        <div className="flex items-center justify-between gap-3 border-b border-red-200/70 pb-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <AlertTriangle className="size-3.5 shrink-0 text-red-600" />
+            <span className="text-[12.5px] font-medium text-red-700">
+              {highPriorityIssues.length} high-priority issue
+              {highPriorityIssues.length === 1 ? "" : "s"} open
+            </span>
+          </div>
+          <Link
+            href="/issues"
+            className="shrink-0 text-[12px] font-medium text-red-700 underline-offset-4 hover:underline"
+          >
+            View issues
+          </Link>
+        </div>
+      ) : null}
+
+      {/* Brand mesh strip — matches Schedule home stats */}
+      <div className="relative overflow-hidden rounded-xl border border-white/[0.08]">
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `
+              radial-gradient(ellipse 100% 80% at 20% 0%, rgba(255,255,255,0.18) 0%, transparent 55%),
+              radial-gradient(ellipse 80% 70% at 80% 15%, rgba(255,255,255,0.1) 0%, transparent 55%),
+              radial-gradient(ellipse 70% 60% at 100% 40%, rgba(255,255,255,0.06) 0%, transparent 50%),
+              radial-gradient(ellipse 80% 70% at 50% 100%, rgba(255,255,255,0.06) 0%, transparent 55%),
+              linear-gradient(160deg, #1a1a1a 0%, #0a0a0a 40%, #000000 72%, #111111 100%)
+            `,
+          }}
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.07)_0%,transparent_45%,transparent_55%,rgba(255,255,255,0.04)_100%)]" />
+        <div className="absolute -top-1/3 left-[-8%] h-[80%] w-[55%] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.11)_0%,transparent_68%)] blur-3xl" />
+        <div className="absolute -top-1/4 right-[-12%] h-[70%] w-[50%] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.08)_0%,transparent_68%)] blur-3xl" />
+
+        <div className="relative z-10 hidden md:flex">
           <button
             type="button"
             onClick={() => onOpenTab("carts")}
-            className="flex flex-col gap-1 rounded-xl border border-[var(--hairline-strong)] bg-neutral-50/40 px-3.5 py-3.5 text-left transition hover:bg-neutral-50"
+            className={cn(reportStatCell, "min-w-0 flex-1")}
           >
-            <span className="type-label text-neutral-400">Active carts</span>
-            <span className="type-metric text-neutral-950">{equipmentHealth}%</span>
+            <span className={reportStatLabel}>Active carts</span>
+            <span className={reportStatValue}>
+              {equipmentHealth}
+              <span className="ml-0.5 text-[0.42em] font-light text-white/40">
+                %
+              </span>
+            </span>
           </button>
           <button
             type="button"
             onClick={() => onOpenTab("bookings")}
-            className="flex flex-col gap-1 rounded-xl border border-[var(--hairline-strong)] bg-neutral-50/40 px-3.5 py-3.5 text-left transition hover:bg-neutral-50"
+            className={cn(
+              reportStatCell,
+              "min-w-0 flex-1 border-l border-white/[0.08]",
+            )}
           >
-            <span className="type-label text-neutral-400">Reservations</span>
-            <span className="type-metric text-neutral-950">{totalBookings}</span>
+            <span className={reportStatLabel}>Reservations</span>
+            <span className={reportStatValue}>{totalBookings}</span>
           </button>
-          <div className="flex flex-col gap-1 rounded-xl border border-[var(--hairline-strong)] bg-neutral-50/40 px-3.5 py-3.5">
-            <span className="type-label text-neutral-400">Teachers</span>
-            <span className="type-metric text-neutral-950">{activeTeachers}</span>
+          <div
+            className={cn(
+              reportStatCell,
+              "min-w-0 flex-1 border-l border-white/[0.08] hover:bg-transparent",
+            )}
+          >
+            <span className={reportStatLabel}>Teachers</span>
+            <span className={reportStatValue}>{activeTeachers}</span>
           </div>
           <Link
             href="/issues"
             className={cn(
-              "flex flex-col gap-1 rounded-xl border px-3.5 py-3.5 transition",
-              openIssues.length > 0
-                ? "border-red-200/90 bg-red-50/40 hover:bg-red-50/70"
-                : "border-[var(--hairline-strong)] bg-neutral-50/40 hover:bg-neutral-50",
+              reportStatCell,
+              "min-w-0 flex-1 border-l border-white/[0.08]",
             )}
           >
             <span
               className={cn(
-                "type-label",
-                openIssues.length > 0 ? "text-red-600" : "text-neutral-400",
+                reportStatLabel,
+                openIssues.length > 0 && "text-red-300/90",
               )}
             >
               Issues
             </span>
             <span
               className={cn(
-                "type-metric",
-                openIssues.length > 0 ? "text-red-600" : "text-neutral-950",
+                reportStatValue,
+                openIssues.length > 0 && "text-red-300",
               )}
             >
               {openIssues.length}
@@ -2133,24 +2190,104 @@ function ReportsPanel({
             type="button"
             onClick={() => onOpenTab("carts")}
             className={cn(
-              "flex flex-col gap-1 rounded-xl border px-3.5 py-3.5 text-left transition",
-              maintenanceCartsCount > 0
-                ? "border-amber-200/90 bg-amber-50/40 hover:bg-amber-50/70"
-                : "border-[var(--hairline-strong)] bg-neutral-50/40 hover:bg-neutral-50",
+              reportStatCell,
+              "min-w-0 flex-1 border-l border-white/[0.08]",
             )}
           >
             <span
               className={cn(
-                "type-label",
-                maintenanceCartsCount > 0 ? "text-amber-800" : "text-neutral-400",
+                reportStatLabel,
+                maintenanceCartsCount > 0 && "text-amber-200/90",
               )}
             >
               Paused carts
             </span>
             <span
               className={cn(
-                "type-metric",
-                maintenanceCartsCount > 0 ? "text-amber-800" : "text-neutral-950",
+                reportStatValue,
+                maintenanceCartsCount > 0 && "text-amber-200",
+              )}
+            >
+              {maintenanceCartsCount}
+            </span>
+          </button>
+        </div>
+
+        <div className="relative z-10 grid grid-cols-2 md:hidden">
+          <button
+            type="button"
+            onClick={() => onOpenTab("carts")}
+            className={cn(reportStatCell, "border-b border-white/[0.08]")}
+          >
+            <span className={reportStatLabel}>Active carts</span>
+            <span className={reportStatValue}>
+              {equipmentHealth}
+              <span className="ml-0.5 text-[0.42em] font-light text-white/40">
+                %
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenTab("bookings")}
+            className={cn(
+              reportStatCell,
+              "border-b border-l border-white/[0.08]",
+            )}
+          >
+            <span className={reportStatLabel}>Reservations</span>
+            <span className={reportStatValue}>{totalBookings}</span>
+          </button>
+          <div
+            className={cn(
+              reportStatCell,
+              "border-b border-white/[0.08] hover:bg-transparent",
+            )}
+          >
+            <span className={reportStatLabel}>Teachers</span>
+            <span className={reportStatValue}>{activeTeachers}</span>
+          </div>
+          <Link
+            href="/issues"
+            className={cn(
+              reportStatCell,
+              "border-b border-l border-white/[0.08]",
+            )}
+          >
+            <span
+              className={cn(
+                reportStatLabel,
+                openIssues.length > 0 && "text-red-300/90",
+              )}
+            >
+              Issues
+            </span>
+            <span
+              className={cn(
+                reportStatValue,
+                openIssues.length > 0 && "text-red-300",
+              )}
+            >
+              {openIssues.length}
+            </span>
+          </Link>
+          <button
+            type="button"
+            onClick={() => onOpenTab("carts")}
+            className={cn(reportStatCell, "col-span-2")}
+          >
+            <span
+              className={cn(
+                reportStatLabel,
+                maintenanceCartsCount > 0 && "text-amber-200/90",
+              )}
+            >
+              Paused carts
+            </span>
+            <span
+              className={cn(
+                reportStatValue,
+                maintenanceCartsCount > 0 && "text-amber-200",
               )}
             >
               {maintenanceCartsCount}
