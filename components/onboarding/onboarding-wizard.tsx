@@ -595,8 +595,17 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
       return;
     }
 
+    if (pending) return;
     setPending(true);
     setError(null);
+
+    // Intentional 3–4s loading beat so “Opening…” feels deliberate, not stuck.
+    const OPEN_DELAY_MS = 3500;
+    const delay = (ms: number) =>
+      new Promise<void>((resolve) => {
+        window.setTimeout(resolve, ms);
+      });
+
     try {
       const cleaned = assignments
         .filter(isAssignmentComplete)
@@ -613,25 +622,7 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
         maxAdvanceDays: isAdmin ? maxAdvanceDays : undefined,
       };
 
-      try {
-        const nextAvatar = avatarDataUrl ?? user.avatarUrl;
-        await updateProfile({
-          name: user.name,
-          department: cleaned[0]?.subject.trim() || user.department,
-          phone: user.phone,
-          bio: user.bio,
-          avatarUrl: nextAvatar ?? undefined,
-          notifyEmail,
-          notifyIssues,
-        });
-        if (nextAvatar) {
-          const s = getSession();
-          if (s) setSession({ ...s, avatarUrl: nextAvatar });
-        }
-      } catch {
-        // Local onboarding still completes.
-      }
-
+      // Persist booking window locally before leave (admin).
       if (isAdmin) {
         mutate((draft) => {
           draft.bookingPolicy.maxAdvanceDays = Math.min(
@@ -641,11 +632,45 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
         });
       }
 
+      // Mark complete first so auth gates never bounce back to /onboarding.
       completeOnboarding(user.id || user.email, prefs, [user.id, user.email]);
-      router.replace(onboardingHomeForRole(user.role));
+
+      const nextAvatar = avatarDataUrl ?? user.avatarUrl;
+      const nextDepartment =
+        cleaned[0]?.subject.trim() || user.department || undefined;
+      const session = getSession();
+      if (session) {
+        setSession({
+          ...session,
+          ...(nextAvatar ? { avatarUrl: nextAvatar } : {}),
+          ...(nextDepartment ? { department: nextDepartment } : {}),
+        });
+      }
+
+      // Best-effort profile sync during the loading animation (ignore failures).
+      void updateProfile({
+        name: user.name,
+        department: nextDepartment,
+        phone: user.phone,
+        bio: user.bio,
+        avatarUrl: nextAvatar ?? undefined,
+        notifyEmail,
+        notifyIssues,
+      });
+
+      await delay(OPEN_DELAY_MS);
+
+      const dest = onboardingHomeForRole(user.role, { firstRun: true });
+      router.replace(dest);
+
+      // Hard fallback if soft navigation stalls on this page.
+      window.setTimeout(() => {
+        if (window.location.pathname.startsWith("/onboarding")) {
+          window.location.assign(dest);
+        }
+      }, 900);
     } catch {
-      setError("Could not save profile. Try again.");
-    } finally {
+      setError("Could not finish setup. Try again.");
       setPending(false);
     }
   }
