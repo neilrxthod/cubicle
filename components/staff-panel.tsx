@@ -13,6 +13,7 @@ import {
   formatDistanceToNow,
   isToday,
   parseISO,
+  subDays,
 } from "date-fns"
 import {
   Check,
@@ -48,6 +49,10 @@ import type {
 import { cn } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import { VerifiedBadge, VerifiedName } from "@/components/verified-badge"
+import {
+  StatsDisplay,
+  type StatItem,
+} from "@/components/tool-ui/stats-display"
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import {
@@ -220,6 +225,8 @@ export function StaffPanel({
     let pending = 0
     let verified = 0
     let revoked = 0
+    let activeToday = 0
+    let openIssues = 0
 
     for (const user of users) {
       if (user.allowlisted === false) {
@@ -229,10 +236,106 @@ export function StaffPanel({
       all++
       if (user.pendingInvite) pending++
       if (isVerifiedStaff(user)) verified++
+      const m = metricsByUser.get(user.id)
+      if (m?.activeToday) activeToday++
+      openIssues += m?.openIssues.length ?? 0
     }
 
-    return { all, pending, verified, revoked }
-  }, [users])
+    return { all, pending, verified, revoked, activeToday, openIssues }
+  }, [users, metricsByUser])
+
+  /** Brand stats strip — same StatsDisplay as Schedule / Reports. */
+  const staffStats = useMemo((): StatItem[] => {
+    const spark = "rgb(23 23 23)"
+    const end = parseISO(today)
+    const dayKeys: string[] = []
+    for (let i = 13; i >= 0; i--) {
+      dayKeys.push(format(subDays(end, i), "yyyy-MM-dd"))
+    }
+
+    // Unique staff with a booking each day (14-day activity spark).
+    const activeSpark = dayKeys.map((key) => {
+      const ids = new Set<string>()
+      for (const b of bookings) {
+        if (b.date !== key) continue
+        if (b.teacherId) ids.add(b.teacherId)
+      }
+      return ids.size
+    })
+    const yActive =
+      activeSpark.length >= 2 ? activeSpark[activeSpark.length - 2]! : 0
+
+    // Open issues reported per day (signal for staff-related load).
+    const issueSpark = dayKeys.map((key) => {
+      let n = 0
+      for (const issue of issues) {
+        if (issue.status !== "open") continue
+        try {
+          if (format(parseISO(issue.createdAt), "yyyy-MM-dd") === key) n++
+        } catch {
+          /* ignore bad dates */
+        }
+      }
+      return n
+    })
+    const yIssues =
+      issueSpark.length >= 2 ? issueSpark[issueSpark.length - 2]! : 0
+
+    function dayOverDay(
+      current: number,
+      previous: number,
+      upIsPositive?: boolean,
+    ): StatItem["diff"] {
+      if (previous <= 0) return undefined
+      const raw = ((current - previous) / previous) * 100
+      const value = Math.round(Math.max(-999, Math.min(999, raw)) * 10) / 10
+      return { value, decimals: 1, upIsPositive }
+    }
+
+    const activeSeries =
+      activeSpark.length >= 2
+        ? activeSpark
+        : [0, counts.activeToday]
+    const issueSeries =
+      issueSpark.length >= 2 ? issueSpark : [0, counts.openIssues]
+
+    return [
+      {
+        key: "staff",
+        label: "Staff",
+        value: counts.all,
+        format: { kind: "number" },
+      },
+      {
+        key: "active",
+        label: "Active today",
+        value: counts.activeToday,
+        format: { kind: "number" },
+        sparkline: { data: activeSeries, color: spark },
+        diff: dayOverDay(counts.activeToday, yActive),
+      },
+      {
+        key: "pending",
+        label: "Pending",
+        value: counts.pending,
+        format: { kind: "number" },
+      },
+      {
+        key: "verified",
+        label: "Verified",
+        value: counts.verified,
+        format: { kind: "number" },
+      },
+      {
+        key: "issues",
+        label: "Open issues",
+        value: counts.openIssues,
+        format: { kind: "number" },
+        sparkline: { data: issueSeries, color: spark },
+        diff: dayOverDay(counts.openIssues, yIssues, false),
+      },
+    ]
+  }, [counts, bookings, issues, today])
 
   const filters: Array<{ id: FilterId; label: string; count: number }> = [
     { id: "all", label: "All", count: counts.all },
@@ -393,6 +496,12 @@ export function StaffPanel({
 
   return (
     <section className="flex flex-col gap-3">
+      <StatsDisplay
+        id="staff-stats"
+        className="w-full max-w-none"
+        stats={staffStats}
+      />
+
       <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
         {/* Header */}
         <div className="border-b border-neutral-200 px-4 py-3 sm:px-5">
@@ -403,15 +512,6 @@ export function StaffPanel({
               </p>
               <p className="mt-0.5 text-[12px] text-neutral-500">
                 Manage who can sign in and book carts
-                {counts.pending > 0 ? (
-                  <>
-                    <span className="mx-1.5 text-neutral-300">·</span>
-                    <span className="tabular-nums text-amber-700">
-                      {counts.pending}
-                    </span>{" "}
-                    waiting to join
-                  </>
-                ) : null}
               </p>
             </div>
             <Button
