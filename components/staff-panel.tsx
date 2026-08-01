@@ -15,8 +15,7 @@ import {
   parseISO,
 } from "date-fns"
 import {
-  AlertTriangle,
-  CalendarDays,
+  Check,
   Copy,
   Pencil,
   Plus,
@@ -61,15 +60,10 @@ import {
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 
-type FilterId =
-  | "all"
-  | "active"
-  | "pending"
-  | "permanent"
-  | "contract"
-  | "revoked"
+/** Access-focused filters only — employment is managed on the person. */
+type FilterId = "all" | "pending" | "verified" | "revoked"
 
-type SortKey = "name" | "activity" | "bookings"
+type SortKey = "name" | "activity"
 
 type ActivityItem = {
   id: string
@@ -92,18 +86,9 @@ type AccessDialog =
   | { mode: "add" }
   | { mode: "edit"; user: User }
 
-const FILTERS: Array<{ id: FilterId; label: string }> = [
-  { id: "all", label: "All" },
-  { id: "active", label: "Active today" },
-  { id: "pending", label: "Pending" },
-  { id: "permanent", label: "Permanent" },
-  { id: "contract", label: "Sub / temp" },
-  { id: "revoked", label: "Revoked" },
-]
-
 /**
- * Admin staff directory — allowlist, profiles, activity.
- * Clean master-detail, no badge soup.
+ * Admin staff directory — allowlist, access, verification.
+ * Flow: search/filter → select → manage access.
  */
 export function StaffPanel({
   users,
@@ -131,6 +116,7 @@ export function StaffPanel({
   const [formError, setFormError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [busyKey, setBusyKey] = useState<string | null>(null)
+  const [copiedEmail, setCopiedEmail] = useState<string | null>(null)
   const [, startTransition] = useTransition()
 
   const cartMap = useMemo(
@@ -172,7 +158,7 @@ export function StaffPanel({
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
       const activity: ActivityItem[] = []
-      for (const b of allBookings.slice(0, 30)) {
+      for (const b of allBookings.slice(0, 20)) {
         activity.push({
           id: `bk-${b.id}`,
           kind: "booking",
@@ -183,7 +169,7 @@ export function StaffPanel({
           }`,
         })
       }
-      for (const issue of userIssues.slice(0, 20)) {
+      for (const issue of userIssues.slice(0, 12)) {
         activity.push({
           id: `iss-${issue.id}`,
           kind: "issue",
@@ -192,7 +178,7 @@ export function StaffPanel({
           detail: `${issue.severity} · ${issue.description}`,
         })
       }
-      for (const swap of swaps.slice(0, 10)) {
+      for (const swap of swaps.slice(0, 8)) {
         activity.push({
           id: `sw-${swap.id}`,
           kind: "swap",
@@ -229,53 +215,49 @@ export function StaffPanel({
     return map
   }, [users, bookings, issues, swapRequests, cartMap, today])
 
-  const summary = useMemo(() => {
+  const counts = useMemo(() => {
+    let all = 0
     let pending = 0
-    let active = 0
     let verified = 0
-    let openIssues = 0
-    let allowlisted = 0
+    let revoked = 0
 
     for (const user of users) {
-      const m = metricsByUser.get(user.id)
-      if (user.allowlisted !== false) allowlisted++
-      if (user.pendingInvite && user.allowlisted !== false) pending++
-      if (m?.activeToday) active++
+      if (user.allowlisted === false) {
+        revoked++
+        continue
+      }
+      all++
+      if (user.pendingInvite) pending++
       if (isVerifiedStaff(user)) verified++
-      openIssues += m?.openIssues.length ?? 0
     }
 
-    return { allowlisted, pending, active, verified, openIssues }
-  }, [users, metricsByUser])
+    return { all, pending, verified, revoked }
+  }, [users])
+
+  const filters: Array<{ id: FilterId; label: string; count: number }> = [
+    { id: "all", label: "All", count: counts.all },
+    { id: "pending", label: "Pending", count: counts.pending },
+    { id: "verified", label: "Verified", count: counts.verified },
+    { id: "revoked", label: "Revoked", count: counts.revoked },
+  ]
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase()
 
     const list = users.filter((user) => {
-      const m = metricsByUser.get(user.id)
-      const emp = user.employmentType ?? "permanent"
-
       switch (filter) {
-        case "active":
-          if (!m?.activeToday) return false
-          break
         case "pending":
           if (!user.pendingInvite || user.allowlisted === false) return false
           break
-        case "permanent":
-          if (user.allowlisted === false || emp !== "permanent") return false
-          break
-        case "contract":
-          if (
-            user.allowlisted === false ||
-            (emp !== "substitute" && emp !== "temporary")
-          )
-            return false
+        case "verified":
+          if (!isVerifiedStaff(user)) return false
           break
         case "revoked":
           if (user.allowlisted !== false) return false
           break
         default:
+          // "All" = current allowlist (hide revoked noise)
+          if (user.allowlisted === false) return false
           break
       }
 
@@ -288,25 +270,16 @@ export function StaffPanel({
     })
 
     return [...list].sort((a, b) => {
-      const ma = metricsByUser.get(a.id)
-      const mb = metricsByUser.get(b.id)
-      if (sortKey === "bookings") {
-        const d =
-          (mb?.upcoming.length ?? 0) +
-          (mb?.activity.filter((x) => x.kind === "booking").length ?? 0) -
-          ((ma?.upcoming.length ?? 0) +
-            (ma?.activity.filter((x) => x.kind === "booking").length ?? 0))
-        if (d !== 0) return d
-      }
       if (sortKey === "activity") {
-        const d = (mb?.lastActiveAt ?? "").localeCompare(ma?.lastActiveAt ?? "")
+        const ma = metricsByUser.get(a.id)?.lastActiveAt ?? ""
+        const mb = metricsByUser.get(b.id)?.lastActiveAt ?? ""
+        const d = mb.localeCompare(ma)
         if (d !== 0) return d
       }
       return a.name.localeCompare(b.name)
     })
   }, [users, query, filter, sortKey, metricsByUser])
 
-  // Derive a valid selection from the filtered list (no effect / setState).
   const resolvedSelectedId =
     filtered.length === 0
       ? null
@@ -332,6 +305,17 @@ export function StaffPanel({
     setAccessDialog({ mode: "edit", user })
   }
 
+  async function copyEmail(email: string) {
+    try {
+      await navigator.clipboard.writeText(email)
+      setCopiedEmail(email)
+      toast({ title: "Email copied" })
+      window.setTimeout(() => setCopiedEmail(null), 1500)
+    } catch {
+      toast({ title: "Could not copy", variant: "destructive" })
+    }
+  }
+
   function handleAccessSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!accessDialog) return
@@ -354,7 +338,7 @@ export function StaffPanel({
           return
         }
         toast({
-          title: isReallowlist ? "Staff restored" : "Staff added",
+          title: isReallowlist ? "Access restored" : "Staff added",
           description: res.data?.name,
         })
         setAccessDialog(null)
@@ -371,7 +355,7 @@ export function StaffPanel({
         setFormError(res.error)
         return
       }
-      toast({ title: "Credentials updated" })
+      toast({ title: "Staff updated" })
       setAccessDialog(null)
       router.refresh()
     })
@@ -395,240 +379,245 @@ export function StaffPanel({
         })
         return
       }
-      toast({ title: "Staff removed", description: user.name })
+      toast({ title: "Access removed", description: user.name })
       setDeleteTarget(null)
       if (selectedId === user.id) setSelectedId(null)
       router.refresh()
     })
   }
 
-  async function copyText(text: string, label: string) {
-    try {
-      await navigator.clipboard.writeText(text)
-      toast({ title: label })
-    } catch {
-      toast({ title: "Could not copy", variant: "destructive" })
-    }
-  }
-
   const editing =
     accessDialog?.mode === "edit" ? accessDialog.user : null
   const isRestore = editing?.allowlisted === false
+  const searching = query.trim().length > 0
 
   return (
-    <section className="flex flex-col gap-4">
-      {/* Toolbar */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search…"
-              className="h-9 rounded-lg border-neutral-200 bg-white pl-9 pr-8 text-[13px]"
-            />
-            {query ? (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                className="absolute right-2 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded text-neutral-400 hover:text-neutral-700"
-                aria-label="Clear search"
-              >
-                <X className="size-3.5" />
-              </button>
-            ) : null}
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2">
-            <select
-              value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as SortKey)}
-              className="h-9 rounded-lg border border-neutral-200 bg-white px-2.5 text-[12px] text-neutral-700 outline-none focus:border-neutral-400"
-              aria-label="Sort"
-            >
-              <option value="name">Name</option>
-              <option value="activity">Recent activity</option>
-              <option value="bookings">Bookings</option>
-            </select>
+    <section className="flex flex-col gap-3">
+      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+        {/* Header */}
+        <div className="border-b border-neutral-200 px-4 py-3 sm:px-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-neutral-950">
+                Staff directory
+              </p>
+              <p className="mt-0.5 text-[12px] text-neutral-500">
+                Manage who can sign in and book carts
+                {counts.pending > 0 ? (
+                  <>
+                    <span className="mx-1.5 text-neutral-300">·</span>
+                    <span className="tabular-nums text-amber-700">
+                      {counts.pending}
+                    </span>{" "}
+                    waiting to join
+                  </>
+                ) : null}
+              </p>
+            </div>
             <Button
               type="button"
               onClick={openAdd}
-              className="h-9 rounded-lg px-3.5 text-[12.5px] font-medium"
+              className="h-8 shrink-0 rounded-md px-3 text-[12.5px] font-medium"
             >
-              <Plus className="size-3.5" />
-              Add
+              <Plus className="size-3.5" strokeWidth={2} />
+              Add staff
             </Button>
           </div>
-        </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap gap-1">
-            {FILTERS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setFilter(item.id)}
-                className={cn(
-                  "h-7 rounded-md px-2.5 text-[12px] font-medium transition-colors",
-                  filter === item.id
-                    ? "bg-neutral-950 text-white"
-                    : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800",
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search name or email"
+                className="h-8 rounded-md border-neutral-200 bg-white pl-8 pr-8 text-[13px] shadow-none placeholder:text-neutral-400"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="absolute right-2 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-neutral-400 hover:text-neutral-700"
+                  aria-label="Clear search"
+                >
+                  <X className="size-3.5" />
+                </button>
+              ) : null}
+            </div>
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as SortKey)}
+              className="h-8 shrink-0 rounded-md border border-neutral-200 bg-white px-2 text-[12.5px] text-neutral-600 outline-none focus:border-neutral-400"
+              aria-label="Sort"
+            >
+              <option value="name">Sort by name</option>
+              <option value="activity">Sort by activity</option>
+            </select>
           </div>
 
-          <p className="text-[12px] tabular-nums text-neutral-400">
-            <span className="text-neutral-600">{summary.allowlisted}</span> staff
-            {summary.pending > 0 ? (
-              <>
-                {" · "}
-                <span className="text-amber-700">{summary.pending} pending</span>
-              </>
-            ) : null}
-            {summary.active > 0 ? (
-              <>
-                {" · "}
-                <span className="text-emerald-700">{summary.active} active</span>
-              </>
-            ) : null}
-            {summary.verified > 0 ? (
-              <>
-                {" · "}
-                <span className="inline-flex items-center gap-0.5 text-sky-700">
-                  <VerifiedBadge size="xs" />
-                  {summary.verified}
-                </span>
-              </>
-            ) : null}
-            {summary.openIssues > 0 ? (
-              <>
-                {" · "}
-                <span className="text-red-600">{summary.openIssues} issues</span>
-              </>
-            ) : null}
-          </p>
+          <div
+            className="mt-3 flex gap-4 overflow-x-auto border-b border-neutral-100 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            role="tablist"
+            aria-label="Filter staff"
+          >
+            {filters.map((item) => {
+              const selectedFilter = filter === item.id
+              // Hide empty non-default tabs (keeps UI quiet)
+              if (
+                item.id !== "all" &&
+                item.count === 0 &&
+                !selectedFilter
+              ) {
+                return null
+              }
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selectedFilter}
+                  onClick={() => setFilter(item.id)}
+                  className={cn(
+                    "-mb-px flex shrink-0 items-center gap-1.5 border-b-2 pb-2 text-[12.5px] font-medium transition-colors",
+                    selectedFilter
+                      ? "border-neutral-950 text-neutral-950"
+                      : "border-transparent text-neutral-500 hover:text-neutral-800",
+                  )}
+                >
+                  {item.label}
+                  <span
+                    className={cn(
+                      "tabular-nums text-[11px]",
+                      selectedFilter
+                        ? "text-neutral-500"
+                        : "text-neutral-400",
+                    )}
+                  >
+                    {item.count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
         </div>
-      </div>
 
-      {/* Master–detail */}
-      <div className="grid min-h-[32rem] overflow-hidden rounded-xl border border-neutral-200/90 bg-white lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
-        {/* List */}
-        <div className="min-w-0 border-b border-neutral-100 lg:border-b-0 lg:border-r">
-          {filtered.length === 0 ? (
-            <EmptyList
-              hasAny={users.length > 0}
-              onAdd={openAdd}
-              googleMode={googleMode}
-            />
-          ) : (
-            <ul className="max-h-[min(70vh,40rem)] divide-y divide-neutral-100 overflow-y-auto">
-              {filtered.map((user) => {
-                const m = metricsByUser.get(user.id)
-                const active = resolvedSelectedId === user.id
-                return (
-                  <li key={user.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(user.id)}
-                      className={cn(
-                        "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors",
-                        active
-                          ? "bg-neutral-50 ring-1 ring-inset ring-neutral-200/80"
-                          : "hover:bg-neutral-50/80",
-                      )}
-                    >
-                      <Avatar
-                        user={user}
-                        verified={isVerifiedStaff(user)}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 items-center gap-1.5">
-                          <VerifiedName
-                            name={user.name}
-                            verified={isVerifiedStaff(user)}
-                            nameClassName="text-[13.5px] font-medium tracking-tight text-neutral-950"
-                          />
-                          {user.role === "admin" ? (
-                            <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
-                              Admin
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="mt-0.5 truncate text-[12px] text-neutral-400">
-                          {user.email}
-                        </p>
-                        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-neutral-500">
-                          <StatusDot status={m?.status ?? "ok"} />
-                          <span className="text-neutral-300">·</span>
-                          <span>{employmentLabel(user.employmentType)}</span>
-                          {(m?.openIssues.length ?? 0) > 0 ? (
-                            <>
-                              <span className="text-neutral-300">·</span>
-                              <span className="text-red-600">
-                                {m!.openIssues.length} issue
-                                {m!.openIssues.length === 1 ? "" : "s"}
+        {/* Master–detail */}
+        <div className="grid min-h-[30rem] lg:grid-cols-[minmax(0,1.15fr)_minmax(17.5rem,21rem)]">
+          <div className="min-w-0 border-b border-neutral-200 lg:border-b-0 lg:border-r">
+            {searching || filter !== "all" ? (
+              <div className="border-b border-neutral-100 px-4 py-1.5 sm:px-5">
+                <p className="text-[11.5px] text-neutral-400">
+                  {filtered.length} result
+                  {filtered.length === 1 ? "" : "s"}
+                  {searching ? ` for “${query.trim()}”` : null}
+                </p>
+              </div>
+            ) : null}
+
+            {filtered.length === 0 ? (
+              <EmptyList
+                hasAny={users.length > 0}
+                filter={filter}
+                searching={searching}
+                onAdd={openAdd}
+                onClear={() => {
+                  setQuery("")
+                  setFilter("all")
+                }}
+                googleMode={googleMode}
+              />
+            ) : (
+              <ul className="max-h-[min(68vh,38rem)] divide-y divide-neutral-100 overflow-y-auto">
+                {filtered.map((user) => {
+                  const m = metricsByUser.get(user.id)
+                  const active = resolvedSelectedId === user.id
+                  const verified = isVerifiedStaff(user)
+                  const status = m?.status ?? "ok"
+                  return (
+                    <li key={user.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(user.id)}
+                        className={cn(
+                          "flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors sm:px-5",
+                          active
+                            ? "bg-neutral-50"
+                            : "bg-white hover:bg-neutral-50/80",
+                        )}
+                      >
+                        <StaffAvatar user={user} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <VerifiedName
+                              name={user.name}
+                              verified={verified}
+                              nameClassName="text-[13px] font-medium text-neutral-950"
+                            />
+                            {user.role === "admin" ? (
+                              <span className="shrink-0 text-[11px] text-neutral-400">
+                                Admin
                               </span>
-                            </>
-                          ) : null}
-                        </p>
-                      </div>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </div>
+                            ) : null}
+                          </div>
+                          <p className="mt-0.5 truncate text-[12px] text-neutral-500">
+                            {user.email}
+                          </p>
+                        </div>
+                        <ListStatus status={status} />
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
 
-        {/* Detail */}
-        <div className="min-w-0 bg-white">
-          {!selected || !selectedMetrics ? (
-            <div className="flex h-full min-h-[16rem] flex-col items-center justify-center gap-2 px-6 py-16 text-center">
-              <p className="text-[13px] text-neutral-400">
-                Select someone to view profile and activity.
-              </p>
-            </div>
-          ) : (
-            <StaffDetail
-              user={selected}
-              metrics={selectedMetrics}
-              cartMap={cartMap}
-              verifyBusy={busyKey === `verify:${selected.id}`}
-              onEdit={() => openEdit(selected)}
-              onRemove={() => {
-                setDeleteError(null)
-                setDeleteTarget(selected)
-              }}
-              onCopyEmail={() => copyText(selected.email, "Email copied")}
-              onSetVerified={(verified) => {
-                const id = selected.id
-                setBusyKey(`verify:${id}`)
-                startTransition(async () => {
-                  const res = await setStaffVerified(id, verified)
-                  setBusyKey(null)
-                  if (!res.ok) {
+          <div className="min-w-0 bg-white">
+            {!selected || !selectedMetrics ? (
+              <div className="flex h-full min-h-[12rem] items-center justify-center px-6 py-16">
+                <p className="text-[13px] text-neutral-400">
+                  Select a staff member
+                </p>
+              </div>
+            ) : (
+              <StaffDetail
+                user={selected}
+                metrics={selectedMetrics}
+                cartMap={cartMap}
+                verifyBusy={busyKey === `verify:${selected.id}`}
+                emailCopied={copiedEmail === selected.email}
+                onCopyEmail={() => copyEmail(selected.email)}
+                onEdit={() => openEdit(selected)}
+                onRemove={() => {
+                  setDeleteError(null)
+                  setDeleteTarget(selected)
+                }}
+                onSetVerified={(verified) => {
+                  const id = selected.id
+                  setBusyKey(`verify:${id}`)
+                  startTransition(async () => {
+                    const res = await setStaffVerified(id, verified)
+                    setBusyKey(null)
+                    if (!res.ok) {
+                      toast({
+                        title: "Could not update badge",
+                        description: res.error,
+                        variant: "destructive",
+                      })
+                      return
+                    }
                     toast({
-                      title: "Could not update badge",
-                      description: res.error,
-                      variant: "destructive",
+                      title: verified
+                        ? "Verified badge granted"
+                        : "Verified badge removed",
+                      description: selected.name,
                     })
-                    return
-                  }
-                  toast({
-                    title: verified
-                      ? "Verified badge granted"
-                      : "Verified badge removed",
-                    description: selected.name,
+                    router.refresh()
                   })
-                  router.refresh()
-                })
-              }}
-            />
-          )}
+                }}
+              />
+            )}
+          </div>
         </div>
       </div>
 
@@ -637,19 +626,19 @@ export function StaffPanel({
         open={accessDialog !== null}
         onOpenChange={(open) => !open && setAccessDialog(null)}
       >
-        <DialogContent className="gap-0 overflow-hidden rounded-2xl border-neutral-200 p-0 sm:max-w-[26rem]">
-          <DialogHeader className="space-y-1 border-b border-neutral-100 px-5 py-4 text-left">
-            <DialogTitle className="text-[15px] font-semibold tracking-tight">
+        <DialogContent className="gap-0 overflow-hidden rounded-lg border-neutral-200 p-0 sm:max-w-[24rem]">
+          <DialogHeader className="gap-1 border-b border-neutral-200 px-5 py-4 text-left">
+            <DialogTitle className="text-[14px] font-medium text-neutral-950">
               {isRestore
-                ? "Restore"
+                ? "Restore access"
                 : accessDialog?.mode === "edit"
-                  ? "Edit"
+                  ? "Edit staff"
                   : "Add staff"}
             </DialogTitle>
-            <DialogDescription className="text-[12.5px]">
+            <DialogDescription className="text-[12.5px] text-neutral-500">
               {googleMode
-                ? `@${SCHOOL_EMAIL_DOMAIN} only`
-                : "Demo staff login"}
+                ? `School accounts only (@${SCHOOL_EMAIL_DOMAIN})`
+                : "Create a staff login for the demo"}
             </DialogDescription>
           </DialogHeader>
 
@@ -663,14 +652,14 @@ export function StaffPanel({
             className="grid gap-4 px-5 py-5"
           >
             <Field
-              label="Name"
+              label="Full name"
               name="name"
               defaultValue={editing?.name ?? ""}
               placeholder="Sarah Chen"
               required
             />
             <Field
-              label="Email"
+              label="Work email"
               name="email"
               type="email"
               defaultValue={editing?.email ?? ""}
@@ -686,7 +675,7 @@ export function StaffPanel({
               <div className="flex flex-col gap-1.5">
                 <label
                   htmlFor="staff-role"
-                  className="text-[11px] font-medium text-neutral-500"
+                  className="text-[12px] font-medium text-neutral-600"
                 >
                   Role
                 </label>
@@ -694,7 +683,7 @@ export function StaffPanel({
                   id="staff-role"
                   name="role"
                   defaultValue={editing?.role ?? "teacher"}
-                  className="h-9 w-full rounded-lg border border-neutral-200 bg-white px-2.5 text-[13px] outline-none focus:border-neutral-400"
+                  className="h-9 w-full rounded-md border border-neutral-200 bg-white px-2.5 text-[13px] outline-none focus:border-neutral-400"
                 >
                   <option value="teacher">Teacher</option>
                   <option value="admin">Admin</option>
@@ -703,7 +692,7 @@ export function StaffPanel({
               <div className="flex flex-col gap-1.5">
                 <label
                   htmlFor="staff-employment"
-                  className="text-[11px] font-medium text-neutral-500"
+                  className="text-[12px] font-medium text-neutral-600"
                 >
                   Employment
                 </label>
@@ -711,24 +700,23 @@ export function StaffPanel({
                   id="staff-employment"
                   name="employmentType"
                   defaultValue={editing?.employmentType ?? "permanent"}
-                  className="h-9 w-full rounded-lg border border-neutral-200 bg-white px-2.5 text-[13px] outline-none focus:border-neutral-400"
+                  className="h-9 w-full rounded-md border border-neutral-200 bg-white px-2.5 text-[13px] outline-none focus:border-neutral-400"
                 >
                   {EMPLOYMENT_TYPES.map((opt) => (
                     <option key={opt.id} value={opt.id}>
                       {opt.shortLabel}
-                      {opt.verified ? " ✓" : ""}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
 
-            <p className="text-[11.5px] leading-snug text-neutral-400">
-              Permanent = blue tick. Sub / temp can still sign in.
+            <p className="text-[12px] leading-snug text-neutral-500">
+              Permanent = verified blue tick on their name.
             </p>
 
             {formError ? (
-              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
+              <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
                 {formError}
               </p>
             ) : null}
@@ -738,7 +726,7 @@ export function StaffPanel({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-9 rounded-lg"
+                className="h-8 rounded-md"
                 onClick={() => setAccessDialog(null)}
               >
                 Cancel
@@ -746,7 +734,7 @@ export function StaffPanel({
               <Button
                 type="submit"
                 size="sm"
-                className="h-9 rounded-lg px-4"
+                className="h-8 rounded-md px-3.5"
                 disabled={
                   busyKey ===
                   (accessDialog?.mode === "edit"
@@ -765,9 +753,9 @@ export function StaffPanel({
                 ) : isRestore ? (
                   "Restore"
                 ) : accessDialog?.mode === "edit" ? (
-                  "Save"
+                  "Save changes"
                 ) : (
-                  "Add"
+                  "Add staff"
                 )}
               </Button>
             </div>
@@ -785,24 +773,29 @@ export function StaffPanel({
           }
         }}
       >
-        <DialogContent className="gap-0 overflow-hidden rounded-2xl border-neutral-200 p-0 sm:max-w-[24rem]">
-          <DialogHeader className="space-y-1 border-b border-neutral-100 px-5 py-4 text-left">
-            <DialogTitle className="text-[15px] font-semibold tracking-tight">
-              Remove
+        <DialogContent className="gap-0 overflow-hidden rounded-lg border-neutral-200 p-0 sm:max-w-[22rem]">
+          <DialogHeader className="gap-1 border-b border-neutral-200 px-5 py-4 text-left">
+            <DialogTitle className="text-[14px] font-medium text-neutral-950">
+              Remove access
             </DialogTitle>
-            <DialogDescription className="text-[12.5px]">
-              Blocks sign-in. History is kept.
+            <DialogDescription className="text-[12.5px] text-neutral-500">
+              They will not be able to sign in. Booking history is kept.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 px-5 py-5">
             {deleteTarget ? (
-              <div className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-neutral-50/60 px-3 py-2.5">
-                <Avatar user={deleteTarget} />
+              <div className="flex items-center gap-3 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2.5">
+                <StaffAvatar user={deleteTarget} />
                 <div className="min-w-0">
-                  <p className="truncate text-[13px] font-medium">
-                    {deleteTarget.name}
-                  </p>
-                  <p className="truncate text-[12px] text-neutral-400">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <p className="truncate text-[13px] font-medium text-neutral-950">
+                      {deleteTarget.name}
+                    </p>
+                    {isVerifiedStaff(deleteTarget) ? (
+                      <VerifiedBadge size="xs" />
+                    ) : null}
+                  </div>
+                  <p className="mt-0.5 truncate text-[12px] text-neutral-500">
                     {deleteTarget.email}
                   </p>
                 </div>
@@ -816,7 +809,7 @@ export function StaffPanel({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-9 rounded-lg"
+                className="h-8 rounded-md"
                 onClick={() => setDeleteTarget(null)}
               >
                 Cancel
@@ -825,7 +818,7 @@ export function StaffPanel({
                 type="button"
                 variant="destructive"
                 size="sm"
-                className="h-9 rounded-lg"
+                className="h-8 rounded-md"
                 disabled={
                   deleteTarget
                     ? busyKey === `delete:${deleteTarget.id}`
@@ -835,7 +828,7 @@ export function StaffPanel({
               >
                 {deleteTarget && busyKey === `delete:${deleteTarget.id}`
                   ? "Removing…"
-                  : "Remove"}
+                  : "Remove access"}
               </Button>
             </div>
           </div>
@@ -852,250 +845,176 @@ function StaffDetail({
   metrics,
   cartMap,
   verifyBusy,
+  emailCopied,
+  onCopyEmail,
   onEdit,
   onRemove,
-  onCopyEmail,
   onSetVerified,
 }: {
   user: User
   metrics: StaffMetrics
   cartMap: Map<string, Cart>
   verifyBusy?: boolean
+  emailCopied?: boolean
+  onCopyEmail: () => void
   onEdit: () => void
   onRemove: () => void
-  onCopyEmail: () => void
   onSetVerified: (verified: boolean) => void
 }) {
   const verified = isVerifiedStaff(user)
   const canManageVerify = user.allowlisted !== false
+  const profileBits = [user.title, user.department].filter(Boolean)
+  const roleLabel = user.role === "admin" ? "Admin" : "Teacher"
 
   return (
-    <div className="flex max-h-[min(70vh,40rem)] flex-col">
-      <div className="border-b border-neutral-100 px-4 py-4">
+    <div className="flex max-h-[min(68vh,38rem)] flex-col">
+      <div className="border-b border-neutral-200 px-4 py-4 sm:px-5">
         <div className="flex items-start gap-3">
-          <Avatar user={user} size="lg" verified={verified} />
+          <StaffAvatar user={user} size="lg" verified={verified} />
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-1.5">
-              <VerifiedName
-                name={user.name}
-                verified={verified}
-                size="md"
-                nameClassName="text-[15px] font-semibold tracking-tight text-neutral-950"
-              />
-            </div>
-            <p className="mt-0.5 truncate text-[12.5px] text-neutral-400">
-              {user.email}
-            </p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11.5px] text-neutral-500">
-              <StatusDot status={metrics.status} />
-              <span className="text-neutral-300">·</span>
-              <span>{user.role === "admin" ? "Admin" : "Teacher"}</span>
-              <span className="text-neutral-300">·</span>
-              <span>{employmentLabel(user.employmentType)}</span>
+              <h3 className="truncate text-[15px] font-medium text-neutral-950">
+                {user.name}
+              </h3>
               {verified ? (
-                <>
-                  <span className="text-neutral-300">·</span>
-                  <span className="inline-flex items-center gap-1 font-medium text-[#1d9bf0]">
-                    <VerifiedBadge size="xs" title="Verified permanent staff" />
-                    Verified
-                  </span>
-                </>
+                <VerifiedBadge size="sm" title="Verified permanent staff" />
               ) : null}
             </div>
+            <button
+              type="button"
+              onClick={onCopyEmail}
+              className="mt-0.5 flex max-w-full items-center gap-1 text-left text-[12.5px] text-neutral-500 transition-colors hover:text-neutral-800"
+              title="Copy email"
+            >
+              <span className="truncate">{user.email}</span>
+              {emailCopied ? (
+                <Check className="size-3 shrink-0 text-emerald-600" />
+              ) : (
+                <Copy className="size-3 shrink-0 opacity-60" />
+              )}
+            </button>
+            {profileBits.length > 0 ? (
+              <p className="mt-1 truncate text-[12px] text-neutral-400">
+                {profileBits.join(" · ")}
+              </p>
+            ) : null}
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          <GhostBtn onClick={onCopyEmail} icon={<Copy className="size-3" />}>
-            Email
-          </GhostBtn>
+        <div className="mt-3 flex flex-wrap gap-2">
           {user.allowlisted !== false ? (
             <>
-              <GhostBtn onClick={onEdit} icon={<Pencil className="size-3" />}>
+              <ActionBtn onClick={onEdit} icon={<Pencil className="size-3" />}>
                 Edit
-              </GhostBtn>
-              <GhostBtn
+              </ActionBtn>
+              <ActionBtn
                 onClick={onRemove}
                 icon={<Trash2 className="size-3" />}
                 danger
               >
                 Remove
-              </GhostBtn>
+              </ActionBtn>
             </>
           ) : (
-            <GhostBtn onClick={onEdit} icon={<UserPlus className="size-3" />}>
-              Restore
-            </GhostBtn>
+            <ActionBtn onClick={onEdit} icon={<UserPlus className="size-3" />}>
+              Restore access
+            </ActionBtn>
           )}
         </div>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
-        {/* Admin: grant / revoke verified badge */}
-        <section
-          className={cn(
-            "rounded-xl border px-3 py-3",
-            verified
-              ? "border-[#1d9bf0]/20 bg-[#1d9bf0]/[0.04]"
-              : "border-neutral-100 bg-neutral-50/60",
-          )}
-        >
-          <div className="flex items-start gap-3">
-            <span
-              className={cn(
-                "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full",
-                verified ? "bg-[#1d9bf0]/12" : "bg-neutral-200/70",
-              )}
-            >
-              <VerifiedBadge
-                size="md"
-                className={verified ? undefined : "text-neutral-400"}
-                title={
-                  verified
-                    ? "Verified permanent staff"
-                    : "Not verified"
-                }
-              />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[13px] font-semibold tracking-tight text-neutral-950">
-                    Verified badge
-                  </p>
-                  <p className="mt-0.5 text-[12px] leading-snug text-neutral-500">
-                    {verified
-                      ? "Blue tick on board, bookings, and profile."
-                      : "Grant permanent staff status and the blue tick."}
-                  </p>
-                </div>
-                <Switch
-                  checked={verified}
-                  disabled={!canManageVerify || verifyBusy}
-                  onCheckedChange={(next) => onSetVerified(next)}
-                  aria-label={
-                    verified ? "Remove verified badge" : "Grant verified badge"
-                  }
-                />
-              </div>
-              {!canManageVerify ? (
-                <p className="mt-2 text-[11.5px] text-neutral-400">
-                  Restore access first to manage verification.
-                </p>
-              ) : null}
-              {verifyBusy ? (
-                <p className="mt-2 text-[11.5px] text-neutral-400">Updating…</p>
-              ) : null}
-            </div>
-          </div>
-        </section>
-
-        {/* Snapshot */}
-        <div className="grid grid-cols-3 gap-2">
-          <StatCell
-            label="Upcoming"
-            value={metrics.upcoming.length}
-            icon={<CalendarDays className="size-3" />}
-          />
-          <StatCell
-            label="Issues"
-            value={metrics.openIssues.length}
-            icon={<AlertTriangle className="size-3" />}
-            warn={metrics.openIssues.length > 0}
-          />
-          <StatCell
-            label="Last active"
-            value={
-              metrics.lastActiveAt
-                ? relativeShort(metrics.lastActiveAt)
-                : "—"
-            }
-            compact
-          />
-        </div>
-
-        {/* Profile facts */}
-        <section>
-          <h4 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-400">
-            Profile
-          </h4>
-          <dl className="mt-2 space-y-2 text-[12.5px]">
-            <Fact label="Title" value={user.title || "—"} />
-            <Fact label="Department" value={user.department || "—"} />
-            <Fact label="Phone" value={user.phone || "—"} />
-            <Fact
-              label="Access"
+      <div className="flex flex-1 flex-col overflow-y-auto">
+        {/* Access facts */}
+        <section className="border-b border-neutral-100 px-4 py-4 sm:px-5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-400">
+            Access
+          </p>
+          <dl className="mt-3 space-y-2.5">
+            <FactRow label="Status" value={detailStatusLabel(metrics.status)} />
+            <FactRow label="Role" value={roleLabel} />
+            <FactRow
+              label="Employment"
+              value={employmentLabel(user.employmentType)}
+            />
+            <FactRow
+              label="Last active"
               value={
-                user.allowlisted === false
-                  ? "Revoked"
-                  : user.pendingInvite
-                    ? "Pending"
-                    : "Allowed"
+                metrics.lastActiveAt
+                  ? relativeShort(metrics.lastActiveAt)
+                  : "—"
               }
             />
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-neutral-400">Verified</dt>
-              <dd className="inline-flex min-w-0 items-center justify-end gap-1 text-right font-medium text-neutral-800">
-                {verified ? (
-                  <>
-                    <VerifiedBadge size="sm" />
-                    <span>Yes</span>
-                  </>
-                ) : (
-                  <span>No</span>
-                )}
-              </dd>
-            </div>
           </dl>
         </section>
 
-        {/* Upcoming */}
-        <section>
-          <h4 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-400">
-            Upcoming
-          </h4>
-          {metrics.upcoming.length === 0 ? (
-            <p className="mt-2 text-[12.5px] text-neutral-400">None</p>
-          ) : (
-            <ul className="mt-2 space-y-1">
-              {metrics.upcoming.slice(0, 5).map((b) => (
+        {/* Verified */}
+        {canManageVerify ? (
+          <section className="flex items-center justify-between gap-3 border-b border-neutral-100 px-4 py-3.5 sm:px-5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className="text-[13px] font-medium text-neutral-950">
+                  Verified badge
+                </p>
+                {verified ? <VerifiedBadge size="xs" /> : null}
+              </div>
+              <p className="mt-0.5 text-[12px] text-neutral-500">
+                Blue tick for permanent staff
+              </p>
+            </div>
+            <Switch
+              checked={verified}
+              disabled={verifyBusy}
+              onCheckedChange={(next) => onSetVerified(next)}
+              aria-label={
+                verified ? "Remove verified badge" : "Grant verified badge"
+              }
+            />
+          </section>
+        ) : null}
+
+        {/* Upcoming — only when present */}
+        {metrics.upcoming.length > 0 ? (
+          <section className="border-b border-neutral-100 px-4 py-4 sm:px-5">
+            <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-400">
+              Upcoming ({metrics.upcoming.length})
+            </p>
+            <ul className="mt-2.5 divide-y divide-neutral-100">
+              {metrics.upcoming.slice(0, 4).map((b) => (
                 <li
                   key={b.id}
-                  className="rounded-lg bg-neutral-50 px-2.5 py-2 text-[12px] text-neutral-700"
+                  className="flex items-baseline justify-between gap-3 py-2 first:pt-0 last:pb-0"
                 >
-                  <span className="font-medium text-neutral-900">
+                  <span className="min-w-0 truncate text-[13px] text-neutral-800">
                     {cartMap.get(b.cartId)?.name ?? "Cart"}
                   </span>
-                  <span className="text-neutral-400">
-                    {" "}
-                    · {b.period} · {fmtDate(b.date)}
+                  <span className="shrink-0 text-[12px] tabular-nums text-neutral-400">
+                    {b.period} · {fmtDate(b.date)}
                   </span>
                 </li>
               ))}
             </ul>
-          )}
-        </section>
+          </section>
+        ) : null}
 
-        {/* Issues */}
+        {/* Issues — only when present */}
         {metrics.openIssues.length > 0 ? (
-          <section>
-            <h4 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-400">
-              Open issues
-            </h4>
-            <ul className="mt-2 space-y-1">
-              {metrics.openIssues.slice(0, 4).map((issue) => (
-                <li
-                  key={issue.id}
-                  className="rounded-lg border border-red-100 bg-red-50/50 px-2.5 py-2 text-[12px]"
-                >
-                  <span className="font-medium capitalize text-red-800">
-                    {issue.severity}
-                  </span>
-                  <span className="text-neutral-500">
-                    {" "}
-                    · {cartMap.get(issue.cartId)?.name ?? "Cart"}
-                  </span>
-                  <p className="mt-0.5 line-clamp-2 text-neutral-600">
+          <section className="border-b border-neutral-100 px-4 py-4 sm:px-5">
+            <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-400">
+              Open issues ({metrics.openIssues.length})
+            </p>
+            <ul className="mt-2.5 space-y-2.5">
+              {metrics.openIssues.slice(0, 3).map((issue) => (
+                <li key={issue.id}>
+                  <p className="text-[13px] text-neutral-800">
+                    <span className="font-medium capitalize">
+                      {issue.severity}
+                    </span>
+                    <span className="text-neutral-400">
+                      {" "}
+                      · {cartMap.get(issue.cartId)?.name ?? "Cart"}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 line-clamp-2 text-[12px] text-neutral-500">
                     {issue.description}
                   </p>
                 </li>
@@ -1105,47 +1024,37 @@ function StaffDetail({
         ) : null}
 
         {/* Activity */}
-        <section>
-          <h4 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-400">
-            Activity
-          </h4>
+        <section className="px-4 py-4 sm:px-5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-neutral-400">
+            Recent activity
+          </p>
           {metrics.activity.length === 0 ? (
-            <p className="mt-2 text-[12.5px] text-neutral-400">
+            <p className="mt-2.5 text-[13px] text-neutral-400">
               {user.pendingInvite
-                ? "Waiting for first sign-in."
-                : "None"}
+                ? "Has not signed in yet."
+                : "No activity yet."}
             </p>
           ) : (
-            <ol className="mt-2 space-y-0">
-              {metrics.activity.slice(0, 12).map((item, i, arr) => (
-                <li key={item.id} className="relative flex gap-2.5 pb-3">
-                  {i < arr.length - 1 ? (
-                    <span className="absolute left-[5px] top-4 bottom-0 w-px bg-neutral-100" />
-                  ) : null}
-                  <span
-                    className={cn(
-                      "relative z-[1] mt-1 size-2.5 shrink-0 rounded-full",
-                      item.kind === "issue"
-                        ? "bg-red-400"
-                        : item.kind === "swap"
-                          ? "bg-amber-400"
-                          : "bg-neutral-300",
-                    )}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[12.5px] font-medium text-neutral-900">
+            <ul className="mt-2.5 divide-y divide-neutral-100">
+              {metrics.activity.slice(0, 6).map((item) => (
+                <li
+                  key={item.id}
+                  className="flex items-start justify-between gap-3 py-2.5 first:pt-0"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] text-neutral-800">
                       {item.title}
                     </p>
-                    <p className="mt-0.5 line-clamp-1 text-[11.5px] text-neutral-400">
+                    <p className="mt-0.5 line-clamp-1 text-[12px] text-neutral-400">
                       {item.detail}
                     </p>
-                    <p className="mt-0.5 text-[10.5px] text-neutral-300">
-                      {relativeShort(item.at)}
-                    </p>
                   </div>
+                  <p className="shrink-0 pt-0.5 text-[11px] tabular-nums text-neutral-400">
+                    {relativeShort(item.at)}
+                  </p>
                 </li>
               ))}
-            </ol>
+            </ul>
           )}
         </section>
       </div>
@@ -1155,47 +1064,119 @@ function StaffDetail({
 
 /* ─── Atoms ─── */
 
-function EmptyList({
-  hasAny,
-  onAdd,
-  googleMode,
+function ListStatus({ status }: { status: StaffMetrics["status"] }) {
+  if (status === "ok") return null
+  const label =
+    status === "active"
+      ? "Active"
+      : status === "pending"
+        ? "Pending"
+        : "Revoked"
+  return (
+    <span
+      className={cn(
+        "hidden shrink-0 text-[11.5px] sm:block",
+        status === "active"
+          ? "text-emerald-700"
+          : status === "pending"
+            ? "text-amber-700"
+            : "text-red-600",
+      )}
+    >
+      {label}
+    </span>
+  )
+}
+
+function detailStatusLabel(status: StaffMetrics["status"]): string {
+  if (status === "active") return "Active today"
+  if (status === "pending") return "Pending invite"
+  if (status === "revoked") return "Access revoked"
+  return "Signed in"
+}
+
+function FactRow({
+  label,
+  value,
 }: {
-  hasAny: boolean
-  onAdd: () => void
-  googleMode: boolean
+  label: string
+  value: string
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
-      <div className="flex size-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
-        <UserPlus className="size-4" strokeWidth={1.5} />
-      </div>
-      <div>
-        <p className="text-[13px] font-medium text-neutral-800">
-          {hasAny ? "No staff match this search" : "No staff yet"}
-        </p>
-        <p className="mt-1 max-w-[16rem] text-[12.5px] text-neutral-400">
-          {hasAny
-            ? "Change the search or filters."
-            : googleMode
-              ? `Add @${SCHOOL_EMAIL_DOMAIN} emails.`
-              : "Add the first staff member."}
-        </p>
-      </div>
-      {!hasAny ? (
-        <Button
-          type="button"
-          onClick={onAdd}
-          className="mt-1 h-8 rounded-lg px-3 text-[12px]"
-        >
-          <Plus className="size-3.5" />
-          Add
-        </Button>
-      ) : null}
+    <div className="flex items-baseline justify-between gap-4">
+      <dt className="text-[12.5px] text-neutral-500">{label}</dt>
+      <dd className="min-w-0 text-right text-[12.5px] font-medium text-neutral-900">
+        {value}
+      </dd>
     </div>
   )
 }
 
-function Avatar({
+function EmptyList({
+  hasAny,
+  filter,
+  searching,
+  onAdd,
+  onClear,
+  googleMode,
+}: {
+  hasAny: boolean
+  filter: FilterId
+  searching: boolean
+  onAdd: () => void
+  onClear: () => void
+  googleMode: boolean
+}) {
+  if (!hasAny) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 px-6 py-20 text-center">
+        <p className="text-[13px] font-medium text-neutral-800">No staff yet</p>
+        <p className="max-w-[16rem] text-[12.5px] leading-relaxed text-neutral-500">
+          {googleMode
+            ? `Add @${SCHOOL_EMAIL_DOMAIN} accounts so teachers can sign in.`
+            : "Add the first staff member to get started."}
+        </p>
+        <Button
+          type="button"
+          onClick={onAdd}
+          className="mt-2 h-8 rounded-md px-3 text-[12.5px]"
+        >
+          <Plus className="size-3.5" />
+          Add staff
+        </Button>
+      </div>
+    )
+  }
+
+  const filterHint =
+    filter === "pending"
+      ? "No one is waiting to join."
+      : filter === "verified"
+        ? "No verified staff in this view."
+        : filter === "revoked"
+          ? "No revoked accounts."
+          : "No matching staff."
+
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 px-6 py-20 text-center">
+      <p className="text-[13px] font-medium text-neutral-800">
+        {searching ? "No results" : "Nothing here"}
+      </p>
+      <p className="max-w-[16rem] text-[12.5px] leading-relaxed text-neutral-500">
+        {searching ? "Try a different name or email." : filterHint}
+      </p>
+      <button
+        type="button"
+        onClick={onClear}
+        className="mt-1 text-[12.5px] font-medium text-neutral-700 underline-offset-2 hover:underline"
+      >
+        Clear filters
+      </button>
+    </div>
+  )
+}
+
+function StaffAvatar({
   user,
   size = "md",
   verified = false,
@@ -1204,8 +1185,9 @@ function Avatar({
   size?: "md" | "lg"
   verified?: boolean
 }) {
-  const dim = size === "lg" ? "size-11 text-[12px]" : "size-9 text-[11px]"
+  const dim = size === "lg" ? "size-10 text-[12px]" : "size-8 text-[11px]"
   const badgeSize = size === "lg" ? "sm" : "xs"
+
   const face = user.avatarUrl ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img
@@ -1218,104 +1200,31 @@ function Avatar({
     <span
       className={cn(
         dim,
-        "flex items-center justify-center rounded-full bg-neutral-100 font-semibold text-neutral-600",
+        "flex items-center justify-center rounded-full bg-neutral-100 font-medium text-neutral-600",
       )}
     >
       {initials(user.name)}
     </span>
   )
 
-  if (!verified) {
-    return <span className="relative shrink-0">{face}</span>
-  }
-
   return (
     <span className="relative shrink-0">
       {face}
-      <span
-        className={cn(
-          "absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-white",
-          size === "lg" ? "size-4" : "size-3.5",
-        )}
-      >
-        <VerifiedBadge size={badgeSize} className="size-full" />
-      </span>
-    </span>
-  )
-}
-
-function StatusDot({ status }: { status: StaffMetrics["status"] }) {
-  const map: Record<
-    StaffMetrics["status"],
-    { label: string; className: string }
-  > = {
-    active: { label: "Active today", className: "bg-emerald-500" },
-    pending: { label: "Pending invite", className: "bg-amber-400" },
-    revoked: { label: "Revoked", className: "bg-red-400" },
-    ok: { label: "Signed in", className: "bg-neutral-300" },
-  }
-  const s = map[status]
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={cn("size-1.5 rounded-full", s.className)} />
-      <span>{s.label}</span>
-    </span>
-  )
-}
-
-function StatCell({
-  label,
-  value,
-  icon,
-  warn,
-  compact,
-}: {
-  label: string
-  value: number | string
-  icon?: ReactNode
-  warn?: boolean
-  compact?: boolean
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-lg border px-2.5 py-2",
-        warn
-          ? "border-red-100 bg-red-50/40"
-          : "border-neutral-100 bg-neutral-50/50",
-      )}
-    >
-      <div className="flex items-center gap-1 text-neutral-400">
-        {icon}
-        <span className="text-[10px] font-medium uppercase tracking-wide">
-          {label}
+      {verified ? (
+        <span
+          className={cn(
+            "absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full bg-white ring-2 ring-white",
+            size === "lg" ? "size-3.5" : "size-3",
+          )}
+        >
+          <VerifiedBadge size={badgeSize} className="size-full" />
         </span>
-      </div>
-      <p
-        className={cn(
-          "mt-1 font-light tabular-nums tracking-tight",
-          compact ? "text-[12px] font-medium" : "text-[1.125rem]",
-          warn ? "text-red-700" : "text-neutral-900",
-        )}
-      >
-        {value}
-      </p>
-    </div>
+      ) : null}
+    </span>
   )
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <dt className="text-neutral-400">{label}</dt>
-      <dd className="min-w-0 text-right font-medium text-neutral-800">
-        {value}
-      </dd>
-    </div>
-  )
-}
-
-function GhostBtn({
+function ActionBtn({
   children,
   onClick,
   icon,
@@ -1331,10 +1240,10 @@ function GhostBtn({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[11.5px] font-medium transition-colors",
+        "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[12px] font-medium transition-colors",
         danger
-          ? "border-red-100 bg-white text-red-600 hover:bg-red-50"
-          : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-900",
+          ? "border-neutral-200 bg-white text-red-600 hover:border-red-200 hover:bg-red-50"
+          : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50 hover:text-neutral-950",
       )}
     >
       {icon}
@@ -1362,7 +1271,7 @@ function Field({
     <div className="flex flex-col gap-1.5">
       <label
         htmlFor={name}
-        className="text-[11px] font-medium text-neutral-500"
+        className="text-[12px] font-medium text-neutral-600"
       >
         {label}
       </label>
@@ -1373,7 +1282,7 @@ function Field({
         defaultValue={defaultValue}
         placeholder={placeholder}
         required={required}
-        className="h-9 rounded-lg border-neutral-200 text-[13px]"
+        className="h-9 rounded-md border-neutral-200 text-[13px] shadow-none"
       />
     </div>
   )
