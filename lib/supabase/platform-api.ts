@@ -35,6 +35,52 @@ function client() {
   return createClient();
 }
 
+/**
+ * Load allowlist rows for the staff directory.
+ * Falls back if employment_type is not migrated yet.
+ * Returns { rows, known }: known=false when the query failed (do NOT treat everyone as revoked).
+ */
+async function fetchAllowlistRows(supabase: ReturnType<typeof client>): Promise<{
+  rows: DbAllowedEmail[];
+  known: boolean;
+}> {
+  const full = await supabase
+    .from("allowed_emails")
+    .select("email, role, name, employment_type, created_at")
+    .order("name");
+
+  if (!full.error) {
+    return {
+      rows: (full.data as DbAllowedEmail[] | null) ?? [],
+      known: true,
+    };
+  }
+
+  const msg = full.error.message.toLowerCase();
+  // Pre-migration schemas omit employment_type — retry without it.
+  if (msg.includes("employment_type")) {
+    const legacy = await supabase
+      .from("allowed_emails")
+      .select("email, role, name, created_at")
+      .order("name");
+    if (!legacy.error) {
+      return {
+        rows: ((legacy.data as DbAllowedEmail[] | null) ?? []).map((row) => ({
+          ...row,
+          employment_type: "permanent",
+        })),
+        known: true,
+      };
+    }
+    console.error("[platform] allowlist legacy load failed:", legacy.error.message);
+    return { rows: [], known: false };
+  }
+
+  // Teachers hit RLS (empty or error). Admins should not silently get "everyone revoked".
+  console.error("[platform] allowlist load failed:", full.error.message);
+  return { rows: [], known: false };
+}
+
 /** Load full platform state from Supabase (browser client + RLS). */
 export async function fetchPlatformState(): Promise<PlatformState> {
   const supabase = client();
@@ -47,7 +93,6 @@ export async function fetchPlatformState(): Promise<PlatformState> {
     swapsRes,
     policyRes,
     profilesRes,
-    allowlistRes,
   ] = await Promise.all([
     supabase.from("carts").select("*").order("name"),
     supabase.from("bookings").select("*").order("created_at", { ascending: false }),
@@ -56,10 +101,6 @@ export async function fetchPlatformState(): Promise<PlatformState> {
     supabase.from("swap_requests").select("*").order("created_at", { ascending: false }),
     supabase.from("booking_policy").select("*").eq("id", 1).maybeSingle(),
     supabase.from("profiles").select("*").order("name"),
-    // Admins only (RLS) — teachers get an empty list without failing the load.
-    supabase
-      .from("allowed_emails")
-      .select("email, role, name, employment_type, created_at"),
   ]);
 
   const firstError =
@@ -75,19 +116,24 @@ export async function fetchPlatformState(): Promise<PlatformState> {
     throw new Error(firstError.message);
   }
 
+  const { rows: allowlist, known: allowlistKnown } =
+    await fetchAllowlistRows(supabase);
+
   const profiles = (profilesRes.data as DbProfile[] | null) ?? [];
-  const allowlist = allowlistRes.error
-    ? []
-    : ((allowlistRes.data as DbAllowedEmail[] | null) ?? []);
   const allowlistByEmail = new Map(
-    allowlist.map((row) => [row.email.toLowerCase(), row] as const),
+    allowlist.map((row) => [row.email.toLowerCase().trim(), row] as const),
   );
-  const profileEmails = new Set(profiles.map((p) => p.email.toLowerCase()));
+  const profileEmails = new Set(
+    profiles.map((p) => p.email.toLowerCase().trim()),
+  );
 
   // Profiles keep history/names; allowlist is source of access + employment type.
+  // If allowlist could not be loaded, leave allowlisted undefined (not "revoked").
   const profileUsers: User[] = profiles.map((row) => {
     const mapped = mapProfile(row);
-    const allowed = allowlistByEmail.get(mapped.email.toLowerCase());
+    const emailKey = mapped.email.toLowerCase().trim();
+    const allowed = allowlistByEmail.get(emailKey);
+    const allowlisted = allowlistKnown ? Boolean(allowed) : undefined;
     return {
       ...mapped,
       // Prefer allowlist role/name/employment when present (source of access truth).
@@ -96,26 +142,28 @@ export async function fetchPlatformState(): Promise<PlatformState> {
       employmentType: allowed
         ? mapEmploymentType(allowed.employment_type)
         : mapped.employmentType ?? "permanent",
-      allowlisted: Boolean(allowed),
+      allowlisted,
       pendingInvite: false,
       password: "",
     };
   });
 
   // Allowlisted people who have not signed in yet (admin staff list).
-  const pendingUsers: User[] = allowlist
-    .filter((row) => !profileEmails.has(row.email.toLowerCase()))
-    .map((row) => ({
-      id: `pending:${row.email.toLowerCase()}`,
-      email: row.email,
-      name: row.name || row.email.split("@")[0],
-      role: row.role as Role,
-      password: "",
-      employmentType: mapEmploymentType(row.employment_type),
-      allowlisted: true,
-      pendingInvite: true,
-      createdAt: row.created_at ?? undefined,
-    }));
+  const pendingUsers: User[] = allowlistKnown
+    ? allowlist
+        .filter((row) => !profileEmails.has(row.email.toLowerCase().trim()))
+        .map((row) => ({
+          id: `pending:${row.email.toLowerCase().trim()}`,
+          email: row.email,
+          name: row.name || row.email.split("@")[0],
+          role: row.role as Role,
+          password: "",
+          employmentType: mapEmploymentType(row.employment_type),
+          allowlisted: true,
+          pendingInvite: true,
+          createdAt: row.created_at ?? undefined,
+        }))
+    : [];
 
   return {
     carts: ((cartsRes.data as DbCart[] | null) ?? []).map(mapCart),

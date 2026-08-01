@@ -462,9 +462,11 @@ export function StaffPanel({
           >
             {filters.map((item) => {
               const selectedFilter = filter === item.id
-              // Hide empty non-default tabs (keeps UI quiet)
+              // Always show All + Revoked (empty Revoked → empty state).
+              // Hide empty Pending/Verified unless selected.
               if (
                 item.id !== "all" &&
+                item.id !== "revoked" &&
                 item.count === 0 &&
                 !selectedFilter
               ) {
@@ -1148,14 +1150,26 @@ function EmptyList({
     )
   }
 
+  if (filter === "revoked" && !searching) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 px-6 py-20 text-center">
+        <p className="text-[13px] font-medium text-neutral-800">
+          No revoked accounts
+        </p>
+        <p className="max-w-[17rem] text-[12.5px] leading-relaxed text-neutral-500">
+          People you remove from access will appear here so you can restore
+          them later.
+        </p>
+      </div>
+    )
+  }
+
   const filterHint =
     filter === "pending"
       ? "No one is waiting to join."
       : filter === "verified"
         ? "No verified staff in this view."
-        : filter === "revoked"
-          ? "No revoked accounts."
-          : "No matching staff."
+        : "No matching staff."
 
   return (
     <div className="flex flex-col items-center justify-center gap-2 px-6 py-20 text-center">
