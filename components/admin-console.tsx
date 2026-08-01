@@ -71,20 +71,22 @@ function SortableHeader({
   sortKey,
   sortConfig,
   onSort,
+  className,
 }: {
   label: string
   sortKey: string
   sortConfig: { key: string; direction: "asc" | "desc" } | null
   onSort: (key: string) => void
+  className?: string
 }) {
   const active = sortConfig?.key === sortKey
   return (
-    <th className="px-3 py-2.5 text-left">
+    <th className={cn("px-3 py-2.5 text-left align-middle", className)}>
       <button
         type="button"
         onClick={() => onSort(sortKey)}
         className={cn(
-          "group inline-flex items-center gap-1 text-[11.5px] font-medium tracking-[-0.01em] transition-colors",
+          "group inline-flex h-7 items-center gap-1 text-[11.5px] font-medium tracking-[-0.01em] transition-colors",
           active ? "text-neutral-950" : "text-neutral-400 hover:text-neutral-700",
         )}
       >
@@ -1392,26 +1394,35 @@ function BookingsTable({
         ) : (
           <div className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] border-collapse text-left">
+              <table className="w-full min-w-[640px] table-fixed border-collapse text-left">
+                <colgroup>
+                  <col className="w-12" />
+                  <col className="w-[22%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[28%]" />
+                  <col className="w-[30%]" />
+                  <col className="w-12" />
+                </colgroup>
                 <thead>
                   <tr className="border-b border-[var(--hairline)]">
-                    <th className="w-11 px-4 py-2.5 sm:px-5">
-                      <Checkbox
-                        checked={allSelected}
-                        indeterminate={someSelected && !allSelected}
-                        onCheckedChange={(checked) => {
-                          if (checked) setSelectedIds(new Set(filtered.map((b) => b.id)))
-                          else setSelectedIds(new Set())
-                        }}
-                        aria-label="Select all"
-                      />
+                    <th className="px-4 py-2.5 align-middle sm:px-5">
+                      <div className="flex h-7 items-center">
+                        <Checkbox
+                          checked={allSelected}
+                          indeterminate={someSelected && !allSelected}
+                          onCheckedChange={(checked) => {
+                            if (checked) setSelectedIds(new Set(filtered.map((b) => b.id)))
+                            else setSelectedIds(new Set())
+                          }}
+                          aria-label="Select all"
+                        />
+                      </div>
                     </th>
                     <SortableHeader label="Date" sortKey="date" sortConfig={sortConfig} onSort={handleSort} />
                     <SortableHeader label="Period" sortKey="period" sortConfig={sortConfig} onSort={handleSort} />
                     <SortableHeader label="Cart" sortKey="cart" sortConfig={sortConfig} onSort={handleSort} />
-                    <SortableHeader label="Class" sortKey="class" sortConfig={sortConfig} onSort={handleSort} />
                     <SortableHeader label="Teacher" sortKey="teacher" sortConfig={sortConfig} onSort={handleSort} />
-                    <th className="w-12 px-3 py-2.5" aria-label="Actions" />
+                    <th className="px-3 py-2.5 align-middle" aria-label="Actions" />
                   </tr>
                 </thead>
                 <tbody>
@@ -1433,44 +1444,46 @@ function BookingsTable({
                           selected ? "bg-neutral-50/80" : "hover:bg-neutral-50/50",
                         )}
                       >
-                        <td className="px-4 py-3.5 sm:px-5">
-                          <Checkbox
-                            checked={selected}
-                            onCheckedChange={(checked) => {
-                              const next = new Set(selectedIds)
-                              if (checked) next.add(b.id)
-                              else next.delete(b.id)
-                              setSelectedIds(next)
-                            }}
-                            aria-label={`Select booking for ${b.teacherName}`}
-                          />
+                        <td className="px-4 py-3.5 align-middle sm:px-5">
+                          <div className="flex h-8 items-center">
+                            <Checkbox
+                              checked={selected}
+                              onCheckedChange={(checked) => {
+                                const next = new Set(selectedIds)
+                                if (checked) next.add(b.id)
+                                else next.delete(b.id)
+                                setSelectedIds(next)
+                              }}
+                              aria-label={`Select booking for ${b.teacherName}`}
+                            />
+                          </div>
                         </td>
-                        <td className="px-3 py-3.5">
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-medium tracking-[-0.01em] text-neutral-950">
+                        <td className="px-3 py-3.5 align-middle">
+                          <div className="min-w-0 leading-tight">
+                            <p className="truncate text-[13px] font-medium tracking-[-0.01em] text-neutral-950">
                               {format(date, "MMM d, yyyy")}
                             </p>
-                            <p className="mt-0.5 text-[12px] text-neutral-400">
+                            <p className="mt-0.5 truncate text-[12px] text-neutral-400">
                               {format(date, "EEE")}
                             </p>
                           </div>
                         </td>
-                        <td className="px-3 py-3.5">
+                        <td className="px-3 py-3.5 align-middle">
                           <span className="text-[12.5px] font-medium tabular-nums text-neutral-700">
                             {b.period}
                           </span>
                         </td>
-                        <td className="px-3 py-3.5">
-                          <div className="min-w-0">
+                        <td className="px-3 py-3.5 align-middle">
+                          <div className="min-w-0 leading-tight">
                             <p
                               className={cn(
-                                "truncate text-[13px] font-medium tracking-[-0.01em]",
+                                "flex min-w-0 items-center gap-1.5 truncate text-[13px] font-medium tracking-[-0.01em]",
                                 isConflict ? "text-red-600" : "text-neutral-950",
                               )}
                             >
-                              {cart?.name ?? "—"}
+                              <span className="truncate">{cart?.name ?? "—"}</span>
                               {isConflict ? (
-                                <AlertTriangle className="ml-1.5 inline size-3.5 -translate-y-px text-red-500" />
+                                <AlertTriangle className="size-3.5 shrink-0 text-red-500" />
                               ) : null}
                             </p>
                             {cart?.location ? (
@@ -1480,19 +1493,7 @@ function BookingsTable({
                             ) : null}
                           </div>
                         </td>
-                        <td className="px-3 py-3.5">
-                          <div className="min-w-0">
-                            <p className="truncate text-[13px] font-medium tracking-[-0.01em] text-neutral-950">
-                              {b.className?.trim() || "—"}
-                            </p>
-                            {b.subject?.trim() ? (
-                              <p className="mt-0.5 truncate text-[12px] text-neutral-400">
-                                {b.subject}
-                              </p>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className="px-3 py-3.5">
+                        <td className="px-3 py-3.5 align-middle">
                           <div className="flex min-w-0 items-center gap-2.5">
                             {avatarUrl ? (
                               // eslint-disable-next-line @next/next/no-img-element
@@ -1515,7 +1516,8 @@ function BookingsTable({
                             </span>
                           </div>
                         </td>
-                        <td className="px-3 py-3.5 text-right">
+                        <td className="px-3 py-3.5 align-middle">
+                          <div className="flex h-8 items-center justify-end">
                           <DropdownMenu modal={false}>
                             <DropdownMenuTrigger asChild>
                               <button
@@ -1582,6 +1584,7 @@ function BookingsTable({
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
+                          </div>
                         </td>
                       </tr>
                     )
