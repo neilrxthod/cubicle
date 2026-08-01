@@ -2,13 +2,14 @@
 
 **Authorized school staff platform for laptop-cart scheduling.**
 
-Cubicle is an internal operations tool for teachers and IT. It provides period-based cart booking, a shared daily board, equipment issue reporting, and admin controls. Production access is limited to **allowlisted `@rbe.sk.ca` Google Workspace accounts** — not a public consumer product.
+Cubicle is an internal operations tool for teachers and IT. It provides period-based cart booking, a shared daily board, equipment issue reporting, and admin fleet controls. Production access is limited to **allowlisted `@rbe.sk.ca` Google Workspace accounts** — not a public consumer product.
 
 | | |
 |---|---|
 | **Production** | [https://mycubicle.app](https://mycubicle.app) |
 | **School domain** | `@rbe.sk.ca` |
 | **IT contact** | [it-support@rbe.sk.ca](mailto:it-support@rbe.sk.ca) |
+| **Platform version** | `1.0.19` (bumped on each git commit via hook) |
 | **Repository** | Private — all rights reserved |
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
@@ -25,7 +26,7 @@ Cubicle is an internal operations tool for teachers and IT. It provides period-b
 |---------|-------------|
 | Booking and managing school laptop carts by period | Public sign-up or personal Gmail / non-school accounts |
 | Reporting equipment issues for IT follow-up | Storing student PERs as a primary purpose |
-| Admin maintenance of fleet, locks, and staff access | Sharing credentials or service-role secrets |
+| Admin maintenance of fleet, locks, reservations, and staff access | Sharing credentials or service-role secrets |
 | Authorized `@rbe.sk.ca` staff on the IT allowlist | Commercial use unrelated to school operations |
 
 Cubicle processes **staff operational data** (identity from Google Sign-In, bookings, issues, allowlist roles). Avoid entering sensitive student identifiers unless division procedure requires it. See in-app [Privacy Policy](https://mycubicle.app/legal/privacy).
@@ -34,19 +35,54 @@ Cubicle processes **staff operational data** (identity from Google Sign-In, book
 
 ## Capabilities
 
-| Area | Description |
-|------|-------------|
-| **Schedule board** | Cart × period grid: open, yours, booked, restricted, maintenance |
-| **Bookings** | Reserve by date and period; manage or cancel your own slots |
-| **Stats** | Day-level booked, utilization, yours, free capacity, open issues |
-| **Swaps** | Request a swap on another teacher’s booking; owner accepts or declines |
-| **Issues** | Severity-tagged equipment reports from any cart |
-| **Settings** | Profile, photo, notification preferences |
-| **Admin** | Cart status, slot restrictions, booking window, staff allowlist |
-| **Verified staff** | Permanent employment type may show a verification mark on the board |
-| **Auth** | Google OAuth · school domain · IT allowlist · teacher / admin roles |
+### Schedule (home)
+
+| Feature | Description |
+|---------|-------------|
+| **Daily board** | Cart × period grid: free, yours, booked, restricted, paused |
+| **Stats strip** | Brand mesh metrics — booked, utilization, yours, issues, free |
+| **Book / cancel** | Reserve by date and period; cancel own bookings |
+| **Swaps** | Request another teacher’s slot; owner accepts or declines |
+| **Holidays** | SK (Regina) statutory days block booking |
+| **Verified staff** | Permanent employment may show a verification mark |
+
+### Teacher tools
+
+| Feature | Description |
+|---------|-------------|
+| **My bookings** | Upcoming and past reservations; cancel upcoming |
+| **Issues** | Severity-tagged equipment reports; open / resolved filters |
+| **Settings** | Profile, photo, email prefs; **teaching schedule** (subjects, grades, periods) |
+| **Onboarding** | First-run photo + teaching load (or booking window for admins) |
+
+### Admin console
+
+| Tab | Description |
+|-----|-------------|
+| **Inventory** | Cart cards with status rails; **Pause** / **Resume**; conflict dialog to move or cancel bookings before pause |
+| **Reservations** | Filterable table with teacher PFPs; quick chips (Today / Tomorrow / This week / On paused carts); CSV + PDF export; reassign / delete |
+| **Reports** | Brand-mesh KPI strip, teacher usage, issue mix; export bookings / usage / issues |
+| **Staff** | Allowlist invite/restore/remove; verified badge; credentials |
+| **Restrictions** | Day grid locks (general / AP exam); booking window; batch tools |
+
+### Auth & setup
+
+| Feature | Description |
+|---------|-------------|
+| **Google OAuth** | School Workspace only (`@rbe.sk.ca`) |
+| **Allowlist** | Exact email in Supabase `allowed_emails` |
+| **Roles** | `teacher` or `admin` from allowlist / profile |
+| **Onboarding (production)** | **Once** after first successful auth |
+| **Onboarding (local `next dev`)** | Re-prompted after every sign-in for testing |
+| **Later edits** | Teaching schedule and booking window in **Settings** (no wizard re-run) |
+
+### Platform
+
+| Feature | Description |
+|---------|-------------|
 | **Realtime** | Multi-user board updates via Supabase Realtime |
-| **Durability** | Authoritative data in Supabase Postgres — app deploys do not wipe school data |
+| **Durability** | Authoritative data in Supabase Postgres — deploys do not wipe school data |
+| **Copy** | Direct, low-ambiguity product labels (actions name the object and outcome) |
 
 ---
 
@@ -95,7 +131,7 @@ Spell **SUPABASE** correctly. Redeploy after any `NEXT_PUBLIC_*` change. Never c
 |-------|--------|----------------------------------|
 | **Supabase Postgres** | Bookings, carts, issues, staff, restrictions, profiles | **Unchanged** |
 | **Vercel** | Application code only | Replaced with new build |
-| **Browser** | Session + temporary cache | Not source of truth |
+| **Browser** | Session + onboarding prefs cache | Not source of truth for bookings |
 
 - Code deploys **never** wipe school operational data.
 - Do **not** point production at a new empty Supabase project (appears as total data loss).
@@ -129,12 +165,12 @@ Cubicle is designed as an **internal staff tool**, not a student-facing learning
 
 | Layer | Technology |
 |-------|------------|
-| Application | Next.js (App Router), React, TypeScript |
-| UI | Tailwind CSS, accessible component primitives |
+| Application | Next.js 16 (App Router), React 19, TypeScript |
+| UI | Tailwind CSS, Radix / accessible primitives, Motion |
 | Auth | Supabase Auth · Google OAuth (Workspace) |
 | Data | Supabase Postgres · RLS · Realtime |
-| Hosting | Vercel · `mycubicle.app` (optional `mycubicle.com`) |
-| Timezone (bell / calendar helpers) | America/Regina |
+| Hosting | Vercel · `mycubicle.app` |
+| Timezone | America/Regina (bell / holiday helpers) |
 
 ---
 
@@ -144,7 +180,7 @@ Cubicle is designed as an **internal staff tool**, not a student-facing learning
 
 - Node.js 18+ (LTS recommended)
 - npm
-- Supabase project with schema applied and Google provider configured
+- Supabase project with schema applied and Google provider configured (for production-like auth)
 
 ### Setup
 
@@ -191,6 +227,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run build` | Production build |
 | `npm run start` | Serve production build |
 | `npm run lint` | ESLint |
+| `npm run version:bump` | Manual platform version bump (also runs on commit) |
 
 **Local-only** demo picker (never enable on Vercel production):
 
@@ -200,30 +237,43 @@ NEXT_PUBLIC_ENABLE_DEMO_LOGIN=true
 
 Without Supabase env vars, localhost may use browser-local demo storage. Production hosts hard-stop if the database is not connected.
 
+### Onboarding in local vs production
+
+| Environment | Behavior |
+|-------------|----------|
+| **`next dev` (local)** | After sign-in, first-run setup is **reset and shown every time** so UI can be tested |
+| **Production** | First-run wizard runs **once** per user; later changes go through **Settings** |
+
 ---
 
 ## Project structure
 
 ```text
 cubicle/
-├── app/                 # Routes: board, admin, auth, legal, settings
+├── app/                      # Routes: board, admin, auth, legal, settings, onboarding
 ├── components/
-│   ├── app/             # Dashboard frame, auth gate, bootstrap
-│   ├── auth/            # Login, wordmark, legal consent
-│   ├── legal/           # Legal shell + navigation
-│   ├── tool-ui/         # Schedule stats display
-│   └── ui/              # Shared UI primitives
+│   ├── admin/                # Pause-conflict dialog, admin-only UI
+│   ├── app/                  # Dashboard frame, auth gate, bootstrap
+│   ├── auth/                 # Login, wordmark, legal consent
+│   ├── legal/                # Legal shell + navigation
+│   ├── onboarding/           # First-run wizard
+│   ├── settings/             # Profile + setup preferences (teaching / booking window)
+│   ├── tool-ui/              # Schedule stats display (brand mesh)
+│   ├── admin-console.tsx     # Inventory, reservations, reports, staff, restrictions
+│   └── ui/                   # Shared UI primitives
 ├── lib/
-│   ├── auth/            # Session, allowlist, school domain, OAuth
-│   ├── calendar/        # Period / bell helpers (America/Regina)
-│   ├── data/            # Platform store + durability guards
-│   ├── legal/           # Legal constants and link map
-│   ├── staff/           # Employment / verified badge rules
-│   └── supabase/        # Clients, mappers, platform API, realtime
-├── supabase/            # SQL schema, seeds, operator docs
-├── PRODUCTION.md        # Ship checklist
-├── SECURITY.md          # Vulnerability reporting + access model
-└── public/              # Static assets
+│   ├── auth/                 # Session, allowlist, school domain, OAuth
+│   ├── calendar/             # Period / holiday helpers (America/Regina)
+│   ├── data/                 # Platform store + durability guards
+│   ├── legal/                # Legal constants and link map
+│   ├── onboarding/           # First-run prefs (localStorage); production one-time
+│   ├── staff/                # Employment / verified badge rules
+│   └── supabase/             # Clients, mappers, platform API, realtime
+├── supabase/                 # SQL schema, seeds, operator docs
+├── scripts/                  # Platform version bump
+├── PRODUCTION.md             # Ship checklist
+├── SECURITY.md               # Vulnerability reporting + access model
+└── public/                   # Static assets
 ```
 
 ---
@@ -232,8 +282,8 @@ cubicle/
 
 | Role | Access |
 |------|--------|
-| **Teacher** | Schedule board, book / cancel own slots, swaps, issues, settings |
-| **Admin / IT** | Teacher access + cart status, restrictions, booking policy, staff allowlist |
+| **Teacher** | Schedule board, book / cancel own slots, swaps, issues, my bookings, settings (including teaching schedule) |
+| **Admin / IT** | Teacher access + inventory pause/resume, reservations ops, reports, staff allowlist, slot restrictions, booking window |
 
 Permanent staff may show a **verified** indicator; substitute / temporary staff typically do not.
 
@@ -272,6 +322,18 @@ Permanent staff may show a **verified** indicator; substitute / temporary staff 
 | [`supabase/SETUP.md`](./supabase/SETUP.md) | Supabase + Google OAuth setup |
 | [`supabase/DATA_DURABILITY.md`](./supabase/DATA_DURABILITY.md) | Why deploys never erase school data |
 | [`components/tool-ui/stats-display/README.md`](./components/tool-ui/stats-display/README.md) | Schedule stats component |
+| [`AGENTS.md`](./AGENTS.md) | Agent notes for this Next.js version |
+
+---
+
+## Changelog
+
+Product release notes are also available in-app at [`/changelog`](https://mycubicle.app/changelog). Recent platform themes:
+
+- Corporate admin inventory, reservations, and reports
+- Pause-cart conflict flow (stage moves / cancels, then pause)
+- One-time production onboarding; Settings for teaching schedule and booking window
+- Clearer product copy and export tools
 
 ---
 
