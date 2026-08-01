@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { DashboardFrame } from "@/components/app/dashboard-frame";
 import { PageShell } from "@/components/app/page-shell";
@@ -13,8 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { updateIssueStatus } from "@/lib/actions";
+import { deleteIssue, updateIssueStatus } from "@/lib/actions";
 import { usePlatformStore } from "@/lib/data/platform-store";
+import {
+  getUiPreferences,
+  UI_PREFS_CHANGE_EVENT,
+  UI_PREFS_KEY,
+} from "@/lib/preferences/ui";
 import type { Issue, IssueSeverity, IssueStatus, SessionUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -39,6 +44,25 @@ function IssuesView({ user }: { user: SessionUser }) {
   const [severity, setSeverity] = useState<SeverityFilter>("all");
   const [reportOpen, setReportOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [allowIssueDelete, setAllowIssueDelete] = useState(false);
+
+  useEffect(() => {
+    const sync = () => {
+      setAllowIssueDelete(getUiPreferences().allowIssueDelete === true);
+    };
+    sync();
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === UI_PREFS_KEY || event.key === null) sync();
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", sync);
+    window.addEventListener(UI_PREFS_CHANGE_EVENT, sync);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", sync);
+      window.removeEventListener(UI_PREFS_CHANGE_EVENT, sync);
+    };
+  }, []);
 
   const cartMap = useMemo(
     () => new Map(state.carts.map((c) => [c.id, c])),
@@ -97,6 +121,35 @@ function IssuesView({ user }: { user: SessionUser }) {
     } finally {
       setBusyId(null);
     }
+  }
+
+  async function handleDelete(issue: Issue) {
+    const cartName = cartMap.get(issue.cartId)?.name ?? "this cart";
+    const confirmed = window.confirm(
+      `Delete this issue for ${cartName}? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    setBusyId(issue.id);
+    try {
+      const res = await deleteIssue(issue.id);
+      if (!res.ok) {
+        toast({
+          title: "Could not delete issue",
+          description: res.error,
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({ title: "Issue deleted" });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function canDeleteIssue(issue: Issue) {
+    if (!allowIssueDelete) return false;
+    return isAdmin || issue.reportedById === user.id;
   }
 
   const tabs = [
@@ -323,37 +376,58 @@ function IssuesView({ user }: { user: SessionUser }) {
                     </p>
                   </div>
 
-                  {isAdmin ? (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() =>
-                        setStatus(issue, isOpen ? "resolved" : "open")
-                      }
-                      className={cn(
-                        "shrink-0 rounded-md border px-2.5 py-1.5 text-[12.5px] font-medium",
-                        "transition-colors duration-150",
-                        "focus-visible:outline-none focus-visible:ring-2",
-                        "disabled:pointer-events-none disabled:opacity-40",
-                        isOpen
-                          ? cn(
-                              "border-emerald-200/90 bg-emerald-50 text-emerald-800",
-                              "hover:border-emerald-300 hover:bg-emerald-100",
-                              "focus-visible:ring-emerald-600/20",
-                            )
-                          : cn(
-                              "border-red-200/90 bg-red-50 text-red-700",
-                              "hover:border-red-300 hover:bg-red-100",
-                              "focus-visible:ring-red-600/20",
-                            ),
-                      )}
-                    >
-                      {busy
-                        ? "…"
-                        : isOpen
-                          ? "Mark resolved"
-                          : "Reopen issue"}
-                    </button>
+                  {isAdmin || canDeleteIssue(issue) ? (
+                    <div className="flex shrink-0 flex-col items-stretch gap-1.5 sm:flex-row sm:items-center">
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            setStatus(issue, isOpen ? "resolved" : "open")
+                          }
+                          className={cn(
+                            "rounded-md border px-2.5 py-1.5 text-[12.5px] font-medium",
+                            "transition-colors duration-150",
+                            "focus-visible:outline-none focus-visible:ring-2",
+                            "disabled:pointer-events-none disabled:opacity-40",
+                            isOpen
+                              ? cn(
+                                  "border-emerald-200/90 bg-emerald-50 text-emerald-800",
+                                  "hover:border-emerald-300 hover:bg-emerald-100",
+                                  "focus-visible:ring-emerald-600/20",
+                                )
+                              : cn(
+                                  "border-red-200/90 bg-red-50 text-red-700",
+                                  "hover:border-red-300 hover:bg-red-100",
+                                  "focus-visible:ring-red-600/20",
+                                ),
+                          )}
+                        >
+                          {busy
+                            ? "…"
+                            : isOpen
+                              ? "Mark resolved"
+                              : "Reopen issue"}
+                        </button>
+                      ) : null}
+                      {canDeleteIssue(issue) ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void handleDelete(issue)}
+                          className={cn(
+                            "rounded-md border border-neutral-200 bg-white px-2.5 py-1.5",
+                            "text-[12.5px] font-medium text-neutral-600",
+                            "transition-colors duration-150",
+                            "hover:border-red-200 hover:bg-red-50 hover:text-red-700",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/20",
+                            "disabled:pointer-events-none disabled:opacity-40",
+                          )}
+                        >
+                          {busy ? "…" : "Delete"}
+                        </button>
+                      ) : null}
+                    </div>
                   ) : null}
                 </li>
               );

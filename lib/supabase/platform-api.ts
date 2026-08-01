@@ -275,6 +275,27 @@ export async function dbUpdateIssueStatus(
   return { error: error?.message };
 }
 
+export async function dbDeleteIssue(
+  issueId: string,
+): Promise<{ error?: string }> {
+  const supabase = client();
+  // Return deleted rows so we can detect RLS blocking (0 rows, no error).
+  const { data, error } = await supabase
+    .from("issues")
+    .delete()
+    .eq("id", issueId)
+    .select("id");
+
+  if (error) return { error: error.message };
+  if (!data?.length) {
+    return {
+      error:
+        "Could not delete this issue in Supabase (permission denied or missing delete policy). Run supabase/issues-delete.sql in the Supabase SQL Editor.",
+    };
+  }
+  return {};
+}
+
 export async function dbSetCartStatus(
   cartId: string,
   status: CartStatus,

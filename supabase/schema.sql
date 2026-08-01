@@ -273,6 +273,18 @@ create policy "Reporters or admins can update issues"
     )
   );
 
+drop policy if exists "Reporters or admins can delete issues" on public.issues;
+create policy "Reporters or admins can delete issues"
+  on public.issues for delete
+  to authenticated
+  using (
+    auth.uid() = reported_by_id
+    or exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+  );
+
 -- Slot restrictions: all read; admins write
 drop policy if exists "Restrictions viewable by authenticated users" on public.slot_restrictions;
 create policy "Restrictions viewable by authenticated users"

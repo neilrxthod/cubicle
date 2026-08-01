@@ -29,6 +29,7 @@ Run each file fully, wait for **Success**:
 | 4 | `restrict-domain.sql` | Only `@rbe.sk.ca` on allowlist |
 | 5 | `realtime.sql` | **Live multi-user board updates** |
 | 6 | `employment-type.sql` | Permanent / sub / temp + blue tick |
+| 7 | `issues-delete.sql` | Allow reporters/admins to **delete issues** from Postgres |
 
 **Durability:** App deploys never touch this data. See [`DATA_DURABILITY.md`](./DATA_DURABILITY.md).  
 Never `drop table` / `truncate` on a live school project without a backup.

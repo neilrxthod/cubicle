@@ -1,9 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Loader2, LogOut } from "lucide-react";
 import { updateProfile, signOutAction } from "@/lib/actions";
+import {
+  getUiPreferences,
+  setUiPreferences,
+} from "@/lib/preferences/ui";
 import { fileToAvatarDataUrl } from "@/lib/profile/image";
 import { isVerifiedStaff } from "@/lib/staff/employment";
 import type { SessionUser } from "@/lib/types";
@@ -53,6 +57,11 @@ export function SettingsForm({
   const [avatarDirty, setAvatarDirty] = useState(false);
   const [notifyEmail, setNotifyEmail] = useState(user.notifyEmail ?? true);
   const [notifyIssues, setNotifyIssues] = useState(user.notifyIssues ?? true);
+  const [allowIssueDelete, setAllowIssueDelete] = useState(false);
+
+  useEffect(() => {
+    setAllowIssueDelete(getUiPreferences().allowIssueDelete === true);
+  }, []);
 
   const dirty = useMemo(() => {
     if (avatarDirty) return true;
@@ -281,6 +290,23 @@ export function SettingsForm({
               checked={notifyIssues}
               onCheckedChange={setNotifyIssues}
               aria-label="Issue email"
+            />
+          }
+        />
+      </SettingsSection>
+
+      <SettingsSection id="issues" title="Issues">
+        <SettingsToggleRow
+          title="Allow deleting issues"
+          description="Show a Delete control on the Issues page. Deletes are permanent."
+          control={
+            <Switch
+              checked={allowIssueDelete}
+              onCheckedChange={(checked) => {
+                setAllowIssueDelete(checked);
+                setUiPreferences({ allowIssueDelete: checked });
+              }}
+              aria-label="Allow deleting issues"
             />
           }
         />

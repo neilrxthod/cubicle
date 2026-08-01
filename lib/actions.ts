@@ -25,6 +25,7 @@ import {
   dbDeleteRestrictionsMatching,
   dbInsertRestriction,
   dbReassignBooking,
+  dbDeleteIssue,
   dbReportIssue,
   dbRequestSwap,
   dbSetCartStatus,
@@ -413,6 +414,72 @@ export async function updateIssueStatus(
       const stillOpenHigh = draft.issues.some(
         (entry) =>
           entry.id !== issueId &&
+          entry.cartId === target.cartId &&
+          entry.status === "open" &&
+          entry.severity === "high",
+      );
+      const cart = draft.carts.find((entry) => entry.id === target.cartId);
+      if (cart && !stillOpenHigh && cart.status === "maintenance") {
+        cart.status = "active";
+      }
+    }
+  });
+
+  return { ok: true };
+}
+
+export async function deleteIssue(issueId: string): Promise<Result> {
+  const session = requireSession();
+  if (!session) return { ok: false, error: "Sign in required." };
+
+  const state = getState();
+  const issue = state.issues.find((entry) => entry.id === issueId);
+  if (!issue) return { ok: false, error: "Issue not found." };
+
+  const isOwner = issue.reportedById === session.id;
+  const isAdmin = session.role === "admin";
+  if (!isAdmin && !isOwner) {
+    return { ok: false, error: "You can only delete issues you reported." };
+  }
+
+  if (isRemoteEnabled()) {
+    // Permanent delete in Postgres (issues table). RLS must allow the caller.
+    const { error } = await dbDeleteIssue(issueId);
+    if (error) return { ok: false, error };
+
+    // Clear maintenance if this was the last open high-severity issue on the cart.
+    if (issue.status === "open" && issue.severity === "high") {
+      const stillOpenHigh = state.issues.some(
+        (entry) =>
+          entry.id !== issueId &&
+          entry.cartId === issue.cartId &&
+          entry.status === "open" &&
+          entry.severity === "high",
+      );
+      if (!stillOpenHigh) {
+        await dbSetCartStatus(issue.cartId, "active");
+      }
+    }
+
+    // Drop from the client cache immediately, then re-sync from Supabase.
+    replaceState({
+      ...state,
+      issues: state.issues.filter((entry) => entry.id !== issueId),
+    });
+    return refreshRemote();
+  }
+
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
+  mutate((draft) => {
+    const idx = draft.issues.findIndex((entry) => entry.id === issueId);
+    if (idx < 0) return;
+    const target = draft.issues[idx];
+    draft.issues.splice(idx, 1);
+
+    if (target.status === "open" && target.severity === "high") {
+      const stillOpenHigh = draft.issues.some(
+        (entry) =>
           entry.cartId === target.cartId &&
           entry.status === "open" &&
           entry.severity === "high",
