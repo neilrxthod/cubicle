@@ -120,13 +120,13 @@ function CancelAction({
           const res = await cancelBooking(bookingId)
           if (res && "error" in res && res.error) {
             toast({
-              title: "Could not cancel",
+              title: "Could not cancel booking",
               description: res.error,
               variant: "destructive",
             })
             return
           }
-          toast({ title: "Canceled" })
+          toast({ title: "Booking canceled" })
           onDone()
         })
       }
@@ -139,7 +139,7 @@ function CancelAction({
         "disabled:pointer-events-none disabled:opacity-40",
       )}
     >
-      {pending ? "…" : "Cancel"}
+      {pending ? "…" : "Cancel booking"}
     </button>
   )
 }

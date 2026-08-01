@@ -68,7 +68,7 @@ export function SwapRequestsList({
                       const res = await acceptSwap(req.id)
                       if (res && "error" in res && res.error) {
                         toast({
-                          title: "Error",
+                          title: "Could not accept swap",
                           description: res.error,
                           variant: "destructive",
                         })
@@ -80,7 +80,7 @@ export function SwapRequestsList({
                   }
                   className="h-8 rounded-lg bg-neutral-950 px-3 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  Accept
+                  Accept swap
                 </button>
                 <button
                   type="button"
@@ -90,7 +90,7 @@ export function SwapRequestsList({
                       const res = await declineSwap(req.id)
                       if (res && "error" in res && res.error) {
                         toast({
-                          title: "Error",
+                          title: "Could not decline swap",
                           description: res.error,
                           variant: "destructive",
                         })

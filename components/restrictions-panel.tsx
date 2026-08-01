@@ -152,7 +152,7 @@ export function RestrictionsPanel({
         return
       }
       toast({
-        title: category === "ap_exam" ? "AP locked" : "Locked",
+        title: category === "ap_exam" ? "AP exam lock set" : "Slot locked",
         description: `${period} · ${format(parseISO(activeDate), "MMM d")}`,
       })
       refresh()
@@ -168,13 +168,13 @@ export function RestrictionsPanel({
       const res = await toggleSlotRestriction(cartId, activeDate, period)
       if (!res.ok) {
         toast({
-          title: "Could not unlock",
+          title: "Could not unlock slot",
           description: res.error,
           variant: "destructive",
         })
         return
       }
-      toast({ title: "Unlocked" })
+      toast({ title: "Slot unlocked" })
       refresh()
     } finally {
       setPendingKey(null)
@@ -199,7 +199,7 @@ export function RestrictionsPanel({
         })
         return
       }
-      toast({ title: "Cleared" })
+      toast({ title: "Day locks cleared" })
       refresh()
     } finally {
       setPendingKey(null)
@@ -484,11 +484,11 @@ export function RestrictionsPanel({
 
       {/* Legend */}
       <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11.5px] text-neutral-500">
-        <Legend swatch="border border-dashed border-neutral-200 bg-white" label="Open · click to lock" />
-        <Legend swatch="bg-neutral-100" label="Booked (view only)" />
+        <Legend swatch="border border-dashed border-neutral-200 bg-white" label="Available" />
+        <Legend swatch="bg-neutral-100" label="Booked" />
         <Legend swatch="bg-slate-100" label="Locked" />
         <Legend swatch="bg-amber-100" label="AP exam" />
-        <Legend swatch="bg-amber-50" label="Maintenance" />
+        <Legend swatch="bg-amber-50" label="Paused cart" />
       </div>
 
       <BatchToolsDialog
@@ -534,7 +534,7 @@ function SlotCell({
   if (maintenance) {
     return (
       <div
-        title="Cart under maintenance"
+        title="Cart paused"
         className="flex h-10 w-full items-center justify-center rounded-md bg-amber-50 text-amber-700"
       >
         <Wrench className="size-3.5" strokeWidth={1.5} />
@@ -859,14 +859,14 @@ function BatchToolsDialog({
       const res = await updateBookingPolicy(n)
       if (!res.ok) {
         toast({
-          title: "Could not save",
+          title: "Could not save booking window",
           description: res.error,
           variant: "destructive",
         })
         return
       }
       toast({
-        title: "Window updated",
+        title: "Booking window updated",
         description: `${n} day${n === 1 ? "" : "s"} ahead`,
       })
       router.refresh()

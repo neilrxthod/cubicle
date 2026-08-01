@@ -95,7 +95,7 @@ export function IssueDialog({
                 return;
               }
               toast({
-                title: "Reported",
+                title: "Issue reported",
                 description: selectedCart?.name,
               });
               router.refresh();

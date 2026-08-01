@@ -85,14 +85,14 @@ function IssuesView({ user }: { user: SessionUser }) {
       const res = await updateIssueStatus(issue.id, next);
       if (!res.ok) {
         toast({
-          title: "Could not update",
+          title: "Could not update issue",
           description: res.error,
           variant: "destructive",
         });
         return;
       }
       toast({
-        title: next === "resolved" ? "Resolved" : "Reopened",
+        title: next === "resolved" ? "Issue resolved" : "Issue reopened",
       });
     } finally {
       setBusyId(null);
@@ -190,7 +190,7 @@ function IssuesView({ user }: { user: SessionUser }) {
                   "focus-visible:border-neutral-400 focus-visible:ring-0",
                 )}
               >
-                <SelectValue placeholder="All severity" />
+                <SelectValue placeholder="All severities" />
               </SelectTrigger>
               <SelectContent
                 align="start"
@@ -206,7 +206,7 @@ function IssuesView({ user }: { user: SessionUser }) {
               >
                 {(
                   [
-                    { value: "all", label: "All severity" },
+                    { value: "all", label: "All severities" },
                     { value: "high", label: "High" },
                     { value: "medium", label: "Medium" },
                     { value: "low", label: "Low" },
@@ -259,7 +259,9 @@ function IssuesView({ user }: { user: SessionUser }) {
         {filtered.length === 0 ? (
           <div className="rounded-xl border border-[var(--hairline)] bg-white px-5 py-12 text-center">
             <p className="text-[13px] text-neutral-400">
-              {issues.length > 0 ? "No matching issues." : "No open issues."}
+              {issues.length > 0
+                ? "No issues match these filters."
+                : "No open issues."}
             </p>
             {issues.length > 0 ? (
               <button
@@ -346,7 +348,11 @@ function IssuesView({ user }: { user: SessionUser }) {
                             ),
                       )}
                     >
-                      {busy ? "…" : isOpen ? "Resolve" : "Reopen"}
+                      {busy
+                        ? "…"
+                        : isOpen
+                          ? "Mark resolved"
+                          : "Reopen issue"}
                     </button>
                   ) : null}
                 </li>

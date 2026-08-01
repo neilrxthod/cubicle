@@ -89,23 +89,23 @@ export function ManageBookingDialog({
               onClick={onClose}
               className="h-9 px-1 text-[13px] font-medium text-neutral-400 transition-colors hover:text-neutral-900"
             >
-              Keep
+              Keep booking
             </button>
             <AnimatedCancelButton
-              idleLabel="Cancel"
-              successLabel="Done"
+              idleLabel="Cancel booking"
+              successLabel="Canceled"
               size="small"
-              className="min-w-[6.5rem]"
+              className="min-w-[7.5rem]"
               onConfirm={() => cancelBooking(booking.id)}
               onError={(message) =>
                 toast({
-                  title: "Could not cancel",
+                  title: "Could not cancel booking",
                   description: message,
                   variant: "destructive",
                 })
               }
               onSuccess={() => {
-                toast({ title: "Canceled" })
+                toast({ title: "Booking canceled" })
                 router.refresh()
                 onClose()
               }}

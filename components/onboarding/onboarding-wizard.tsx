@@ -557,7 +557,8 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
     } catch (err) {
       toast({
         title: "Could not use that image",
-        description: err instanceof Error ? err.message : "Try another file.",
+        description:
+          err instanceof Error ? err.message : "Choose a different image file.",
         variant: "destructive",
       });
     }
@@ -643,7 +644,7 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
       completeOnboarding(user.id || user.email, prefs, [user.id, user.email]);
       router.replace(onboardingHomeForRole(user.role));
     } catch {
-      setError("Could not save. Try again.");
+      setError("Could not save profile. Try again.");
     } finally {
       setPending(false);
     }
@@ -912,7 +913,7 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
                   {pending ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : null}
-                  {pending ? "Opening…" : "Go to Schedule"}
+                  {pending ? "Opening…" : "Open schedule"}
                   {!pending ? (
                     <ArrowRight className="size-4 opacity-80" strokeWidth={1.75} />
                   ) : null}

@@ -29,12 +29,13 @@ export function SwapRequestDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="gap-0 overflow-hidden rounded-2xl border-border/60 bg-white p-0 shadow-xl sm:max-w-md">
         <DialogHeader className="space-y-2 border-b border-border/60 px-5 py-5 text-left sm:px-6">
-          <DialogTitle>Request swap</DialogTitle>
+          <DialogTitle>Request slot swap</DialogTitle>
           <DialogDescription>
-            Ask {booking.teacherName} for this slot.
+            Ask {booking.teacherName} to give you this slot
             {booking.className?.trim()
               ? ` (${booking.className.trim()})`
               : ""}
+            .
           </DialogDescription>
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <span className="type-label rounded-full border border-border bg-muted/20 px-2.5 py-1">
@@ -61,7 +62,7 @@ export function SwapRequestDialog({
                 return
               }
               toast({
-                title: "Request sent",
+                title: "Swap request sent",
                 description: booking.teacherName,
               })
               router.refresh()
@@ -98,7 +99,7 @@ export function SwapRequestDialog({
               disabled={pending}
               className="h-9 rounded-lg bg-foreground px-5 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {pending ? "Sending…" : "Send"}
+              {pending ? "Sending…" : "Send request"}
             </button>
           </div>
         </form>

@@ -87,7 +87,7 @@ export function BookDialog({
                   if (res && "error" in res && res.error) {
                     setError(res.error);
                     toast({
-                      title: "Could not book",
+                      title: "Could not book cart",
                       description: res.error,
                       variant: "destructive",
                     });
@@ -95,7 +95,7 @@ export function BookDialog({
                     return;
                   }
                   toast({
-                    title: "Booked",
+                    title: "Cart booked",
                     description: `${cart.name} · ${period}`,
                   });
                   router.refresh();

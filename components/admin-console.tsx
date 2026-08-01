@@ -245,7 +245,7 @@ function CartsGrid({
           return s
         })
         toast({
-          title: "Could not update",
+          title: "Could not update cart",
           description: res.error,
           variant: "destructive",
         })
@@ -263,8 +263,8 @@ function CartsGrid({
         return m
       })
       toast({
-        title: cart.name,
-        description: next === "maintenance" ? "Paused" : "Active",
+        title: next === "maintenance" ? "Cart paused" : "Cart resumed",
+        description: cart.name,
       })
       router.refresh()
     })
@@ -318,7 +318,7 @@ function CartsGrid({
 
       {carts.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-neutral-200/80 bg-white px-6 py-16 text-center text-[13px] text-neutral-400">
-          No carts.
+          No carts in inventory.
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -360,7 +360,7 @@ function CartsGrid({
                     {cart.name}
                   </h3>
                   <p className="mt-1 truncate text-[12px] tracking-[-0.01em] text-neutral-400">
-                    {cart.location || "No location"}
+                    {cart.location || "Location not set"}
                   </p>
                 </div>
 
@@ -610,8 +610,8 @@ function BookingsTable({
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
     toast({
-      title: "Exported",
-      description: `${list.length} reservation${list.length === 1 ? "" : "s"} · CSV`,
+      title: "CSV exported",
+      description: `${list.length} reservation${list.length === 1 ? "" : "s"}`,
     })
   }
 
@@ -654,7 +654,7 @@ function BookingsTable({
     downloadCsv(
       `reservations-conflicts-${format(new Date(), "yyyy-MM-dd")}.csv`,
       list,
-      "No conflict reservations (bookings on paused carts).",
+      "No reservations on paused carts.",
     )
   }
 
@@ -686,8 +686,8 @@ function BookingsTable({
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
     toast({
-      title: "Exported",
-      description: `${rows.length} teacher${rows.length === 1 ? "" : "s"} · CSV`,
+      title: "CSV exported",
+      description: `${rows.length} teacher${rows.length === 1 ? "" : "s"}`,
     })
   }
 
@@ -1049,10 +1049,14 @@ function BookingsTable({
     try {
       const res = await deleteBookings(Array.from(selectedIds))
       if (!res.ok) {
-        toast({ title: "Error", description: res.error, variant: "destructive" })
+        toast({
+          title: "Could not delete bookings",
+          description: res.error,
+          variant: "destructive",
+        })
       } else {
         toast({
-          title: "Deleted",
+          title: "Bookings deleted",
           description: `${selectedIds.size} booking${selectedIds.size === 1 ? "" : "s"}`,
         })
         setSelectedIds(new Set())
@@ -1096,17 +1100,18 @@ function BookingsTable({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] tracking-[-0.01em]">
           <p className="tabular-nums text-neutral-950">
             <span className="font-medium">{filtered.length}</span>
-            <span className="ml-1 font-normal text-neutral-400">shown</span>
+            <span className="ml-1 font-normal text-neutral-400">matching</span>
           </p>
           <span aria-hidden className="hidden h-3 w-px bg-neutral-200 sm:block" />
           <p className="tabular-nums text-neutral-500">
-            Total <span className="font-medium text-neutral-700">{sorted.length}</span>
+            Total{" "}
+            <span className="font-medium text-neutral-700">{sorted.length}</span>
           </p>
           {conflictsCount > 0 ? (
             <>
               <span aria-hidden className="hidden h-3 w-px bg-neutral-200 sm:block" />
               <p className="tabular-nums text-neutral-500">
-                Conflicts{" "}
+                On paused carts{" "}
                 <span className="font-medium text-red-600">{conflictsCount}</span>
               </p>
             </>
@@ -1348,7 +1353,7 @@ function BookingsTable({
                     className="cursor-pointer rounded-md text-[12.5px]"
                     onSelect={exportVisibleCsv}
                   >
-                    Visible list
+                    Filtered list
                     <span className="ml-auto tabular-nums text-[11px] text-neutral-400">
                       {filtered.length}
                     </span>
@@ -1366,7 +1371,7 @@ function BookingsTable({
                     className="cursor-pointer rounded-md text-[12.5px]"
                     onSelect={exportTodayCsv}
                   >
-                    Today only
+                    Today
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="cursor-pointer rounded-md text-[12.5px]"
@@ -1378,13 +1383,13 @@ function BookingsTable({
                     className="cursor-pointer rounded-md text-[12.5px]"
                     onSelect={exportConflictsCsv}
                   >
-                    Conflicts only
+                    On paused carts
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="cursor-pointer rounded-md text-[12.5px]"
                     onSelect={exportByTeacherCsv}
                   >
-                    By teacher
+                    Counts by teacher
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="my-1" />
                   <DropdownMenuLabel className="px-2 py-1.5 text-[11px] font-medium text-neutral-400">
@@ -1456,7 +1461,7 @@ function BookingsTable({
                 "text-red-600 hover:bg-red-50 hover:text-red-700",
             )}
           >
-            Conflicts
+            On paused carts
             {conflictsCount > 0 ? (
               <span className="tabular-nums opacity-80">{conflictsCount}</span>
             ) : null}
@@ -1468,7 +1473,9 @@ function BookingsTable({
         filtered.length === 0 ? (
           <div className="rounded-xl border border-[var(--hairline)] bg-white px-5 py-12 text-center">
             <p className="text-[13px] text-neutral-400">
-              {hasFilters ? "No matching reservations." : "No reservations yet."}
+              {hasFilters
+                ? "No reservations match these filters."
+                : "No reservations yet."}
             </p>
             {hasFilters ? (
               <button
@@ -1725,9 +1732,16 @@ function BookingsTable({
                         try {
                           const res = await reassignBooking(reassigningBooking.id, c.id)
                           if (!res.ok) {
-                            toast({ title: "Could not reassign", description: res.error, variant: "destructive" })
+                            toast({
+                              title: "Could not move booking",
+                              description: res.error,
+                              variant: "destructive",
+                            })
                           } else {
-                            toast({ title: "Reassigned", description: c.name })
+                            toast({
+                              title: "Booking moved",
+                              description: c.name,
+                            })
                             setReassigningBooking(null)
                           }
                         } finally {
@@ -2055,7 +2069,7 @@ function ReportsPanel({
             onClick={() => onOpenTab("carts")}
             className="flex flex-col gap-1 rounded-xl border border-[var(--hairline-strong)] bg-neutral-50/40 px-3.5 py-3.5 text-left transition hover:bg-neutral-50"
           >
-            <span className="type-label text-neutral-400">Fleet</span>
+            <span className="type-label text-neutral-400">Active carts</span>
             <span className="type-metric text-neutral-950">{equipmentHealth}%</span>
           </button>
           <button
@@ -2063,7 +2077,7 @@ function ReportsPanel({
             onClick={() => onOpenTab("bookings")}
             className="flex flex-col gap-1 rounded-xl border border-[var(--hairline-strong)] bg-neutral-50/40 px-3.5 py-3.5 text-left transition hover:bg-neutral-50"
           >
-            <span className="type-label text-neutral-400">Bookings</span>
+            <span className="type-label text-neutral-400">Reservations</span>
             <span className="type-metric text-neutral-950">{totalBookings}</span>
           </button>
           <div className="flex flex-col gap-1 rounded-xl border border-[var(--hairline-strong)] bg-neutral-50/40 px-3.5 py-3.5">
@@ -2112,7 +2126,7 @@ function ReportsPanel({
                 maintenanceCartsCount > 0 ? "text-amber-800" : "text-neutral-400",
               )}
             >
-              Maintenance
+              Paused carts
             </span>
             <span
               className={cn(
@@ -2224,14 +2238,14 @@ function ReportsPanel({
           </div>
 
           <div className="rounded-xl border border-[var(--hairline-strong)] bg-white p-4 shadow-[var(--shadow-surface)]">
-            <h3 className="type-section-title mb-3">Booking mix</h3>
+            <h3 className="type-section-title mb-3">Reservations by period & subject</h3>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg border border-neutral-100 p-3">
                 <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
                   By period
                 </p>
                 {periodRows.length === 0 ? (
-                  <p className="text-[13px] text-neutral-400">No data</p>
+                  <p className="text-[13px] text-neutral-400">No reservations yet</p>
                 ) : (
                   <ul className="space-y-1.5">
                     {periodRows.slice(0, 5).map(([period, count]) => (
@@ -2251,7 +2265,7 @@ function ReportsPanel({
                   By subject
                 </p>
                 {subjectRows.length === 0 ? (
-                  <p className="text-[13px] text-neutral-400">No data</p>
+                  <p className="text-[13px] text-neutral-400">No subjects yet</p>
                 ) : (
                   <ul className="space-y-1.5">
                     {subjectRows.slice(0, 5).map(([subject, count]) => (

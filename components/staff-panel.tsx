@@ -354,7 +354,7 @@ export function StaffPanel({
           return
         }
         toast({
-          title: isReallowlist ? "Restored" : "Added",
+          title: isReallowlist ? "Staff restored" : "Staff added",
           description: res.data?.name,
         })
         setAccessDialog(null)
@@ -371,7 +371,7 @@ export function StaffPanel({
         setFormError(res.error)
         return
       }
-      toast({ title: "Saved" })
+      toast({ title: "Credentials updated" })
       setAccessDialog(null)
       router.refresh()
     })
@@ -389,13 +389,13 @@ export function StaffPanel({
       if (!res.ok) {
         setDeleteError(res.error)
         toast({
-          title: "Could not remove",
+          title: "Could not remove staff",
           description: res.error,
           variant: "destructive",
         })
         return
       }
-      toast({ title: "Removed", description: user.name })
+      toast({ title: "Staff removed", description: user.name })
       setDeleteTarget(null)
       if (selectedId === user.id) setSelectedId(null)
       router.refresh()
@@ -1171,14 +1171,14 @@ function EmptyList({
       </div>
       <div>
         <p className="text-[13px] font-medium text-neutral-800">
-          {hasAny ? "No matches" : "No staff"}
+          {hasAny ? "No staff match this search" : "No staff yet"}
         </p>
         <p className="mt-1 max-w-[16rem] text-[12.5px] text-neutral-400">
           {hasAny
-            ? "Try another search."
+            ? "Change the search or filters."
             : googleMode
               ? `Add @${SCHOOL_EMAIL_DOMAIN} emails.`
-              : "Add the first person."}
+              : "Add the first staff member."}
         </p>
       </div>
       {!hasAny ? (

@@ -96,7 +96,7 @@ export function AnimatedCancelButton({
       setSuccess(true);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Something went wrong.";
+        err instanceof Error ? err.message : "Could not cancel booking.";
       onError?.(message);
       setLoading(false);
     }

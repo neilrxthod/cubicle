@@ -503,7 +503,7 @@ export function DailyBoard({
                       return (
                         <div
                           key={period}
-                          title="Cart under maintenance — unavailable"
+                          title="Cart paused — not bookable"
                           className={cn(
                             cellBase,
                             "items-center justify-center bg-neutral-50 text-neutral-300",

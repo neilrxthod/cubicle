@@ -118,7 +118,7 @@ export function SettingsForm({
         return;
       }
       setAvatarDirty(false);
-      setStatus({ type: "ok", message: "Saved" });
+      setStatus({ type: "ok", message: "Profile saved" });
     });
   }
 
@@ -258,25 +258,25 @@ export function SettingsForm({
 
       <SettingsSection id="notifications" title="Email">
         <SettingsToggleRow
-          title="Email updates"
-          description="Admin changes to your bookings, profile, or access"
+          title="Account email"
+          description="Booking, profile, and access changes"
           control={
             <Switch
               checked={notifyEmail}
               onCheckedChange={setNotifyEmail}
-              aria-label="Email updates"
+              aria-label="Account email"
             />
           }
         />
         <SettingsDivider />
         <SettingsToggleRow
-          title="Issues"
-          description="Updates on your reports"
+          title="Issue email"
+          description="Status changes on issues you reported"
           control={
             <Switch
               checked={notifyIssues}
               onCheckedChange={setNotifyIssues}
-              aria-label="Issue updates"
+              aria-label="Issue email"
             />
           }
         />
@@ -295,7 +295,7 @@ export function SettingsForm({
       </SettingsSection>
 
       {/* Minimal links — no icon blocks */}
-      <SettingsSection id="more" title="More">
+      <SettingsSection id="more" title="Shortcuts">
         <Link
           href="/my-bookings"
           className="flex items-center justify-between gap-3 px-4 py-3 text-[13.5px] transition-colors hover:bg-neutral-50/80 sm:px-5"
@@ -303,7 +303,7 @@ export function SettingsForm({
           <span className="font-medium tracking-[-0.01em] text-neutral-900">
             My bookings
           </span>
-          <span className="text-[12px] text-neutral-400">View</span>
+          <span className="text-[12px] text-neutral-400">Open</span>
         </Link>
         {isAdmin ? (
           <>
@@ -313,7 +313,7 @@ export function SettingsForm({
               className="flex items-center justify-between gap-3 px-4 py-3 text-[13.5px] transition-colors hover:bg-neutral-50/80 sm:px-5"
             >
               <span className="font-medium tracking-[-0.01em] text-neutral-900">
-                Admin
+                Admin console
               </span>
               <span className="text-[12px] text-neutral-400">Open</span>
             </Link>

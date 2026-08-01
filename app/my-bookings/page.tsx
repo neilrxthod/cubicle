@@ -35,7 +35,7 @@ function MyBookings({ user }: { user: SessionUser }) {
           title="Upcoming"
           bookings={upcoming}
           carts={state.carts}
-          emptyLabel="Nothing upcoming."
+          emptyLabel="No upcoming bookings."
           emptyAction={{ href: "/", label: "Book a cart" }}
           canCancel
         />

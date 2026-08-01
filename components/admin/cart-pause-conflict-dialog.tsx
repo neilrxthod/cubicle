@@ -149,7 +149,7 @@ export function CartPauseConflictDialog({
           if (!res.ok) {
             setSubmitting(false);
             toast({
-              title: "Could not reassign",
+              title: "Could not move booking",
               description: res.error,
               variant: "destructive",
             });
@@ -160,7 +160,7 @@ export function CartPauseConflictDialog({
           if (!res.ok) {
             setSubmitting(false);
             toast({
-              title: "Could not cancel",
+              title: "Could not cancel booking",
               description: res.error,
               variant: "destructive",
             });
@@ -173,14 +173,14 @@ export function CartPauseConflictDialog({
       setSubmitting(false);
       if (res && "error" in res && res.error) {
         toast({
-          title: "Could not pause",
+          title: "Could not pause cart",
           description: res.error,
           variant: "destructive",
         });
         return;
       }
 
-      toast({ title: cart.name, description: "Paused" });
+      toast({ title: "Cart paused", description: cart.name });
       onResolvedAndPaused();
       onClose();
     });
@@ -214,12 +214,12 @@ export function CartPauseConflictDialog({
                 id="pause-conflict-title"
                 className="text-[15px] font-medium tracking-[-0.02em] text-neutral-950"
               >
-                Reassign bookings
+                Move bookings first
               </h2>
               <p className="mt-1 text-[12.5px] leading-snug text-neutral-400">
                 {allClear
-                  ? `${cart.name} · ready to pause`
-                  : `${cart.name} · reassign or cancel each row, then proceed`}
+                  ? `${cart.name} · no bookings left`
+                  : `${cart.name} · move or cancel every booking, then pause`}
               </p>
             </div>
             <button
@@ -237,7 +237,7 @@ export function CartPauseConflictDialog({
         <div className="min-h-0 flex-1 overflow-auto border-t border-[var(--hairline)]">
           {allClear ? (
             <p className="py-10 text-center text-[13px] text-neutral-400">
-              Ready
+              No bookings left
             </p>
           ) : (
             <table className="w-full min-w-[36rem] border-collapse text-left">
@@ -253,10 +253,10 @@ export function CartPauseConflictDialog({
                     Teacher
                   </th>
                   <th className="px-3 py-2.5 text-[11px] font-medium tracking-wide text-neutral-400">
-                    Cart
+                    Move to
                   </th>
                   <th className="px-3 py-2.5 pr-4 text-right text-[11px] font-medium tracking-wide text-neutral-400 sm:pr-5">
-                    <span className="sr-only">Cancel</span>
+                    Cancel
                   </th>
                 </tr>
               </thead>
@@ -354,7 +354,7 @@ export function CartPauseConflictDialog({
                             )}
                           >
                             <option value="">
-                              {free.length === 0 ? "—" : "Cart"}
+                              {free.length === 0 ? "No free cart" : "Select cart"}
                             </option>
                             {reassignId &&
                             !free.some((c) => c.id === reassignId) ? (
@@ -397,7 +397,7 @@ export function CartPauseConflictDialog({
                               : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900",
                           )}
                         >
-                          Cancel
+                          {canceling ? "Will cancel" : "Cancel"}
                         </button>
                       </td>
                     </tr>
@@ -416,14 +416,14 @@ export function CartPauseConflictDialog({
               onClick={onClose}
               className="h-8 rounded-md px-3 text-[12.5px] font-medium text-neutral-400 transition-colors hover:text-neutral-900 disabled:opacity-40"
             >
-              Back
+              Don&apos;t pause
             </button>
             <button
               type="button"
               disabled={!allPlanned || busy}
               onClick={proceed}
               className={cn(
-                "inline-flex h-8 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-md px-3.5",
+                "inline-flex h-8 min-w-[6.25rem] items-center justify-center gap-1.5 rounded-md px-3.5",
                 "text-[12.5px] font-medium transition-colors",
                 allPlanned && !busy
                   ? "bg-neutral-950 text-white hover:bg-neutral-800"
@@ -433,7 +433,7 @@ export function CartPauseConflictDialog({
               {busy ? (
                 <Loader2 className="size-3.5 animate-spin opacity-70" />
               ) : (
-                "Proceed"
+                "Pause cart"
               )}
             </button>
           </div>
