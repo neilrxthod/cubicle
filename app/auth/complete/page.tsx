@@ -5,7 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { isSchoolEmail } from "@/lib/auth/school-domain";
 import { setSession } from "@/lib/auth/session";
 import { syncOAuthProfileFromGoogle } from "@/lib/auth/sync-oauth-profile";
-import { prepareOnboardingAfterAuth } from "@/lib/onboarding/storage";
+import {
+  needsOnboarding,
+  onboardingHomeForRole,
+  prepareOnboardingAfterAuth,
+} from "@/lib/onboarding/storage";
 import { createClient } from "@/lib/supabase/client";
 
 /**
@@ -69,9 +73,14 @@ function CompleteInner() {
           lastName: synced.lastName,
         });
 
-        // Local dev: always re-prompt teaching card after Google auth.
+        // Local dev: reset so onboarding shows after every sign-in.
+        // Production: leave completed prefs so first-run stays one-time.
         prepareOnboardingAfterAuth(synced.id, synced.email);
-        router.replace("/onboarding");
+        if (needsOnboarding(synced.role, synced.id, synced.email)) {
+          router.replace("/onboarding");
+        } else {
+          router.replace(onboardingHomeForRole(synced.role));
+        }
       } catch {
         if (!cancelled) {
           setMessage("Could not finish sign-in.");

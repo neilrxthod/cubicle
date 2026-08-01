@@ -199,6 +199,33 @@ export function completeOnboarding(
   clearOnboardingDraft(...keys);
 }
 
+/**
+ * Update onboarding prefs after first-run (Settings).
+ * Always keeps `completed: true` so production never reopens the wizard.
+ */
+export function saveOnboardingPrefs(
+  userId: string,
+  patch: Partial<Omit<OnboardingPrefs, "completed" | "completedAt">>,
+  mirrorKeys: Array<string | undefined | null> = [],
+) {
+  const keys = [userId, ...mirrorKeys].filter(
+    (k): k is string => Boolean(k && k.trim()),
+  );
+  if (keys.length === 0) return;
+  const current = getOnboarding(...keys);
+  const next: OnboardingPrefs = {
+    ...current,
+    ...patch,
+    completed: true,
+    completedAt: current.completedAt ?? new Date().toISOString(),
+  };
+  const store = readStore();
+  for (const key of Array.from(new Set(keys))) {
+    store[key] = next;
+  }
+  writeStore(store);
+}
+
 /** Clear teaching-setup state for the given user keys (id / email). */
 export function resetOnboarding(
   ...keys: Array<string | undefined | null>

@@ -19,6 +19,7 @@ import {
   SettingsToggleRow,
   settingsInputClass,
 } from "@/components/settings/settings-section";
+import { SetupPreferences } from "@/components/settings/setup-preferences";
 
 function initials(name: string) {
   const parts = name.split(/\s+/).filter(Boolean);
@@ -255,6 +256,9 @@ export function SettingsForm({
       </SettingsSection>
 
       {integrations}
+
+      {/* First-run onboarding data — edit anytime without reopening the wizard */}
+      <SetupPreferences user={user} />
 
       <SettingsSection id="notifications" title="Email">
         <SettingsToggleRow

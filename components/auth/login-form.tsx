@@ -6,7 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { authenticate, DEMO_ACCOUNTS } from "@/lib/auth/credentials";
 import type { DemoAccount } from "@/lib/auth/types";
 import { getSession, setSession } from "@/lib/auth/session";
-import { prepareOnboardingAfterAuth } from "@/lib/onboarding/storage";
+import {
+  needsOnboarding,
+  onboardingHomeForRole,
+  prepareOnboardingAfterAuth,
+} from "@/lib/onboarding/storage";
 import { authContainerVariants, authItemVariants } from "@/lib/auth/motion";
 import {
   GOOGLE_HOSTED_DOMAIN,
@@ -70,7 +74,12 @@ export default function LoginForm() {
 
   useEffect(() => {
     const existing = getSession();
-    if (existing) router.replace("/onboarding");
+    if (!existing) return;
+    if (needsOnboarding(existing.role, existing.id, existing.email)) {
+      router.replace("/onboarding");
+    } else {
+      router.replace(onboardingHomeForRole(existing.role));
+    }
   }, [router]);
 
   function requireLegal(): boolean {
