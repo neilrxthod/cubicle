@@ -124,7 +124,6 @@ export function AdminConsole({
   bookings: Booking[]
   users: User[]
   issues: Issue[]
-  /** Kept for API stability; Restrictions tab is deferred. */
   slotRestrictions?: SlotRestriction[]
   bookingPolicy?: BookingPolicy
   swapRequests?: SwapRequest[]
