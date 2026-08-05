@@ -5,12 +5,6 @@ import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { format, parseISO, addDays } from "date-fns"
 import type { Booking, BookingPolicy, Cart, Period, SessionUser, SlotRestriction } from "@/lib/types"
-import {
-  getSkHoliday,
-  getSkHolidayDatesAround,
-  isSkHoliday,
-  skipSkHolidays,
-} from "@/lib/calendar/sk-holidays"
 
 const BookDialog = dynamic(() => import("./book-dialog").then((mod) => mod.BookDialog), {
   ssr: false,
@@ -148,26 +142,9 @@ export function DailyBoard({
   const isTeacherWindowEnforced = session.role !== "admin"
   const isBeyondAdvanceWindow = isTeacherWindowEnforced && date > lastBookableDate
   const isPastDate = isTeacherWindowEnforced && date < today
-  const isHolidayDate = isSkHoliday(date)
-  const canBookOpenSlots = !isPastDate && !isBeyondAdvanceWindow && !isHolidayDate
-
-  const skHolidayDates = useMemo(
-    () => getSkHolidayDatesAround(parseISO(date), 2),
-    [date],
-  )
-  const boardHoliday = getSkHoliday(date)
+  const canBookOpenSlots = !isPastDate && !isBeyondAdvanceWindow
 
   function setDate(next: string) {
-    const holiday = getSkHoliday(next)
-    if (holiday) {
-      toast({
-        title: holiday.name,
-        description:
-          "Statutory holiday (Regina, SK). Cart booking is unavailable.",
-        variant: "destructive",
-      })
-      return
-    }
     if (isTeacherWindowEnforced && next > lastBookableDate) {
       toast({
         title: "Outside booking window",
@@ -182,13 +159,7 @@ export function DailyBoard({
   }
 
   function go(offsetDays: number) {
-    const dir = offsetDays >= 0 ? 1 : -1
-    let next = format(addDays(parseISO(date), offsetDays), "yyyy-MM-dd")
-    if (isSkHoliday(next)) {
-      next = skipSkHolidays(date, dir, (ymd) =>
-        isTeacherWindowEnforced ? ymd > lastBookableDate : false,
-      )
-    }
+    const next = format(addDays(parseISO(date), offsetDays), "yyyy-MM-dd")
     setDate(next)
   }
 
@@ -202,16 +173,6 @@ export function DailyBoard({
         return
       }
       setSwapDialog(existing)
-      return
-    }
-
-    const holiday = getSkHoliday(date)
-    if (holiday) {
-      toast({
-        title: holiday.name,
-        description: "Statutory holiday (Regina, SK). Cart booking is unavailable.",
-        variant: "destructive",
-      })
       return
     }
 
@@ -328,15 +289,7 @@ export function DailyBoard({
                   if (!val) return
                   setDate(format(val, "yyyy-MM-dd"))
                 }}
-                modifiers={{
-                  holiday: skHolidayDates,
-                }}
-                modifiersClassNames={{
-                  holiday:
-                    "bg-neutral-100 text-neutral-400 opacity-100 hover:bg-neutral-100 hover:text-neutral-400",
-                }}
                 disabled={(day) => {
-                  if (isSkHoliday(day)) return true
                   if (
                     isTeacherWindowEnforced &&
                     format(day, "yyyy-MM-dd") > lastBookableDate
@@ -345,54 +298,7 @@ export function DailyBoard({
                   }
                   return false
                 }}
-                components={{
-                  DayContent: ({ date: dayDate, activeModifiers }) => {
-                    const holiday = getSkHoliday(dayDate)
-                    if (holiday || activeModifiers.holiday) {
-                      return (
-                        <span
-                          className="relative flex h-8 w-8 items-center justify-center"
-                          title={
-                            holiday
-                              ? `${holiday.name} — unavailable`
-                              : "Statutory holiday — unavailable"
-                          }
-                        >
-                          <span className="text-[12px] tabular-nums text-neutral-400">
-                            {format(dayDate, "d")}
-                          </span>
-                          <span
-                            aria-hidden
-                            className="absolute bottom-1 left-1/2 size-0.5 -translate-x-1/2 rounded-full bg-neutral-400"
-                          />
-                        </span>
-                      )
-                    }
-                    return (
-                      <span className="flex h-8 w-8 items-center justify-center text-[12px] tabular-nums">
-                        {format(dayDate, "d")}
-                      </span>
-                    )
-                  },
-                }}
               />
-              <div className="flex items-center justify-between gap-3 border-t border-neutral-100 px-3 py-2">
-                <div className="flex items-center gap-1.5 text-[11px] text-neutral-500">
-                  <span
-                    aria-hidden
-                    className="relative flex size-5 items-center justify-center rounded-sm bg-neutral-100"
-                  >
-                    <span className="text-[9px] tabular-nums text-neutral-400">
-                      1
-                    </span>
-                    <span className="absolute bottom-0.5 left-1/2 size-0.5 -translate-x-1/2 rounded-full bg-neutral-400" />
-                  </span>
-                  <span>Holiday</span>
-                </div>
-                <p className="text-[10.5px] text-neutral-400">
-                  Regina, SK · booking closed
-                </p>
-              </div>
             </PopoverContent>
           </Popover>
 
@@ -427,22 +333,6 @@ export function DailyBoard({
           ) : null}
         </div>
       </div>
-
-      {boardHoliday ? (
-        <div className="flex items-center justify-between gap-3 border-b border-neutral-200 bg-neutral-50 px-4 py-2.5 sm:px-5">
-          <div className="min-w-0">
-            <p className="text-[12.5px] font-medium text-neutral-900">
-              {boardHoliday.name}
-            </p>
-            <p className="text-[11.5px] text-neutral-500">
-              Statutory holiday · Regina, SK · cart booking unavailable
-            </p>
-          </div>
-          <span className="shrink-0 rounded border border-neutral-200 bg-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-neutral-500">
-            Closed
-          </span>
-        </div>
-      ) : null}
 
       {/* ── Legend strip: aligned with toolbar padding ── */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-[var(--hairline)] bg-neutral-50/80 px-4 py-2 sm:px-5">
@@ -663,18 +553,13 @@ export function DailyBoard({
                         <div
                           key={period}
                           title={
-                            isHolidayDate
-                              ? boardHoliday
-                                ? `${boardHoliday.name} — booking unavailable`
-                                : "Holiday — booking unavailable"
-                              : isPastDate
-                                ? "Past date — cannot book"
-                                : "Outside booking window"
+                            isPastDate
+                              ? "Past date — cannot book"
+                              : "Outside booking window"
                           }
                           className={cn(
                             cellBase,
                             "items-center justify-center bg-white text-neutral-200",
-                            isHolidayDate && "bg-neutral-50",
                           )}
                         >
                           <span className="text-[11px] font-light">—</span>

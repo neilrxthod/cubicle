@@ -71,6 +71,7 @@ export default function LoginForm() {
   const demoEnabled = isDemoLoginEnabled();
   const urlError = messageForError(searchParams.get("error"));
   const displayError = error || urlError;
+  const accountDeleted = searchParams.get("deleted") === "1";
 
   useEffect(() => {
     const existing = getSession();
@@ -250,6 +251,14 @@ export default function LoginForm() {
                 invalid={legalInvalid}
               />
 
+              {accountDeleted && !displayError && !legalInvalid ? (
+                <p
+                  role="status"
+                  className="text-center text-[12.5px] font-medium text-neutral-600"
+                >
+                  Your account was deleted.
+                </p>
+              ) : null}
               {(displayError || legalInvalid) && (
                 <p
                   role="alert"

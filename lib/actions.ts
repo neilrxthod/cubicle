@@ -1560,6 +1560,70 @@ export async function signOutAction() {
   window.location.href = "/login";
 }
 
+/**
+ * Permanently delete the signed-in account.
+ * Remote: removes allowlist + Auth user (profile cascades).
+ * Local demo: drops the user row from the platform store.
+ */
+export async function deleteAccountAction(): Promise<Result> {
+  if (typeof window === "undefined") {
+    return { ok: false, error: "Not available." };
+  }
+
+  const session = requireSession();
+  if (!session) return { ok: false, error: "Sign in required." };
+
+  if (isRemoteEnabled() && isUuid(session.id)) {
+    try {
+      const res = await fetch("/api/account/delete", { method: "POST" });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        ok?: boolean;
+      };
+      if (!res.ok) {
+        return {
+          ok: false,
+          error: body.error || "Could not delete account.",
+        };
+      }
+    } catch {
+      return { ok: false, error: "Could not reach the server. Try again." };
+    }
+
+    // Clear local session chrome; auth user is already gone server-side.
+    clearSession();
+    try {
+      clearPlatformBrowserCache();
+    } catch {
+      // ignore
+    }
+    window.location.href = "/login?deleted=1";
+    return { ok: true };
+  }
+
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
+
+  mutate((draft) => {
+    draft.users = draft.users.filter((entry) => entry.id !== session.id);
+    draft.bookings = draft.bookings.filter(
+      (booking) => booking.teacherId !== session.id,
+    );
+    draft.issues = draft.issues.filter(
+      (issue) => issue.reportedById !== session.id,
+    );
+  });
+
+  clearSession();
+  try {
+    clearPlatformBrowserCache();
+  } catch {
+    // ignore
+  }
+  window.location.href = "/login?deleted=1";
+  return { ok: true };
+}
+
 export async function updateProfile(
   input: ProfileUpdate,
 ): Promise<Result<SessionUser>> {
@@ -1569,6 +1633,21 @@ export async function updateProfile(
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Name is required." };
   if (name.length > 80) return { ok: false, error: "Name is too long." };
+  // Settings always sends phone as a string (may be ""). Onboarding may omit it.
+  if (typeof input.phone === "string") {
+    const phone = input.phone.trim();
+    if (!phone) {
+      return {
+        ok: false,
+        error:
+          "Phone number is required — each classroom teacher has a dedicated number.",
+      };
+    }
+    if (phone.length > 40) {
+      return { ok: false, error: "Phone number is too long." };
+    }
+    input = { ...input, phone };
+  }
   if ((input.bio?.length ?? 0) > 280) {
     return { ok: false, error: "Bio must be 280 characters or less." };
   }

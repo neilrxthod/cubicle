@@ -43,7 +43,6 @@ Cubicle processes **staff operational data** (identity from Google Sign-In, book
 | **Stats strip** | Brand mesh metrics — booked, utilization, yours, issues, free |
 | **Book / cancel** | Reserve by date and period; cancel own bookings |
 | **Swaps** | Request another teacher’s slot; owner accepts or declines |
-| **Holidays** | SK (Regina) statutory days block booking |
 | **Verified staff** | Permanent employment may show a verification mark |
 
 ### Teacher tools
@@ -169,7 +168,7 @@ Cubicle is designed as an **internal staff tool**, not a student-facing learning
 | Auth | Supabase Auth · Google OAuth (Workspace) |
 | Data | Supabase Postgres · RLS · Realtime |
 | Hosting | Vercel · `mycubicle.app` |
-| Timezone | America/Regina (bell / holiday helpers) |
+| Timezone | America/Regina (bell schedule helpers) |
 
 ---
 
@@ -262,7 +261,7 @@ cubicle/
 │   └── ui/                   # Shared UI primitives
 ├── lib/
 │   ├── auth/                 # Session, allowlist, school domain, OAuth
-│   ├── calendar/             # Period / holiday helpers (America/Regina)
+│   ├── calendar/             # Period schedule helpers (America/Regina)
 │   ├── data/                 # Platform store + durability guards
 │   ├── legal/                # Legal constants and link map
 │   ├── onboarding/           # First-run prefs (localStorage); production one-time

@@ -9,20 +9,35 @@ export function SettingsSection({
   title,
   children,
   className,
+  cardClassName,
+  titleClassName,
 }: {
   id?: string;
   title?: string;
   children: React.ReactNode;
   className?: string;
+  /** Override the card surface (e.g. danger zone border). */
+  cardClassName?: string;
+  titleClassName?: string;
 }) {
   return (
     <section id={id} className={cn("scroll-mt-24", className)}>
       {title ? (
-        <h2 className="mb-2 px-1 text-[12px] font-medium tracking-[-0.01em] text-neutral-400">
+        <h2
+          className={cn(
+            "mb-2 px-1 text-[12px] font-medium tracking-[-0.01em] text-neutral-400",
+            titleClassName,
+          )}
+        >
           {title}
         </h2>
       ) : null}
-      <div className="overflow-hidden rounded-[14px] border border-black/[0.06] bg-white">
+      <div
+        className={cn(
+          "overflow-hidden rounded-[14px] border border-black/[0.06] bg-white",
+          cardClassName,
+        )}
+      >
         {children}
       </div>
     </section>
