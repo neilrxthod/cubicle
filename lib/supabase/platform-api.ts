@@ -394,6 +394,26 @@ export async function dbUpdateCart(
   return { error: error?.message };
 }
 
+/** Deletes a cart; related bookings/issues/restrictions cascade in Postgres. */
+export async function dbDeleteCart(
+  cartId: string,
+): Promise<{ error?: string }> {
+  const supabase = client();
+  const { data, error } = await supabase
+    .from("carts")
+    .delete()
+    .eq("id", cartId)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) {
+    return {
+      error:
+        "Could not delete this cart (permission denied or already removed).",
+    };
+  }
+  return {};
+}
+
 export async function dbRequestSwap(input: {
   bookingId: string;
   requesterId: string;

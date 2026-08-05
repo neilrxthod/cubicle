@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import type { Booking, BookingPolicy, Cart, Issue, User, Period, SlotRestriction, SwapRequest } from "@/lib/types"
 import {
   createCart,
+  deleteCart,
   setCartStatus,
   deleteBookings,
   reassignBooking,
@@ -14,6 +15,7 @@ import {
 import { toast } from "@/hooks/use-toast"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { AnimatePresence, motion } from "motion/react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -229,12 +231,34 @@ function CartsGrid({
     | { mode: "edit"; cart: Cart }
     | null
   >(null)
+  const [deletingCart, setDeletingCart] = useState<Cart | null>(null)
+  const [exitingIds, setExitingIds] = useState<Set<string>>(new Set())
   const [, startTransition] = useTransition()
 
   const sortedCarts = useMemo(
-    () => [...carts].sort((a, b) => a.name.localeCompare(b.name)),
-    [carts],
+    () =>
+      [...carts]
+        .filter((c) => !exitingIds.has(c.id))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [carts, exitingIds],
   )
+
+  // Drop exit markers once the server list no longer includes them
+  useEffect(() => {
+    if (exitingIds.size === 0) return
+    const live = new Set(carts.map((c) => c.id))
+    setExitingIds((prev) => {
+      let changed = false
+      const next = new Set(prev)
+      for (const id of prev) {
+        if (!live.has(id)) {
+          next.delete(id)
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [carts, exitingIds.size])
 
   function futureCount(cartId: string) {
     const today = format(new Date(), "yyyy-MM-dd")
@@ -352,109 +376,166 @@ function CartsGrid({
         </button>
       </div>
 
-      {sortedCarts.length === 0 ? (
-        <div className="flex flex-col items-center rounded-2xl border border-dashed border-neutral-200/80 bg-white px-6 py-16 text-center">
-          <p className="text-[13.5px] font-medium tracking-[-0.015em] text-neutral-950">
-            No carts in inventory
-          </p>
-          <p className="mt-1.5 max-w-xs text-[12.5px] leading-relaxed text-neutral-400">
-            Add a cart name and location so staff can start booking.
-          </p>
-          <button
-            type="button"
-            onClick={() => setEditor({ mode: "create" })}
-            className="mt-5 inline-flex h-8 items-center gap-1.5 rounded-md bg-neutral-950 px-3.5 text-[12.5px] font-medium text-white transition-opacity hover:opacity-90"
+      <AnimatePresence mode="popLayout" initial={false}>
+        {sortedCarts.length === 0 ? (
+          <motion.div
+            key="empty"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            className="flex flex-col items-center rounded-2xl border border-dashed border-neutral-200/80 bg-white px-6 py-16 text-center"
           >
-            <Plus className="size-3.5" strokeWidth={1.75} />
-            Add first cart
-          </button>
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {sortedCarts.map((cart) => {
-            const visualStatus = optimisticStatusById[cart.id] ?? cart.status
-            const isPending = pendingIds.has(cart.id)
-            const paused = visualStatus === "maintenance"
+            <p className="text-[13.5px] font-medium tracking-[-0.015em] text-neutral-950">
+              No carts in inventory
+            </p>
+            <p className="mt-1.5 max-w-xs text-[12.5px] leading-relaxed text-neutral-400">
+              Add a cart name and location so staff can start booking.
+            </p>
+            <button
+              type="button"
+              onClick={() => setEditor({ mode: "create" })}
+              className="mt-5 inline-flex h-8 items-center gap-1.5 rounded-md bg-neutral-950 px-3.5 text-[12.5px] font-medium text-white transition-opacity duration-200 hover:opacity-90"
+            >
+              <Plus className="size-3.5" strokeWidth={1.75} />
+              Add first cart
+            </button>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="grid"
+            layout
+            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          >
+            <AnimatePresence mode="popLayout" initial={false}>
+              {sortedCarts.map((cart) => {
+                const visualStatus =
+                  optimisticStatusById[cart.id] ?? cart.status
+                const isPending = pendingIds.has(cart.id)
+                const paused = visualStatus === "maintenance"
 
-            return (
-              <div
-                key={cart.id}
-                className={cn(
-                  "group relative flex flex-col justify-between overflow-hidden rounded-2xl border bg-white p-4 pl-5",
-                  "transition-[border-color,box-shadow,background-color] duration-200 ease-out",
-                  paused
-                    ? "border-neutral-200/80 bg-[#fafafa]"
-                    : "border-[var(--hairline-strong)] shadow-[var(--shadow-surface)] hover:border-neutral-300/90 hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_20px_rgba(0,0,0,0.04)]",
-                )}
-              >
-                <span
-                  aria-hidden
-                  className={cn(
-                    "absolute left-0 top-1 bottom-1",
-                    paused ? "w-[5px] bg-red-500" : "w-[4px] bg-emerald-500",
-                  )}
-                />
-
-                <div className="flex min-w-0 items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h3
-                      className={cn(
-                        "truncate text-[13.5px] font-medium tracking-[-0.02em]",
-                        paused ? "text-neutral-500" : "text-neutral-950",
-                      )}
-                    >
-                      {cart.name}
-                    </h3>
-                    <p className="mt-1 truncate text-[12px] tracking-[-0.01em] text-neutral-400">
-                      {cart.location || "Location not set"}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    aria-label={`Edit ${cart.name}`}
-                    title="Edit cart"
-                    onClick={() => setEditor({ mode: "edit", cart })}
+                return (
+                  <motion.div
+                    key={cart.id}
+                    layout
+                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{
+                      opacity: 0,
+                      scale: 0.96,
+                      y: -6,
+                      transition: {
+                        duration: 0.28,
+                        ease: [0.16, 1, 0.3, 1],
+                      },
+                    }}
+                    transition={{
+                      layout: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
+                      opacity: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
+                      y: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
+                      scale: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
+                    }}
                     className={cn(
-                      "flex size-7 shrink-0 items-center justify-center rounded-md",
-                      "text-neutral-300 transition-colors",
-                      "hover:bg-neutral-100 hover:text-neutral-700",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
-                      "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100",
-                    )}
-                  >
-                    <Pencil className="size-3.5" strokeWidth={1.5} />
-                  </button>
-                </div>
-
-                <div className="mt-5 flex items-center justify-end">
-                  <button
-                    type="button"
-                    disabled={isPending}
-                    onClick={() => toggle(cart)}
-                    className={cn(
-                      "inline-flex h-8 min-w-[4.75rem] items-center justify-center gap-1.5 rounded-full px-3.5",
-                      "text-[12px] font-medium tracking-[-0.01em] transition-colors duration-150",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
-                      "disabled:pointer-events-none disabled:opacity-40",
+                      "group relative flex flex-col justify-between overflow-hidden rounded-2xl border bg-white p-4 pl-5",
+                      "transition-[border-color,box-shadow,background-color] duration-200 ease-out",
                       paused
-                        ? "bg-neutral-950 text-white hover:bg-neutral-800"
-                        : "bg-neutral-100/90 text-neutral-600 hover:bg-neutral-200/80 hover:text-neutral-950",
+                        ? "border-neutral-200/80 bg-[#fafafa]"
+                        : "border-[var(--hairline-strong)] shadow-[var(--shadow-surface)] hover:border-neutral-300/90 hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_20px_rgba(0,0,0,0.04)]",
                     )}
                   >
-                    {isPending ? (
-                      <Loader2 className="size-3 animate-spin opacity-70" />
-                    ) : paused ? (
-                      "Resume"
-                    ) : (
-                      "Pause"
-                    )}
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "absolute left-0 top-1 bottom-1",
+                        paused
+                          ? "w-[5px] bg-red-500"
+                          : "w-[4px] bg-emerald-500",
+                      )}
+                    />
+
+                    <div className="flex min-w-0 items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h3
+                          className={cn(
+                            "truncate text-[13.5px] font-medium tracking-[-0.02em]",
+                            paused ? "text-neutral-500" : "text-neutral-950",
+                          )}
+                        >
+                          {cart.name}
+                        </h3>
+                        <p className="mt-1 truncate text-[12px] tracking-[-0.01em] text-neutral-400">
+                          {cart.location || "Location not set"}
+                        </p>
+                      </div>
+                      <div
+                        className={cn(
+                          "flex shrink-0 items-center gap-0.5",
+                          "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100",
+                          "transition-opacity duration-200 ease-out",
+                        )}
+                      >
+                        <button
+                          type="button"
+                          aria-label={`Edit ${cart.name}`}
+                          title="Edit cart"
+                          onClick={() => setEditor({ mode: "edit", cart })}
+                          className={cn(
+                            "flex size-7 items-center justify-center rounded-md",
+                            "text-neutral-300 transition-colors duration-200",
+                            "hover:bg-neutral-100 hover:text-neutral-700",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+                          )}
+                        >
+                          <Pencil className="size-3.5" strokeWidth={1.5} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Delete ${cart.name}`}
+                          title="Delete cart"
+                          onClick={() => setDeletingCart(cart)}
+                          className={cn(
+                            "flex size-7 items-center justify-center rounded-md",
+                            "text-neutral-300 transition-colors duration-200",
+                            "hover:bg-red-50 hover:text-red-600",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/15",
+                          )}
+                        >
+                          <Trash2 className="size-3.5" strokeWidth={1.5} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 flex items-center justify-end">
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => toggle(cart)}
+                        className={cn(
+                          "inline-flex h-8 min-w-[4.75rem] items-center justify-center gap-1.5 rounded-full px-3.5",
+                          "text-[12px] font-medium tracking-[-0.01em] transition-colors duration-200",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+                          "disabled:pointer-events-none disabled:opacity-40",
+                          paused
+                            ? "bg-neutral-950 text-white hover:bg-neutral-800"
+                            : "bg-neutral-100/90 text-neutral-600 hover:bg-neutral-200/80 hover:text-neutral-950",
+                        )}
+                      >
+                        {isPending ? (
+                          <Loader2 className="size-3 animate-spin opacity-70" />
+                        ) : paused ? (
+                          "Resume"
+                        ) : (
+                          "Pause"
+                        )}
+                      </button>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <CartEditorDialog
         open={!!editor}
@@ -464,6 +545,29 @@ function CartsGrid({
         onSaved={() => {
           setEditor(null)
           router.refresh()
+        }}
+      />
+
+      <CartDeleteDialog
+        cart={deletingCart}
+        bookings={bookings}
+        onClose={() => setDeletingCart(null)}
+        onBeginExit={(cartId) => {
+          // Optimistically drop the card so layout + exit motion can run
+          setExitingIds((prev) => new Set(prev).add(cartId))
+          setDeletingCart(null)
+        }}
+        onDeleteFailed={(cartId) => {
+          setExitingIds((prev) => {
+            const next = new Set(prev)
+            next.delete(cartId)
+            return next
+          })
+        }}
+        onDeleted={() => {
+          window.setTimeout(() => {
+            router.refresh()
+          }, 280)
         }}
       />
 
@@ -478,6 +582,129 @@ function CartsGrid({
         />
       ) : null}
     </section>
+  )
+}
+
+/** Confirm permanent cart removal — quiet corporate confirm. */
+function CartDeleteDialog({
+  cart,
+  bookings,
+  onClose,
+  onBeginExit,
+  onDeleteFailed,
+  onDeleted,
+}: {
+  cart: Cart | null
+  bookings: Booking[]
+  onClose: () => void
+  onBeginExit: (cartId: string) => void
+  onDeleteFailed: (cartId: string) => void
+  onDeleted: () => void
+}) {
+  const [error, setError] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
+
+  useEffect(() => {
+    if (cart) setError(null)
+  }, [cart])
+
+  const open = !!cart
+  const relatedBookings = cart
+    ? bookings.filter((b) => b.cartId === cart.id).length
+    : 0
+
+  function confirmDelete() {
+    if (!cart) return
+    const target = cart
+    setError(null)
+    // Close dialog + start card exit immediately for a calm corporate motion
+    onBeginExit(target.id)
+    startTransition(async () => {
+      const res = await deleteCart(target.id)
+      if (!res.ok) {
+        onDeleteFailed(target.id)
+        setError(res.error)
+        toast({
+          title: "Could not delete cart",
+          description: res.error,
+          variant: "destructive",
+        })
+        // Re-open confirm is awkward — toast is enough; card is restored
+        return
+      }
+      toast({
+        title: "Cart deleted",
+        description: target.name,
+      })
+      onDeleted()
+    })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && !pending && onClose()}>
+      <DialogContent className="gap-0 overflow-hidden rounded-2xl border-border/60 bg-white p-0 shadow-xl sm:max-w-sm">
+        <DialogHeader className="space-y-0 border-b border-[var(--hairline)] px-5 pb-4 pt-5 text-left">
+          <DialogTitle className="text-[15px] font-light tracking-[-0.02em] text-neutral-950">
+            Delete cart?
+          </DialogTitle>
+          <DialogDescription className="mt-1 text-[12.5px] leading-relaxed text-neutral-400">
+            This permanently removes the cart from inventory and the schedule.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4 px-5 py-5">
+          {cart ? (
+            <div className="rounded-xl border border-neutral-200/80 bg-neutral-50/80 px-3.5 py-3">
+              <p className="text-[13.5px] font-medium tracking-[-0.02em] text-neutral-950">
+                {cart.name}
+              </p>
+              <p className="mt-0.5 text-[12px] text-neutral-400">
+                {cart.location || "Location not set"}
+              </p>
+              {relatedBookings > 0 ? (
+                <p className="mt-2 text-[12px] leading-snug text-neutral-500">
+                  {relatedBookings} booking
+                  {relatedBookings === 1 ? "" : "s"} on this cart will also be
+                  removed.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {error ? (
+            <p className="text-[12.5px] text-red-600">{error}</p>
+          ) : null}
+
+          <div className="flex items-center justify-end gap-3 pt-0.5">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={onClose}
+              className="h-9 px-1 text-[13px] font-medium text-neutral-400 transition-colors duration-200 hover:text-neutral-900 disabled:opacity-50"
+            >
+              Keep cart
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={confirmDelete}
+              className={cn(
+                "inline-flex h-9 min-w-[6.5rem] items-center justify-center rounded-lg bg-red-600 px-4",
+                "text-[13px] font-medium text-white",
+                "transition-[opacity,background-color] duration-200 ease-out",
+                "hover:bg-red-700 disabled:opacity-50",
+              )}
+            >
+              {pending ? (
+                <Loader2 className="size-3.5 animate-spin opacity-90" />
+              ) : (
+                "Delete"
+              )}
+            </button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

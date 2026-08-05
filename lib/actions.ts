@@ -29,6 +29,7 @@ import {
   dbReportIssue,
   dbRequestSwap,
   dbCreateCart,
+  dbDeleteCart,
   dbSetCartStatus,
   dbSyncBookingTeacherName,
   dbUpdateAllowedEmail,
@@ -666,6 +667,48 @@ export async function updateCart(
     cart.location = location;
     cart.laptopCount = laptopCount;
     draft.carts.sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  return { ok: true };
+}
+
+/**
+ * Admin: permanently remove a cart from inventory.
+ * Cascades bookings, issues, restrictions (and swap requests that pointed at those bookings).
+ */
+export async function deleteCart(cartId: string): Promise<Result> {
+  const session = requireSession();
+  if (!session || session.role !== "admin") {
+    return { ok: false, error: "Admin only." };
+  }
+  if (!cartId) return { ok: false, error: "Cart not found." };
+
+  const existing = getState().carts.find((c) => c.id === cartId);
+  if (!existing) return { ok: false, error: "Cart not found." };
+
+  if (isRemoteEnabled()) {
+    const { error } = await dbDeleteCart(cartId);
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
+  mutate((draft) => {
+    const bookingIds = new Set(
+      draft.bookings
+        .filter((b) => b.cartId === cartId)
+        .map((b) => b.id),
+    );
+    draft.bookings = draft.bookings.filter((b) => b.cartId !== cartId);
+    draft.issues = draft.issues.filter((i) => i.cartId !== cartId);
+    draft.slotRestrictions = draft.slotRestrictions.filter(
+      (r) => r.cartId !== cartId,
+    );
+    draft.swapRequests = draft.swapRequests.filter(
+      (s) => !bookingIds.has(s.bookingId),
+    );
+    draft.carts = draft.carts.filter((c) => c.id !== cartId);
   });
 
   return { ok: true };
