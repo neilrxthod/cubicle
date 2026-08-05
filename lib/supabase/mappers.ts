@@ -60,6 +60,7 @@ export type DbSlotRestriction = {
 export type DbSwapRequest = {
   id: string;
   booking_id: string;
+  offered_booking_id?: string | null;
   requester_id: string;
   requester_name: string;
   reason: string | null;
@@ -88,6 +89,7 @@ export type DbProfile = {
 export type DbBookingPolicy = {
   id: number;
   max_advance_days: number;
+  max_slots_per_teacher_per_day?: number | null;
 };
 
 export type DbAllowedEmail = {
@@ -165,6 +167,9 @@ export function mapSwapRequest(row: DbSwapRequest): SwapRequest {
   return {
     id: row.id,
     bookingId: row.booking_id,
+    offeredBookingId: row.offered_booking_id
+      ? String(row.offered_booking_id)
+      : undefined,
     requesterId: row.requester_id,
     requesterName: row.requester_name,
     reason: row.reason ?? undefined,
@@ -197,8 +202,14 @@ export function mapProfile(row: DbProfile): User {
 export { mapEmploymentType };
 
 export function mapBookingPolicy(row: DbBookingPolicy | null): BookingPolicy {
+  const rawSlots = row?.max_slots_per_teacher_per_day;
+  const slots =
+    typeof rawSlots === "number" && Number.isFinite(rawSlots)
+      ? Math.min(5, Math.max(1, Math.round(rawSlots)))
+      : 5;
   return {
     maxAdvanceDays: row?.max_advance_days ?? 14,
+    maxSlotsPerTeacherPerDay: slots,
   };
 }
 
@@ -209,7 +220,10 @@ export function emptyPlatformState(): PlatformState {
     issues: [],
     users: [],
     slotRestrictions: [],
-    bookingPolicy: { maxAdvanceDays: 14 },
+    bookingPolicy: {
+      maxAdvanceDays: 14,
+      maxSlotsPerTeacherPerDay: 5,
+    },
     swapRequests: [],
   };
 }

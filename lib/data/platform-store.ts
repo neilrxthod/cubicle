@@ -64,7 +64,10 @@ function emptyState(): PlatformState {
     issues: [],
     users: [],
     slotRestrictions: [],
-    bookingPolicy: { maxAdvanceDays: 14 },
+    bookingPolicy: {
+      maxAdvanceDays: 14,
+      maxSlotsPerTeacherPerDay: 5,
+    },
     swapRequests: [],
   };
 }
@@ -127,7 +130,19 @@ function read(): PlatformState {
     if (!Array.isArray(memory.issues)) memory.issues = [];
     if (!Array.isArray(memory.users)) memory.users = [];
     if (!Array.isArray(memory.swapRequests)) memory.swapRequests = [];
-    if (!memory.bookingPolicy) memory.bookingPolicy = { maxAdvanceDays: 14 };
+    if (!memory.bookingPolicy) {
+      memory.bookingPolicy = {
+        maxAdvanceDays: 14,
+        maxSlotsPerTeacherPerDay: 5,
+      };
+    } else {
+      if (typeof memory.bookingPolicy.maxAdvanceDays !== "number") {
+        memory.bookingPolicy.maxAdvanceDays = 14;
+      }
+      if (typeof memory.bookingPolicy.maxSlotsPerTeacherPerDay !== "number") {
+        memory.bookingPolicy.maxSlotsPerTeacherPerDay = 5;
+      }
+    }
     return memory;
   } catch {
     memory = emptyState();

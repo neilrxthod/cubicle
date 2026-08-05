@@ -27,6 +27,7 @@ import {
 } from "@/components/settings/settings-section";
 
 const ADVANCE_PRESETS = [7, 14, 21, 30] as const;
+const SLOT_PRESETS = [1, 2, 3, 5] as const;
 
 function Chip({
   selected,
@@ -72,8 +73,13 @@ function AdminBookingWindow({ user }: { user: SessionUser }) {
   const platform = usePlatformStore();
   const stored = getOnboarding(user.id, user.email);
   const platformDays = platform.bookingPolicy.maxAdvanceDays ?? 14;
+  const platformSlots =
+    platform.bookingPolicy.maxSlotsPerTeacherPerDay ?? 5;
   const [days, setDays] = useState(() =>
     Math.min(60, Math.max(1, stored.maxAdvanceDays ?? platformDays)),
+  );
+  const [slots, setSlots] = useState(() =>
+    Math.min(5, Math.max(1, platformSlots)),
   );
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState<{
@@ -82,36 +88,47 @@ function AdminBookingWindow({ user }: { user: SessionUser }) {
   } | null>(null);
 
   // Compare against live platform policy so Save disables after a successful write.
-  const dirty = days !== (platform.bookingPolicy.maxAdvanceDays ?? 14);
+  const dirty =
+    days !== (platform.bookingPolicy.maxAdvanceDays ?? 14) ||
+    slots !== (platform.bookingPolicy.maxSlotsPerTeacherPerDay ?? 5);
 
-  function clamp(n: number) {
+  function clampDays(n: number) {
     return Math.min(60, Math.max(1, Math.round(n)));
+  }
+
+  function clampSlots(n: number) {
+    return Math.min(5, Math.max(1, Math.round(n)));
   }
 
   function handleSave() {
     setStatus(null);
-    const next = clamp(days);
+    const nextDays = clampDays(days);
+    const nextSlots = clampSlots(slots);
     startTransition(async () => {
-      const res = await updateBookingPolicy(next);
+      const res = await updateBookingPolicy({
+        maxAdvanceDays: nextDays,
+        maxSlotsPerTeacherPerDay: nextSlots,
+      });
       if (!res.ok) {
         setStatus({
           type: "error",
-          message: res.error || "Could not save booking window.",
+          message: res.error || "Could not save booking policy.",
         });
         return;
       }
       saveOnboardingPrefs(
         user.id || user.email,
-        { maxAdvanceDays: next },
+        { maxAdvanceDays: nextDays },
         [user.id, user.email],
       );
-      setDays(next);
-      setStatus({ type: "ok", message: "Booking window saved" });
+      setDays(nextDays);
+      setSlots(nextSlots);
+      setStatus({ type: "ok", message: "Booking policy saved" });
     });
   }
 
   return (
-    <SettingsSection id="setup" title="Booking window">
+    <SettingsSection id="setup" title="Booking policy">
       <SettingsRow className="space-y-4">
         <p className="text-[12.5px] leading-snug text-neutral-400">
           How far ahead teachers can book carts.
@@ -120,7 +137,7 @@ function AdminBookingWindow({ user }: { user: SessionUser }) {
         <div className="flex items-center justify-center gap-4 py-1">
           <button
             type="button"
-            onClick={() => setDays((d) => clamp(d - 1))}
+            onClick={() => setDays((d) => clampDays(d - 1))}
             disabled={days <= 1 || pending}
             aria-label="Fewer days"
             className={cn(
@@ -140,7 +157,7 @@ function AdminBookingWindow({ user }: { user: SessionUser }) {
           </div>
           <button
             type="button"
-            onClick={() => setDays((d) => clamp(d + 1))}
+            onClick={() => setDays((d) => clampDays(d + 1))}
             disabled={days >= 60 || pending}
             aria-label="More days"
             className={cn(
@@ -173,6 +190,77 @@ function AdminBookingWindow({ user }: { user: SessionUser }) {
             );
           })}
         </div>
+      </SettingsRow>
+
+      <SettingsDivider />
+
+      <SettingsRow className="space-y-4">
+        <div>
+          <p className="text-[13px] font-medium tracking-[-0.01em] text-neutral-900">
+            Max cart slots per day
+          </p>
+          <p className="mt-1 text-[12.5px] leading-snug text-neutral-400">
+            Cap how many periods a teacher can book on one school day (P1–P5).
+            Teachers still get at most one cart per period.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-center gap-4 py-1">
+          <button
+            type="button"
+            onClick={() => setSlots((s) => clampSlots(s - 1))}
+            disabled={slots <= 1 || pending}
+            aria-label="Fewer slots"
+            className={cn(
+              "flex size-9 items-center justify-center rounded-full border border-neutral-200 bg-neutral-50 text-neutral-700 transition",
+              "hover:bg-white disabled:opacity-30",
+            )}
+          >
+            <Minus className="size-3.5" strokeWidth={2} />
+          </button>
+          <div className="min-w-[5.5rem] text-center tabular-nums">
+            <p className="text-[2.25rem] font-extralight leading-none tracking-[-0.04em] text-neutral-950">
+              {slots}
+            </p>
+            <p className="mt-1 text-[12px] text-neutral-400">
+              {slots === 1 ? "slot / day" : "slots / day"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSlots((s) => clampSlots(s + 1))}
+            disabled={slots >= 5 || pending}
+            aria-label="More slots"
+            className={cn(
+              "flex size-9 items-center justify-center rounded-full border border-neutral-200 bg-neutral-50 text-neutral-700 transition",
+              "hover:bg-white disabled:opacity-30",
+            )}
+          >
+            <Plus className="size-3.5" strokeWidth={2} />
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-1.5">
+          {SLOT_PRESETS.map((preset) => {
+            const active = slots === preset;
+            return (
+              <button
+                key={preset}
+                type="button"
+                disabled={pending}
+                onClick={() => setSlots(preset)}
+                className={cn(
+                  "h-8 min-w-[2.75rem] rounded-full px-3 text-[12.5px] font-medium tabular-nums transition-colors",
+                  active
+                    ? "bg-neutral-950 text-white"
+                    : "border border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:text-neutral-900",
+                )}
+              >
+                {preset}
+              </button>
+            );
+          })}
+        </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-black/[0.05] pt-3">
           <p
@@ -197,7 +285,7 @@ function AdminBookingWindow({ user }: { user: SessionUser }) {
             {pending ? (
               <Loader2 className="size-3 animate-spin" strokeWidth={2} />
             ) : null}
-            Save window
+            Save policy
           </button>
         </div>
       </SettingsRow>

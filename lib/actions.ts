@@ -220,6 +220,27 @@ export async function createBooking(
           "You already have a cart this period. Cancel or reassign that booking first.",
       };
     }
+
+    // Daily slot cap from admin booking policy (admins unlimited).
+    const dayKey = date.slice(0, 10);
+    const maxSlots = Math.min(
+      5,
+      Math.max(1, state.bookingPolicy.maxSlotsPerTeacherPerDay ?? 5),
+    );
+    const dayCount = state.bookings.filter(
+      (booking) =>
+        booking.teacherId === session.id &&
+        booking.date.slice(0, 10) === dayKey,
+    ).length;
+    if (dayCount >= maxSlots) {
+      return {
+        ok: false,
+        error:
+          maxSlots === 1
+            ? "You can book at most 1 cart slot per day. Cancel another booking first."
+            : `You can book at most ${maxSlots} cart slots per day. Cancel another booking first.`,
+      };
+    }
   }
 
   const restricted = state.slotRestrictions.find(
@@ -768,6 +789,7 @@ export async function requestSwap(formData: FormData): Promise<Result> {
   const reason = String(
     formData.get("reason") ?? formData.get("message") ?? "",
   ).trim();
+  const offeredRaw = String(formData.get("offeredBookingId") ?? "").trim();
 
   const state = getState();
   const booking = state.bookings.find((entry) => entry.id === bookingId);
@@ -775,9 +797,7 @@ export async function requestSwap(formData: FormData): Promise<Result> {
     ? state.carts.find((c) => c.id === booking.cartId)
     : undefined;
 
-  const {
-    evaluateSwapRequest,
-  } = await import("@/lib/booking/swap-rules");
+  const { evaluateSwapRequest } = await import("@/lib/booking/swap-rules");
   const evaluated = evaluateSwapRequest({
     session,
     booking,
@@ -786,8 +806,14 @@ export async function requestSwap(formData: FormData): Promise<Result> {
     swaps: state.swapRequests,
     bookingPolicy: state.bookingPolicy,
     reason,
+    offeredBookingId: offeredRaw || undefined,
   });
   if (!evaluated.ok) return { ok: false, error: evaluated.error };
+
+  const offeredBookingId =
+    evaluated.mode === "exchange" && evaluated.counterparty
+      ? evaluated.counterparty.id
+      : undefined;
 
   if (isRemoteEnabled()) {
     if (!isUuid(session.id)) {
@@ -802,6 +828,7 @@ export async function requestSwap(formData: FormData): Promise<Result> {
       requesterId: session.id,
       requesterName: session.name,
       reason,
+      offeredBookingId,
     });
     if (error) {
       // Unique pending index → friendly message.
@@ -822,6 +849,7 @@ export async function requestSwap(formData: FormData): Promise<Result> {
     draft.swapRequests.unshift({
       id: makeId("sw"),
       bookingId,
+      offeredBookingId,
       requesterId: session.id,
       requesterName: session.name,
       reason,
@@ -849,7 +877,7 @@ export async function acceptSwap(requestId: string): Promise<Result> {
 
   const {
     evaluateSwapAccept,
-    findCounterpartyBooking,
+    resolveOfferedBooking,
     relatedPendingSwapIds,
   } = await import("@/lib/booking/swap-rules");
 
@@ -859,6 +887,7 @@ export async function acceptSwap(requestId: string): Promise<Result> {
     booking,
     cart,
     bookings: state.bookings,
+    bookingPolicy: state.bookingPolicy,
   });
   if (!evaluated.ok) return { ok: false, error: evaluated.error };
   if (!request || !booking) {
@@ -867,13 +896,7 @@ export async function acceptSwap(requestId: string): Promise<Result> {
 
   const counterparty =
     evaluated.counterparty ??
-    findCounterpartyBooking(
-      state.bookings,
-      request.requesterId,
-      booking.date,
-      booking.period,
-      booking.id,
-    );
+    resolveOfferedBooking(state.bookings, request, booking);
 
   const editor = {
     id: session.id,
@@ -911,13 +934,9 @@ export async function acceptSwap(requestId: string): Promise<Result> {
     const swap = draft.swapRequests.find((entry) => entry.id === requestId);
     if (!target || !swap) return;
 
-    const source = findCounterpartyBooking(
-      draft.bookings,
-      swap.requesterId,
-      target.date,
-      target.period,
-      target.id,
-    );
+    const source =
+      counterparty &&
+      draft.bookings.find((entry) => entry.id === counterparty.id);
 
     const editedAt = new Date().toISOString();
     const stamp = {
@@ -1391,16 +1410,54 @@ export async function batchRestrictSlots(
   return { ok: true, data: { restrictedCount, skippedBookedCount } };
 }
 
-export async function updateBookingPolicy(
-  maxAdvanceDays: number,
-): Promise<Result> {
+export async function updateBookingPolicy(input: {
+  maxAdvanceDays?: number;
+  maxSlotsPerTeacherPerDay?: number;
+}): Promise<Result> {
   const session = requireSession();
   if (!session || session.role !== "admin") {
     return { ok: false, error: "Admin only." };
   }
 
+  const next: {
+    maxAdvanceDays?: number;
+    maxSlotsPerTeacherPerDay?: number;
+  } = {};
+
+  if (typeof input.maxAdvanceDays === "number") {
+    if (
+      !Number.isInteger(input.maxAdvanceDays) ||
+      input.maxAdvanceDays < 1 ||
+      input.maxAdvanceDays > 60
+    ) {
+      return { ok: false, error: "Booking window must be 1–60 days." };
+    }
+    next.maxAdvanceDays = input.maxAdvanceDays;
+  }
+
+  if (typeof input.maxSlotsPerTeacherPerDay === "number") {
+    if (
+      !Number.isInteger(input.maxSlotsPerTeacherPerDay) ||
+      input.maxSlotsPerTeacherPerDay < 1 ||
+      input.maxSlotsPerTeacherPerDay > 5
+    ) {
+      return {
+        ok: false,
+        error: "Max cart slots must be between 1 and 5 per day.",
+      };
+    }
+    next.maxSlotsPerTeacherPerDay = input.maxSlotsPerTeacherPerDay;
+  }
+
+  if (
+    next.maxAdvanceDays === undefined &&
+    next.maxSlotsPerTeacherPerDay === undefined
+  ) {
+    return { ok: false, error: "Nothing to update." };
+  }
+
   if (isRemoteEnabled()) {
-    const { error } = await dbUpdateBookingPolicy(maxAdvanceDays);
+    const { error } = await dbUpdateBookingPolicy(next);
     if (error) return { ok: false, error };
     return refreshRemote();
   }
@@ -1408,7 +1465,13 @@ export async function updateBookingPolicy(
   const __demo = assertLocalDemoAllowed();
   if (!__demo.ok) return __demo;
   mutate((draft) => {
-    draft.bookingPolicy.maxAdvanceDays = maxAdvanceDays;
+    if (next.maxAdvanceDays !== undefined) {
+      draft.bookingPolicy.maxAdvanceDays = next.maxAdvanceDays;
+    }
+    if (next.maxSlotsPerTeacherPerDay !== undefined) {
+      draft.bookingPolicy.maxSlotsPerTeacherPerDay =
+        next.maxSlotsPerTeacherPerDay;
+    }
   });
 
   return { ok: true };

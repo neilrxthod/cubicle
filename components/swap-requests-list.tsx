@@ -6,7 +6,7 @@ import { format, parseISO } from "date-fns"
 import type { Booking, Cart, SwapRequest } from "@/lib/types"
 import { acceptSwap, declineSwap } from "@/lib/actions"
 import { toast } from "@/hooks/use-toast"
-import { findCounterpartyBooking } from "@/lib/booking/swap-rules"
+import { resolveOfferedBooking } from "@/lib/booking/swap-rules"
 import { SwapCartRoute } from "@/components/swap-cart-route"
 import { cn } from "@/lib/utils"
 
@@ -123,20 +123,31 @@ export function SwapRequestsList({
           }
 
           const theirCart = cartMap.get(booking.cartId)
-          const counterparty = findCounterpartyBooking(
-            bookings,
-            req.requesterId,
-            booking.date,
-            booking.period,
-            booking.id,
-          )
+          const counterparty = resolveOfferedBooking(bookings, req, booking)
           const offeredCart = counterparty
             ? cartMap.get(counterparty.cartId)
             : undefined
           const isExchange = Boolean(counterparty)
           const busy = busyId === req.id
           const blocked = busyId !== null
-          const whenLabel = `${booking.period} · ${format(parseISO(booking.date), "MMM d")}`
+          const whenLabel =
+            isExchange &&
+            counterparty &&
+            counterparty.period !== booking.period
+              ? `${counterparty.period} ⇄ ${booking.period} · ${format(parseISO(booking.date), "MMM d")}`
+              : `${booking.period} · ${format(parseISO(booking.date), "MMM d")}`
+
+          const offerDetail = isExchange
+            ? [counterparty?.period, counterparty?.className?.trim() || req.requesterName]
+                .filter(Boolean)
+                .join(" · ")
+            : undefined
+          const targetDetail = [
+            booking.period,
+            booking.className?.trim() || booking.teacherName,
+          ]
+            .filter(Boolean)
+            .join(" · ")
 
           // Perspective:
           // - Incoming (you own the target slot): they offer → your cart
@@ -148,17 +159,12 @@ export function SwapRequestsList({
                   cartName: isExchange
                     ? (offeredCart?.name ?? "Your cart")
                     : "No cart",
-                  detail: isExchange
-                    ? counterparty?.className?.trim() || req.requesterName
-                    : "This period",
+                  detail: isExchange ? offerDetail : "This period",
                 },
                 to: {
                   eyebrow: isExchange ? "You get" : "You want",
                   cartName: theirCart?.name ?? "Their cart",
-                  detail:
-                    booking.className?.trim() ||
-                    booking.teacherName ||
-                    "Their slot",
+                  detail: targetDetail || "Their slot",
                 },
               }
             : {
@@ -167,17 +173,12 @@ export function SwapRequestsList({
                   cartName: isExchange
                     ? (offeredCart?.name ?? "Their cart")
                     : "No cart",
-                  detail: isExchange
-                    ? counterparty?.className?.trim() || req.requesterName
-                    : req.requesterName,
+                  detail: isExchange ? offerDetail : req.requesterName,
                 },
                 to: {
                   eyebrow: isExchange ? "Your cart" : "They want",
                   cartName: theirCart?.name ?? "Your cart",
-                  detail:
-                    booking.className?.trim() ||
-                    booking.teacherName ||
-                    "Your slot",
+                  detail: targetDetail || "Your slot",
                 },
               }
 

@@ -435,16 +435,27 @@ export async function dbRequestSwap(input: {
   requesterId: string;
   requesterName: string;
   reason?: string;
+  offeredBookingId?: string;
 }): Promise<{ error?: string }> {
   const supabase = client();
-  const { error } = await supabase.from("swap_requests").insert({
+  const base = {
     booking_id: input.bookingId,
     requester_id: input.requesterId,
     requester_name: input.requesterName,
     reason: input.reason ?? null,
     message: input.reason ?? null,
-    status: "pending",
-  });
+    status: "pending" as const,
+  };
+  const withOffer = {
+    ...base,
+    offered_booking_id: input.offeredBookingId ?? null,
+  };
+  let { error } = await supabase.from("swap_requests").insert(withOffer);
+  // Pre-migration DBs may not have offered_booking_id yet.
+  if (error && /offered_booking_id/i.test(error.message ?? "")) {
+    const retry = await supabase.from("swap_requests").insert(base);
+    error = retry.error;
+  }
   return { error: error?.message };
 }
 
@@ -739,13 +750,24 @@ export async function dbDeleteRestrictionsMatching(
   return { error: error?.message };
 }
 
-export async function dbUpdateBookingPolicy(
-  maxAdvanceDays: number,
-): Promise<{ error?: string }> {
+export async function dbUpdateBookingPolicy(input: {
+  maxAdvanceDays?: number;
+  maxSlotsPerTeacherPerDay?: number;
+}): Promise<{ error?: string }> {
   const supabase = client();
+  const payload: Record<string, number> = {};
+  if (typeof input.maxAdvanceDays === "number") {
+    payload.max_advance_days = input.maxAdvanceDays;
+  }
+  if (typeof input.maxSlotsPerTeacherPerDay === "number") {
+    payload.max_slots_per_teacher_per_day = input.maxSlotsPerTeacherPerDay;
+  }
+  if (Object.keys(payload).length === 0) {
+    return { error: "Nothing to update." };
+  }
   const { error } = await supabase
     .from("booking_policy")
-    .update({ max_advance_days: maxAdvanceDays })
+    .update(payload)
     .eq("id", 1);
   return { error: error?.message };
 }

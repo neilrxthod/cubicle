@@ -100,6 +100,8 @@ create table if not exists public.slot_restrictions (
 create table if not exists public.swap_requests (
   id uuid primary key default gen_random_uuid(),
   booking_id uuid not null references public.bookings (id) on delete cascade,
+  -- Requester's booking offered in a two-way exchange (null = handoff).
+  offered_booking_id uuid references public.bookings (id) on delete set null,
   requester_id uuid not null references public.profiles (id) on delete cascade,
   requester_name text not null,
   reason text,
@@ -107,6 +109,10 @@ create table if not exists public.swap_requests (
   status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
   created_at timestamptz not null default now()
 );
+
+-- Existing projects: add column idempotently.
+alter table public.swap_requests
+  add column if not exists offered_booking_id uuid references public.bookings (id) on delete set null;
 
 -- One open request per teacher per target booking (see also swap-accept.sql).
 create unique index if not exists swap_requests_pending_unique
@@ -118,12 +124,26 @@ create unique index if not exists swap_requests_pending_unique
 -- ---------------------------------------------------------------------------
 create table if not exists public.booking_policy (
   id integer primary key default 1 check (id = 1),
-  max_advance_days integer not null default 14
+  max_advance_days integer not null default 14,
+  -- How many cart periods a teacher may hold on one calendar day (P1–P5).
+  max_slots_per_teacher_per_day integer not null default 5
+    check (max_slots_per_teacher_per_day >= 1 and max_slots_per_teacher_per_day <= 5)
 );
 
-insert into public.booking_policy (id, max_advance_days)
-values (1, 14)
+insert into public.booking_policy (id, max_advance_days, max_slots_per_teacher_per_day)
+values (1, 14, 5)
 on conflict (id) do nothing;
+
+-- Existing projects created before max_slots column:
+alter table public.booking_policy
+  add column if not exists max_slots_per_teacher_per_day integer not null default 5;
+
+alter table public.booking_policy
+  drop constraint if exists booking_policy_max_slots_range;
+
+alter table public.booking_policy
+  add constraint booking_policy_max_slots_range
+  check (max_slots_per_teacher_per_day >= 1 and max_slots_per_teacher_per_day <= 5);
 
 -- ---------------------------------------------------------------------------
 -- Auto-create profile when a user signs up

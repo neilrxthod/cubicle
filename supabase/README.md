@@ -41,7 +41,7 @@ Run each file fully in the Supabase **SQL Editor** and wait for **Success** befo
 | 6 | `employment-type.sql` | Permanent / substitute / temporary + verified staff indicator |
 | 7 | `profile-name-sync.sql` | Fan-out of display name to bookings, issues, swaps |
 | 8 | `booking-last-editor.sql` | Optional last-editor columns on bookings (audit-friendly) |
-| 9 | `swap-accept.sql` | Atomic two-way cart swap accept + owner RLS for swaps |
+| 9 | `swap-accept.sql` | Atomic two-way cart swap accept, offered cart column, owner RLS |
 
 **Never** run ad-hoc `drop table` / `truncate` against a live school project without an approved backup and change window.
 

@@ -3,10 +3,16 @@
 -- Safe to re-run.
 --
 -- Model:
---   • Same date + same period only (never cross-period).
---   • Exchange when requester has a cart that period; else one-way handoff.
+--   • Same calendar day; requester may pick which of their carts to offer.
+--   • offered_booking_id set → exchange that booking; null → one-way handoff.
 --   • Accept only via accept_swap_request (cannot mark accepted with a raw UPDATE).
 --   • Decline / cancel via decline_swap_request with role checks.
+
+-- ---------------------------------------------------------------------------
+-- Offered cart column (requester selects which booking to exchange)
+-- ---------------------------------------------------------------------------
+alter table public.swap_requests
+  add column if not exists offered_booking_id uuid references public.bookings (id) on delete set null;
 
 -- ---------------------------------------------------------------------------
 -- At most one pending request per (booking, requester)
@@ -178,15 +184,24 @@ begin
       and column_name = 'last_edited_by_id'
   ) into v_has_last_edited;
 
-  -- At most one counterparty booking (same day + period, requester-owned).
-  select b.id into v_source_id
-  from public.bookings b
-  where b.teacher_id = v_req.requester_id
-    and b.date = v_target.date
-    and b.period = v_target.period
-    and b.id is distinct from v_target.id
-  order by b.created_at asc
-  limit 1;
+  -- Prefer explicitly offered booking (requester selected cart in the UI).
+  -- Fall back to same day + period for legacy rows without offered_booking_id.
+  if v_req.offered_booking_id is not null then
+    select b.id into v_source_id
+    from public.bookings b
+    where b.id = v_req.offered_booking_id
+      and b.teacher_id = v_req.requester_id
+      and b.id is distinct from v_target.id;
+  else
+    select b.id into v_source_id
+    from public.bookings b
+    where b.teacher_id = v_req.requester_id
+      and b.date = v_target.date
+      and b.period = v_target.period
+      and b.id is distinct from v_target.id
+    order by b.created_at asc
+    limit 1;
+  end if;
 
   if v_source_id is not null then
     select * into v_source
@@ -278,7 +293,7 @@ grant execute on function public.accept_swap_request(uuid, uuid, text, text) to 
 grant execute on function public.accept_swap_request(uuid, uuid, text, text) to service_role;
 
 comment on function public.accept_swap_request(uuid, uuid, text, text) is
-  'Accept a pending cart swap: exchange both teachers'' same-period slots, or one-way handoff if the requester has no counterparty booking. Accept cannot be faked via raw UPDATE.';
+  'Accept a pending cart swap: exchange the target booking with swap_requests.offered_booking_id (or legacy same-period counterparty), or one-way handoff when none. Accept cannot be faked via raw UPDATE.';
 
 -- ---------------------------------------------------------------------------
 -- decline_swap_request — owner/admin reject or requester cancel

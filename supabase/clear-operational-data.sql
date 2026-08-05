@@ -22,9 +22,11 @@ truncate table public.issues restart identity cascade;
 truncate table public.slot_restrictions restart identity cascade;
 truncate table public.carts restart identity cascade;
 
-insert into public.booking_policy (id, max_advance_days)
-values (1, 14)
-on conflict (id) do update set max_advance_days = 14;
+insert into public.booking_policy (id, max_advance_days, max_slots_per_teacher_per_day)
+values (1, 14, 5)
+on conflict (id) do update
+  set max_advance_days = 14,
+      max_slots_per_teacher_per_day = 5;
 
 commit;
 

@@ -48,6 +48,32 @@ function normalizeDate(ymd: string): string {
   return ymd.slice(0, 10);
 }
 
+/** Daily cart-slot cap for teachers (admins unlimited). */
+function maxSlotsPerDay(policy: BookingPolicy): number {
+  return Math.min(5, Math.max(1, policy.maxSlotsPerTeacherPerDay ?? 5));
+}
+
+/**
+ * Handoff adds one slot on that day. Fail if the teacher is already at the
+ * school-wide daily cap set by admins.
+ */
+function teacherDaySlotCap(
+  policy: BookingPolicy,
+  currentDayCount: number,
+): SwapEvalFail | null {
+  const max = maxSlotsPerDay(policy);
+  if (currentDayCount >= max) {
+    return {
+      ok: false,
+      error:
+        max === 1
+          ? "Daily limit is 1 cart slot — cancel another booking or offer an exchange."
+          : `Daily limit is ${max} cart slots — cancel another booking or offer an exchange.`,
+    };
+  }
+  return null;
+}
+
 const PERIOD_ORDER = new Map(
   PERIODS.map((period, index) => [period as string, index]),
 );
@@ -281,8 +307,10 @@ export function evaluateSwapRequest(input: {
   const offerable = listOfferableBookings(bookings, session.id, booking);
   const rawOffer = (offeredBookingId ?? "").trim();
 
-  // No carts that day → handoff only.
+  // No carts that day → handoff only (still respect daily slot cap).
   if (offerable.length === 0) {
+    const handoffCap = teacherDaySlotCap(bookingPolicy, 0);
+    if (handoffCap) return handoffCap;
     return { ok: true, mode: "handoff" };
   }
 
@@ -295,6 +323,8 @@ export function evaluateSwapRequest(input: {
         error: "Select which cart you want to offer, or choose handoff only.",
       };
     }
+    const handoffCap = teacherDaySlotCap(bookingPolicy, offerable.length);
+    if (handoffCap) return handoffCap;
     return { ok: true, mode: "handoff" };
   }
 
@@ -377,8 +407,9 @@ export function evaluateSwapAccept(input: {
   booking: Booking | undefined;
   cart: Cart | undefined;
   bookings: Booking[];
+  bookingPolicy?: BookingPolicy;
 }): SwapEval {
-  const { session, request, booking, cart, bookings } = input;
+  const { session, request, booking, cart, bookings, bookingPolicy } = input;
 
   if (!request || request.status !== "pending") {
     return { ok: false, error: "Request not found or already closed." };
@@ -445,6 +476,19 @@ export function evaluateSwapAccept(input: {
       error:
         "Requester already has a cart this period — ask them to re-send as an exchange.",
     };
+  }
+
+  // Handoff increases the requester's daily slot count.
+  if (bookingPolicy) {
+    const day = normalizeDate(booking.date);
+    const dayCount = bookings.filter(
+      (b) =>
+        b.teacherId === request.requesterId &&
+        normalizeDate(b.date) === day &&
+        b.id !== booking.id,
+    ).length;
+    const cap = teacherDaySlotCap(bookingPolicy, dayCount);
+    if (cap) return cap;
   }
 
   return { ok: true, mode: "handoff" };
