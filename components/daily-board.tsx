@@ -33,14 +33,61 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Wrench, AlertTrian
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { usePlatformStore } from "@/lib/data/platform-store"
-import { isVerifiedStaff } from "@/lib/staff/employment"
-import { VerifiedBadge } from "@/components/verified-badge"
-
 
 const PERIODS: Period[] = ["P1", "P2", "P3", "P4", "P5"]
 
 const cellBase =
-  "flex min-h-11 min-w-0 border-l border-[var(--hairline)] transition-colors duration-150 ease-out sm:min-h-12"
+  "flex min-h-14 min-w-0 border-l border-[var(--hairline)] transition-colors duration-150 ease-out sm:min-h-16"
+
+/** Dominant face in the slot; cell height tracks so neighbors stay clear. */
+const SLOT_AVATAR =
+  "size-11 shrink-0 rounded-full object-cover select-none sm:size-12"
+
+function slotInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) {
+    return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
+  }
+  return (parts[0]?.slice(0, 2) ?? "?").toUpperCase()
+}
+
+function SlotPfp({
+  name,
+  src,
+  onDark,
+}: {
+  name: string
+  src?: string | null
+  /** Initials contrast on solid black vs translucent cells */
+  onDark?: boolean
+}) {
+  if (src) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt=""
+        referrerPolicy="no-referrer"
+        draggable={false}
+        className={SLOT_AVATAR}
+      />
+    )
+  }
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        SLOT_AVATAR,
+        "inline-flex items-center justify-center text-[13px] font-medium tracking-[-0.02em] sm:text-[14px]",
+        onDark
+          ? "bg-white/15 text-white"
+          : "bg-neutral-900/10 text-neutral-600",
+      )}
+    >
+      {slotInitials(name)}
+    </span>
+  )
+}
 
 export function DailyBoard({
   session,
@@ -59,13 +106,26 @@ export function DailyBoard({
 }) {
   const router = useRouter()
   const platform = usePlatformStore()
-  const verifiedByTeacherId = (() => {
-    const map = new Map<string, boolean>()
+
+  const avatarByTeacherId = useMemo(() => {
+    const map = new Map<string, string | undefined>()
     for (const user of platform.users) {
-      map.set(user.id, isVerifiedStaff(user))
+      if (user.avatarUrl) map.set(user.id, user.avatarUrl)
+    }
+    if (session.id && session.avatarUrl) {
+      map.set(session.id, session.avatarUrl)
     }
     return map
-  })()
+  }, [platform.users, session.id, session.avatarUrl])
+
+  const nameByTeacherId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const user of platform.users) {
+      map.set(user.id, user.name)
+    }
+    if (session.id) map.set(session.id, session.name)
+    return map
+  }, [platform.users, session.id, session.name])
 
   const [bookDialog, setBookDialog] = useState<{ cart: Cart; period: Period } | null>(null)
   const [issueDialog, setIssueDialog] = useState<Cart | null>(null)
@@ -391,11 +451,17 @@ export function DailyBoard({
           Open
         </span>
         <span className={legendItem}>
-          <span className="size-2 shrink-0 rounded-[1px] bg-neutral-950" />
+          <span
+            className="size-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: "#211d1d" }}
+          />
           Yours
         </span>
         <span className={legendItem}>
-          <span className="size-2 shrink-0 rounded-[1px] bg-neutral-200" />
+          <span
+            className="size-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: "rgba(33, 29, 29, 0.15)" }}
+          />
           Booked
         </span>
         <span className={legendItem}>
@@ -510,64 +576,42 @@ export function DailyBoard({
                       )
                     }
 
-                    if (booking && isMine) {
-                      const primaryLabel = booking.className?.trim() || "Yours"
-                      const verified = verifiedByTeacherId.get(booking.teacherId)
-                      return (
-                        <button
-                          key={period}
-                          type="button"
-                          onClick={() => onCellClick(cart, period)}
-                          title={`${primaryLabel} — click to manage or cancel`}
-                          className={cn(
-                            cellBase,
-                            "items-center gap-1.5 border-l-neutral-900 bg-neutral-950 px-2 text-left text-white sm:px-2.5",
-                            "hover:bg-neutral-800",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25",
-                          )}
-                        >
-                          <span className="truncate text-[12px] font-medium leading-tight tracking-[-0.015em]">
-                            {primaryLabel}
-                          </span>
-                          {verified ? (
-                            <VerifiedBadge
-                              size="xs"
-                              className="shrink-0 text-white/70"
-                              title="Verified permanent staff"
-                            />
-                          ) : null}
-                        </button>
-                      )
-                    }
-
                     if (booking) {
-                      const primaryLabel =
-                        booking.className?.trim() || booking.teacherName
-                      const verified = verifiedByTeacherId.get(booking.teacherId)
+                      const personName =
+                        nameByTeacherId.get(booking.teacherId) ||
+                        booking.teacherName
+                      const avatarSrc =
+                        avatarByTeacherId.get(booking.teacherId) ??
+                        (isMine ? session.avatarUrl : undefined)
+                      const classLabel = booking.className?.trim()
+                      const title = isMine
+                        ? `${classLabel || "Your booking"} — click to manage or cancel`
+                        : `${classLabel || personName} · ${personName} — click to request swap`
+
                       return (
                         <button
                           key={period}
                           type="button"
                           onClick={() => onCellClick(cart, period)}
-                          title={`${primaryLabel} · ${booking.teacherName}${verified ? " · verified permanent" : ""} — click to request swap`}
+                          title={title}
+                          aria-label={title}
                           className={cn(
                             cellBase,
-                            "flex-col justify-center gap-0.5 bg-neutral-50/90 px-2.5 text-left",
-                            "hover:bg-neutral-100",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-900/10",
+                            "items-center justify-center p-1.5",
+                            // Booking ink #211d1d — distinct from period header
+                            isMine
+                              ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/20"
+                              : "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#211d1d]/20",
+                            isMine
+                              ? "bg-[#211d1d] hover:bg-[#2a2525]"
+                              : "bg-[#211d1d]/10 hover:bg-[#211d1d]/15",
                           )}
                         >
-                          <span className="flex min-w-0 items-center gap-1">
-                            <span className="truncate text-[12px] font-medium leading-tight tracking-[-0.015em] text-neutral-900">
-                              {primaryLabel}
-                            </span>
-                            {verified ? (
-                              <VerifiedBadge size="xs" className="shrink-0" />
-                            ) : null}
-                          </span>
-                          <span className="truncate text-[10.5px] leading-tight tracking-[-0.01em] text-neutral-400">
-                            {booking.teacherName}
-                          </span>
+                          <SlotPfp
+                            name={personName}
+                            src={avatarSrc}
+                            onDark={isMine}
+                          />
                         </button>
                       )
                     }
