@@ -356,6 +356,44 @@ export async function dbSetCartStatus(
   return { error: error?.message };
 }
 
+export async function dbCreateCart(input: {
+  id: string;
+  name: string;
+  location?: string;
+  laptopCount?: number;
+  status?: CartStatus;
+}): Promise<{ error?: string }> {
+  const supabase = client();
+  const { error } = await supabase.from("carts").insert({
+    id: input.id,
+    name: input.name,
+    status: input.status ?? "active",
+    location: input.location ?? null,
+    laptop_count: input.laptopCount ?? null,
+  });
+  return { error: error?.message };
+}
+
+export async function dbUpdateCart(
+  cartId: string,
+  input: {
+    name: string;
+    location?: string;
+    laptopCount?: number;
+  },
+): Promise<{ error?: string }> {
+  const supabase = client();
+  const { error } = await supabase
+    .from("carts")
+    .update({
+      name: input.name,
+      location: input.location ?? null,
+      laptop_count: input.laptopCount ?? null,
+    })
+    .eq("id", cartId);
+  return { error: error?.message };
+}
+
 export async function dbRequestSwap(input: {
   bookingId: string;
   requesterId: string;

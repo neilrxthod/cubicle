@@ -1,11 +1,19 @@
 "use client"
 
-import { useState, useTransition, useMemo } from "react"
+import { useState, useTransition, useMemo, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import type { Booking, BookingPolicy, Cart, Issue, User, Period, SlotRestriction, SwapRequest } from "@/lib/types"
-import { setCartStatus, deleteBookings, reassignBooking } from "@/lib/actions"
+import {
+  createCart,
+  setCartStatus,
+  deleteBookings,
+  reassignBooking,
+  updateCart,
+} from "@/lib/actions"
 import { toast } from "@/hooks/use-toast"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +50,8 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  Pencil,
+  Plus,
 } from "lucide-react"
 import { format, parseISO, isWithinInterval, startOfDay, endOfDay, addDays } from "date-fns"
 import type { DateRange } from "react-day-picker"
@@ -61,6 +71,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -213,7 +224,17 @@ function CartsGrid({
     Record<string, Cart["status"]>
   >({})
   const [pauseConflictCart, setPauseConflictCart] = useState<Cart | null>(null)
+  const [editor, setEditor] = useState<
+    | { mode: "create" }
+    | { mode: "edit"; cart: Cart }
+    | null
+  >(null)
   const [, startTransition] = useTransition()
+
+  const sortedCarts = useMemo(
+    () => [...carts].sort((a, b) => a.name.localeCompare(b.name)),
+    [carts],
+  )
 
   function futureCount(cartId: string) {
     const today = format(new Date(), "yyyy-MM-dd")
@@ -289,38 +310,68 @@ function CartsGrid({
   const pausedCount = carts.length - activeCount
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] tracking-[-0.01em]">
-        <p className="tabular-nums text-neutral-950">
-          <span className="font-medium">{carts.length}</span>
-          <span className="ml-1 font-normal text-neutral-400">carts</span>
-        </p>
-        <span aria-hidden className="hidden h-3 w-px bg-neutral-200 sm:block" />
-        <p className="tabular-nums text-neutral-500">
-          Active{" "}
-          <span className="font-medium text-emerald-700">{activeCount}</span>
-        </p>
-        <span aria-hidden className="hidden h-3 w-px bg-neutral-200 sm:block" />
-        <p className="tabular-nums text-neutral-500">
-          Paused{" "}
-          <span
-            className={cn(
-              "font-medium",
-              pausedCount > 0 ? "text-red-600" : "text-neutral-400",
-            )}
-          >
-            {pausedCount}
-          </span>
-        </p>
+    <section className="flex min-w-0 flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] tracking-[-0.01em]">
+          <p className="tabular-nums text-neutral-950">
+            <span className="font-medium">{carts.length}</span>
+            <span className="ml-1 font-normal text-neutral-400">carts</span>
+          </p>
+          <span aria-hidden className="hidden h-3 w-px bg-neutral-200 sm:block" />
+          <p className="tabular-nums text-neutral-500">
+            Active{" "}
+            <span className="font-medium text-emerald-700">{activeCount}</span>
+          </p>
+          <span aria-hidden className="hidden h-3 w-px bg-neutral-200 sm:block" />
+          <p className="tabular-nums text-neutral-500">
+            Paused{" "}
+            <span
+              className={cn(
+                "font-medium",
+                pausedCount > 0 ? "text-red-600" : "text-neutral-400",
+              )}
+            >
+              {pausedCount}
+            </span>
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setEditor({ mode: "create" })}
+          className={cn(
+            "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 self-start rounded-md bg-neutral-950 px-3",
+            "text-[12.5px] font-medium tracking-[-0.01em] text-white",
+            "transition-opacity hover:opacity-90",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/15",
+            "sm:self-auto",
+          )}
+        >
+          <Plus className="size-3.5" strokeWidth={1.75} />
+          Add cart
+        </button>
       </div>
 
-      {carts.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-neutral-200/80 bg-white px-6 py-16 text-center text-[13px] text-neutral-400">
-          No carts in inventory.
+      {sortedCarts.length === 0 ? (
+        <div className="flex flex-col items-center rounded-2xl border border-dashed border-neutral-200/80 bg-white px-6 py-16 text-center">
+          <p className="text-[13.5px] font-medium tracking-[-0.015em] text-neutral-950">
+            No carts in inventory
+          </p>
+          <p className="mt-1.5 max-w-xs text-[12.5px] leading-relaxed text-neutral-400">
+            Add a cart name and location so staff can start booking.
+          </p>
+          <button
+            type="button"
+            onClick={() => setEditor({ mode: "create" })}
+            className="mt-5 inline-flex h-8 items-center gap-1.5 rounded-md bg-neutral-950 px-3.5 text-[12.5px] font-medium text-white transition-opacity hover:opacity-90"
+          >
+            <Plus className="size-3.5" strokeWidth={1.75} />
+            Add first cart
+          </button>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {carts.map((cart) => {
+          {sortedCarts.map((cart) => {
             const visualStatus = optimisticStatusById[cart.id] ?? cart.status
             const isPending = pendingIds.has(cart.id)
             const paused = visualStatus === "maintenance"
@@ -336,10 +387,6 @@ function CartsGrid({
                     : "border-[var(--hairline-strong)] shadow-[var(--shadow-surface)] hover:border-neutral-300/90 hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_20px_rgba(0,0,0,0.04)]",
                 )}
               >
-                {/*
-                  Left status rail: full left edge, stops short of the
-                  top-left / bottom-left corner tips (rounded-2xl → 4px inset).
-                */}
                 <span
                   aria-hidden
                   className={cn(
@@ -348,18 +395,35 @@ function CartsGrid({
                   )}
                 />
 
-                <div className="min-w-0">
-                  <h3
+                <div className="flex min-w-0 items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3
+                      className={cn(
+                        "truncate text-[13.5px] font-medium tracking-[-0.02em]",
+                        paused ? "text-neutral-500" : "text-neutral-950",
+                      )}
+                    >
+                      {cart.name}
+                    </h3>
+                    <p className="mt-1 truncate text-[12px] tracking-[-0.01em] text-neutral-400">
+                      {cart.location || "Location not set"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`Edit ${cart.name}`}
+                    title="Edit cart"
+                    onClick={() => setEditor({ mode: "edit", cart })}
                     className={cn(
-                      "truncate text-[13.5px] font-medium tracking-[-0.02em]",
-                      paused ? "text-neutral-500" : "text-neutral-950",
+                      "flex size-7 shrink-0 items-center justify-center rounded-md",
+                      "text-neutral-300 transition-colors",
+                      "hover:bg-neutral-100 hover:text-neutral-700",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+                      "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100",
                     )}
                   >
-                    {cart.name}
-                  </h3>
-                  <p className="mt-1 truncate text-[12px] tracking-[-0.01em] text-neutral-400">
-                    {cart.location || "Location not set"}
-                  </p>
+                    <Pencil className="size-3.5" strokeWidth={1.5} />
+                  </button>
                 </div>
 
                 <div className="mt-5 flex items-center justify-end">
@@ -392,6 +456,17 @@ function CartsGrid({
         </div>
       )}
 
+      <CartEditorDialog
+        open={!!editor}
+        mode={editor?.mode ?? "create"}
+        cart={editor?.mode === "edit" ? editor.cart : null}
+        onClose={() => setEditor(null)}
+        onSaved={() => {
+          setEditor(null)
+          router.refresh()
+        }}
+      />
+
       {pauseConflictCart ? (
         <CartPauseConflictDialog
           cart={pauseConflictCart}
@@ -403,6 +478,179 @@ function CartsGrid({
         />
       ) : null}
     </section>
+  )
+}
+
+/** Minimal admin dialog — add or rename a cart. */
+function CartEditorDialog({
+  open,
+  mode,
+  cart,
+  onClose,
+  onSaved,
+}: {
+  open: boolean
+  mode: "create" | "edit"
+  cart: Cart | null
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [name, setName] = useState("")
+  const [location, setLocation] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
+
+  // Reset fields when opening / switching target
+  useEffect(() => {
+    if (!open) return
+    if (mode === "edit" && cart) {
+      setName(cart.name)
+      setLocation(cart.location ?? "")
+    } else {
+      setName("")
+      setLocation("")
+    }
+    setError(null)
+  }, [open, mode, cart])
+
+  function submit() {
+    setError(null)
+    startTransition(async () => {
+      const payload = {
+        name,
+        location,
+        // Preserve existing laptop count on edit; never prompt for it in the UI.
+        laptopCount:
+          mode === "edit" && cart && typeof cart.laptopCount === "number"
+            ? cart.laptopCount
+            : null,
+      }
+      const res =
+        mode === "edit" && cart
+          ? await updateCart(cart.id, payload)
+          : await createCart(payload)
+
+      if (!res.ok) {
+        setError(res.error)
+        toast({
+          title: mode === "edit" ? "Could not update cart" : "Could not add cart",
+          description: res.error,
+          variant: "destructive",
+        })
+        return
+      }
+
+      toast({
+        title: mode === "edit" ? "Cart updated" : "Cart added",
+        description: name.trim(),
+      })
+      onSaved()
+    })
+  }
+
+  const title = mode === "edit" ? "Edit cart" : "Add cart"
+  const description =
+    mode === "edit"
+      ? "Update the display name and location for this cart."
+      : "Create a cart for the schedule. Name and location are required."
+  const canSubmit = Boolean(name.trim() && location.trim())
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && !pending && onClose()}>
+      <DialogContent className="gap-0 overflow-hidden rounded-2xl border-border/60 bg-white p-0 shadow-xl sm:max-w-sm">
+        <DialogHeader className="space-y-0 border-b border-[var(--hairline)] px-5 pb-4 pt-5 text-left">
+          <DialogTitle className="text-[15px] font-light tracking-[-0.02em] text-neutral-950">
+            {title}
+          </DialogTitle>
+          <DialogDescription className="mt-1 text-[12.5px] text-neutral-400">
+            {description}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4 px-5 py-5">
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="cart-name"
+              className="text-[11px] font-medium tracking-[0.04em] text-neutral-400"
+            >
+              Name
+            </Label>
+            <Input
+              id="cart-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Oak"
+              disabled={pending}
+              autoComplete="off"
+              autoFocus
+              maxLength={48}
+              className="h-9 rounded-lg border-neutral-200 text-[13px] tracking-[-0.01em] shadow-none placeholder:text-neutral-300"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  if (canSubmit) submit()
+                }
+              }}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="cart-location"
+              className="text-[11px] font-medium tracking-[0.04em] text-neutral-400"
+            >
+              Location
+            </Label>
+            <Input
+              id="cart-location"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="e.g. Library"
+              disabled={pending}
+              autoComplete="off"
+              maxLength={80}
+              required
+              className="h-9 rounded-lg border-neutral-200 text-[13px] tracking-[-0.01em] shadow-none placeholder:text-neutral-300"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  if (canSubmit) submit()
+                }
+              }}
+            />
+          </div>
+
+          {error ? (
+            <p className="text-[12.5px] text-red-600">{error}</p>
+          ) : null}
+
+          <div className="flex items-center justify-end gap-3 pt-1">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={onClose}
+              className="h-9 px-1 text-[13px] font-medium text-neutral-400 transition-colors hover:text-neutral-900 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={pending || !canSubmit}
+              onClick={submit}
+              className="h-9 rounded-lg bg-foreground px-5 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {pending
+                ? mode === "edit"
+                  ? "Saving…"
+                  : "Adding…"
+                : mode === "edit"
+                  ? "Save"
+                  : "Add cart"}
+            </button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

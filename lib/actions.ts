@@ -28,10 +28,12 @@ import {
   dbDeleteIssue,
   dbReportIssue,
   dbRequestSwap,
+  dbCreateCart,
   dbSetCartStatus,
   dbSyncBookingTeacherName,
   dbUpdateAllowedEmail,
   dbUpdateBookingPolicy,
+  dbUpdateCart,
   dbUpdateIssueStatus,
   dbUpdateProfile,
   dbUpdateProfileEmployment,
@@ -514,6 +516,156 @@ export async function setCartStatus(
   mutate((draft) => {
     const cart = draft.carts.find((entry) => entry.id === cartId);
     if (cart) cart.status = status;
+  });
+
+  return { ok: true };
+}
+
+function normalizeCartFields(input: {
+  name: string;
+  location?: string;
+  laptopCount?: number | string | null;
+}): Result<{ name: string; location?: string; laptopCount?: number }> {
+  const name = input.name.trim().replace(/\s+/g, " ");
+  if (!name) return { ok: false, error: "Cart name is required." };
+  if (name.length > 48) {
+    return { ok: false, error: "Name must be 48 characters or fewer." };
+  }
+
+  const locationRaw = (input.location ?? "").trim().replace(/\s+/g, " ");
+  if (!locationRaw) return { ok: false, error: "Location is required." };
+  if (locationRaw.length > 80) {
+    return { ok: false, error: "Location must be 80 characters or fewer." };
+  }
+
+  let laptopCount: number | undefined;
+  if (
+    input.laptopCount !== undefined &&
+    input.laptopCount !== null &&
+    String(input.laptopCount).trim() !== ""
+  ) {
+    const n = Number(input.laptopCount);
+    if (!Number.isInteger(n) || n < 0 || n > 200) {
+      return {
+        ok: false,
+        error: "Laptop count must be a whole number from 0–200.",
+      };
+    }
+    laptopCount = n;
+  }
+
+  return {
+    ok: true,
+    data: {
+      name,
+      location: locationRaw,
+      laptopCount,
+    },
+  };
+}
+
+/** Admin: add a cart to inventory. */
+export async function createCart(input: {
+  name: string;
+  location?: string;
+  laptopCount?: number | string | null;
+}): Promise<Result<{ cartId: string }>> {
+  const session = requireSession();
+  if (!session || session.role !== "admin") {
+    return { ok: false, error: "Admin only." };
+  }
+
+  const fields = normalizeCartFields(input);
+  if (!fields.ok || !fields.data) return { ok: false, error: fields.error };
+
+  const { name, location, laptopCount } = fields.data;
+  const duplicate = getState().carts.some(
+    (c) => c.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (duplicate) {
+    return { ok: false, error: "A cart with that name already exists." };
+  }
+
+  const id = makeId("cart");
+
+  if (isRemoteEnabled()) {
+    const { error } = await dbCreateCart({
+      id,
+      name,
+      location,
+      laptopCount,
+      status: "active",
+    });
+    if (error) return { ok: false, error };
+    const refreshed = await refreshRemote();
+    if (!refreshed.ok) return refreshed;
+    return { ok: true, data: { cartId: id } };
+  }
+
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
+  mutate((draft) => {
+    draft.carts.push({
+      id,
+      name,
+      status: "active",
+      location,
+      laptopCount,
+    });
+    draft.carts.sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  return { ok: true, data: { cartId: id } };
+}
+
+/** Admin: rename / update cart details. */
+export async function updateCart(
+  cartId: string,
+  input: {
+    name: string;
+    location?: string;
+    laptopCount?: number | string | null;
+  },
+): Promise<Result> {
+  const session = requireSession();
+  if (!session || session.role !== "admin") {
+    return { ok: false, error: "Admin only." };
+  }
+  if (!cartId) return { ok: false, error: "Cart not found." };
+
+  const fields = normalizeCartFields(input);
+  if (!fields.ok || !fields.data) return { ok: false, error: fields.error };
+
+  const { name, location, laptopCount } = fields.data;
+  const existing = getState().carts.find((c) => c.id === cartId);
+  if (!existing) return { ok: false, error: "Cart not found." };
+
+  const duplicate = getState().carts.some(
+    (c) => c.id !== cartId && c.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (duplicate) {
+    return { ok: false, error: "A cart with that name already exists." };
+  }
+
+  if (isRemoteEnabled()) {
+    const { error } = await dbUpdateCart(cartId, {
+      name,
+      location,
+      laptopCount,
+    });
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
+  mutate((draft) => {
+    const cart = draft.carts.find((entry) => entry.id === cartId);
+    if (!cart) return;
+    cart.name = name;
+    cart.location = location;
+    cart.laptopCount = laptopCount;
+    draft.carts.sort((a, b) => a.name.localeCompare(b.name));
   });
 
   return { ok: true };
