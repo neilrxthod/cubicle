@@ -124,7 +124,7 @@ function HomeBoard({ user }: { user: SessionUser }) {
     const yFree = Math.max(activeCarts * 5 - yBooked, 0);
     const yUtil = Math.round((yBooked / capacity) * 1000) / 10;
 
-    // ——— Real multi-day series from platform seed / live store ———
+    // ——— Multi-day series from live platform store ———
     const bookedSpark = bookingCountsByDay(
       state.bookings,
       date,

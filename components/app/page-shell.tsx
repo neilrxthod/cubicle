@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 /**
  * Post-auth page header — Tesla product: light display title,
  * one restrained line of context, no decorative chrome.
+ * Stacks cleanly on narrow viewports; expands on wide ones.
  */
 export function PageShell({
   title,
@@ -26,16 +27,18 @@ export function PageShell({
   return (
     <div
       className={cn(
-        "w-full",
+        "w-full min-w-0",
         narrow ? "mx-auto max-w-3xl" : "max-w-none",
         className,
       )}
     >
       {showHeader ? (
-        <header className="mb-7 flex items-end justify-between gap-6 sm:mb-9">
+        <header className="mb-6 flex flex-col gap-4 sm:mb-9 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
           <div className="min-w-0 max-w-2xl">
             {title ? (
-              <h1 className="type-page-title text-neutral-950">{title}</h1>
+              <h1 className="type-page-title break-words text-neutral-950">
+                {title}
+              </h1>
             ) : null}
             {description ? (
               <p className="type-body mt-2.5 max-w-md leading-relaxed text-neutral-400 sm:text-[13.5px]">
@@ -44,13 +47,13 @@ export function PageShell({
             ) : null}
           </div>
           {action ? (
-            <div className="flex shrink-0 items-center justify-end pb-0.5">
+            <div className="flex w-full min-w-0 shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:pb-0.5">
               {action}
             </div>
           ) : null}
         </header>
       ) : null}
-      <div className={cn(contentClassName)}>{children}</div>
+      <div className={cn("min-w-0 w-full", contentClassName)}>{children}</div>
     </div>
   );
 }

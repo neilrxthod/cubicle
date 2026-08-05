@@ -131,14 +131,14 @@ export function AppHeader({ user }: { user: SessionUser }) {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[var(--hairline)] bg-white/80 backdrop-blur-2xl">
-      <div className="relative mx-auto flex h-14 w-full max-w-300 items-center justify-between px-4 sm:h-16 sm:px-6">
-        {/* Same left edge as main (max-w-300 + px-4/6); bold mark + platform version */}
-        <div className="relative z-10 flex h-full min-w-0 shrink-0 items-center gap-2">
+    <header className="sticky top-0 z-40 border-b border-[var(--hairline)] bg-white/80 pt-[env(safe-area-inset-top,0px)] backdrop-blur-2xl">
+      <div className="platform-shell relative flex h-14 w-full min-w-0 items-center justify-between sm:h-16">
+        {/* Same left edge as main shell; bold mark + platform version */}
+        <div className="relative z-10 flex h-full min-w-0 shrink items-center gap-1.5 sm:gap-2">
           <CubicleWordmark
             size="sm"
             href="/"
-            className="font-bold leading-none tracking-[0.28em] mr-[-0.28em] text-[12px]"
+            className="mr-[-0.28em] shrink-0 font-bold text-[11px] leading-none tracking-[0.28em] sm:text-[12px]"
           />
           <Link
             href="/changelog"
@@ -151,9 +151,9 @@ export function AppHeader({ user }: { user: SessionUser }) {
 
         <nav
           aria-label="Primary"
-          className="absolute left-1/2 top-0 hidden h-full -translate-x-1/2 md:block"
+          className="absolute left-1/2 top-0 hidden h-full max-w-[min(100%,42rem)] -translate-x-1/2 md:block"
         >
-          <div className="flex h-full items-stretch gap-1">
+          <div className="flex h-full min-w-0 items-stretch gap-0.5 lg:gap-1">
             {navItems.map((item) => (
               <NavLink
                 key={item.href}
@@ -170,7 +170,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex h-8 max-w-[11rem] items-center gap-2 rounded-full border border-transparent bg-transparent py-0.5 pl-0.5 pr-2 text-left transition-colors duration-200 hover:border-neutral-200/80 hover:bg-neutral-50/90"
+                className="flex h-8 max-w-[min(11rem,40vw)] items-center gap-2 rounded-full border border-transparent bg-transparent py-0.5 pl-0.5 pr-2 text-left transition-colors duration-200 hover:border-neutral-200/80 hover:bg-neutral-50/90"
               >
                 <Avatar user={user} size="sm" />
                 <span className="hidden min-w-0 flex-col leading-tight sm:flex">

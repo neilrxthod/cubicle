@@ -59,23 +59,27 @@ export function AuthLayout({
   return (
     <div
       className={cn(
-        "flex w-full bg-[#f6f6f7]",
-        noScroll ? "h-svh max-h-svh overflow-hidden" : "min-h-svh",
+        "flex w-full min-w-0 bg-[#f6f6f7]",
+        noScroll
+          ? "h-dvh max-h-dvh overflow-hidden"
+          : "min-h-dvh",
       )}
     >
       {/* Form column */}
       <div
         className={cn(
-          "relative flex w-full flex-col bg-white lg:w-[46%] xl:w-[44%]",
+          "relative flex w-full min-w-0 flex-col bg-white lg:w-[46%] xl:w-[42%]",
           noScroll && "min-h-0 overflow-hidden",
         )}
       >
         <div
           className={cn(
-            "flex flex-1 flex-col",
+            "flex min-w-0 flex-1 flex-col",
+            "pl-[max(1.25rem,env(safe-area-inset-left,0px))] pr-[max(1.25rem,env(safe-area-inset-right,0px))]",
+            "pt-[max(1rem,env(safe-area-inset-top,0px))] pb-[max(1rem,env(safe-area-inset-bottom,0px))]",
             noScroll
-              ? "min-h-0 px-5 py-4 sm:px-8 sm:py-5 lg:px-10"
-              : "px-6 py-6 sm:px-10 sm:py-8 lg:px-12 xl:px-16",
+              ? "min-h-0 sm:px-8 sm:py-5 lg:px-10"
+              : "sm:px-10 sm:py-8 lg:px-12 xl:px-16",
           )}
         >
           <header className="shrink-0">
@@ -84,10 +88,10 @@ export function AuthLayout({
 
           <div
             className={cn(
-              "mx-auto flex w-full flex-1 flex-col",
+              "mx-auto flex w-full min-w-0 flex-1 flex-col",
               noScroll
-                ? "max-w-[360px] min-h-0 justify-center py-3"
-                : "max-w-[380px] justify-center py-10 sm:py-14",
+                ? "max-w-[min(100%,22.5rem)] min-h-0 justify-center py-3"
+                : "max-w-[min(100%,23.75rem)] justify-center py-8 sm:py-14",
               className,
             )}
           >
@@ -110,7 +114,7 @@ export function AuthLayout({
       </div>
 
       {/* Brand panel — gradient + logo (same as onboarding) */}
-      <div className="hidden p-3 pl-0 lg:block lg:w-[54%] xl:w-[56%]">
+      <div className="hidden min-w-0 flex-1 p-3 pl-0 lg:block">
         <AuthBrandPanel fullHeight={noScroll} />
       </div>
     </div>

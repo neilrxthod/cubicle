@@ -1,29 +1,11 @@
 import type { DemoAccount, SessionUser } from "./types";
 
-export const DEMO_ACCOUNTS: DemoAccount[] = [
-  {
-    label: "Teacher",
-    email: "teacher@cubicle.edu",
-    password: "teacher123",
-    name: "Sarah Chen",
-    role: "teacher",
-    id: "teacher-1",
-    title: "Science teacher",
-    department: "Science",
-    employmentType: "permanent",
-  },
-  {
-    label: "Admin",
-    email: "admin@cubicle.edu",
-    password: "admin123",
-    name: "James Wilson",
-    role: "admin",
-    id: "admin-1",
-    title: "IT coordinator",
-    department: "Technology",
-    employmentType: "permanent",
-  },
-];
+/**
+ * Local password demo accounts — intentionally empty.
+ * Production uses Google OAuth + allowlist only.
+ * Set NEXT_PUBLIC_ENABLE_DEMO_LOGIN=true only if you add accounts here for local UI work.
+ */
+export const DEMO_ACCOUNTS: DemoAccount[] = [];
 
 export function authenticate(
   email: string,

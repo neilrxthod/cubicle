@@ -7,7 +7,7 @@ import { LEGAL_LINKS } from "@/lib/legal/constants";
 import type { SessionUser } from "@/lib/types";
 
 /**
- * Post-auth product chrome — quiet canvas, one content width, minimal footer.
+ * Post-auth product chrome — fluid shell that flexes phone → ultrawide.
  */
 export function DashboardFrame({
   user,
@@ -17,14 +17,14 @@ export function DashboardFrame({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-svh flex-col bg-[var(--canvas)] text-neutral-950">
+    <div className="flex min-h-dvh w-full min-w-0 flex-col bg-[var(--canvas)] text-neutral-950">
       <AppHeader user={user} />
-      <main className="mx-auto w-full max-w-300 flex-1 px-4 py-6 sm:px-6 sm:py-9">
-        {children}
+      <main className="platform-shell min-w-0 flex-1 py-[var(--shell-py)] pb-[max(var(--shell-py),env(safe-area-inset-bottom,0px))]">
+        <div className="min-w-0 w-full">{children}</div>
       </main>
       {/* Tesla footer — pure type, open tracking, whisper hairline */}
-      <footer className="border-t border-[var(--hairline)] bg-transparent">
-        <div className="mx-auto flex w-full max-w-300 flex-col items-center justify-between gap-3 px-4 py-4 sm:flex-row sm:gap-6 sm:px-6 sm:py-5">
+      <footer className="border-t border-[var(--hairline)] bg-transparent pb-[env(safe-area-inset-bottom,0px)]">
+        <div className="platform-shell flex flex-col items-center justify-between gap-3 py-4 sm:flex-row sm:gap-6 sm:py-5">
           <p className="shrink-0 text-[10.5px] font-normal uppercase tracking-[0.16em] text-neutral-400">
             <span className="text-neutral-300">©</span>{" "}
             {new Date().getFullYear()}{" "}
@@ -32,7 +32,7 @@ export function DashboardFrame({
           </p>
           <nav
             aria-label="Legal"
-            className="flex flex-wrap items-center justify-center gap-x-0 sm:justify-end"
+            className="flex min-w-0 flex-wrap items-center justify-center gap-x-0 sm:justify-end"
           >
             {LEGAL_LINKS.map((link, index) => (
               <span key={link.href} className="inline-flex items-center">

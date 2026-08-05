@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Geist } from "next/font/google";
 import { SITE_ORIGIN } from "@/lib/site";
@@ -33,6 +33,14 @@ export const metadata: Metadata = {
   },
 };
 
+/** Fluid on every display — phones, tablets, desktops, notched devices. */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f4f4f5",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -46,7 +54,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body
-        className="min-h-full flex flex-col"
+        className="flex min-h-dvh w-full flex-col overflow-x-clip"
         suppressHydrationWarning
       >
         {children}

@@ -353,17 +353,5 @@ create policy "Admins update policy"
   );
 
 -- ---------------------------------------------------------------------------
--- Seed sample carts (optional — delete if you prefer empty tables)
+-- No sample carts — tables start empty. Add inventory via the Admin UI.
 -- ---------------------------------------------------------------------------
-insert into public.carts (id, name, status, laptop_count, location) values
-  ('cart-01', 'Oak', 'active', 30, 'Library'),
-  ('cart-02', 'Maple', 'active', 28, 'Room 102'),
-  ('cart-03', 'Cedar', 'active', 32, 'Room 118'),
-  ('cart-04', 'Pine', 'active', 30, 'Room 204'),
-  ('cart-05', 'Birch', 'active', 24, 'Room 210'),
-  ('cart-06', 'Willow', 'active', 30, 'Room 215'),
-  ('cart-07', 'Aspen', 'active', 28, 'Science wing'),
-  ('cart-08', 'Redwood', 'active', 32, 'Lab 1'),
-  ('cart-09', 'Elm', 'active', 30, 'Lab 2'),
-  ('cart-10', 'Spruce', 'maintenance', 26, 'Media center')
-on conflict (id) do nothing;

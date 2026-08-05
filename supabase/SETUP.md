@@ -145,7 +145,7 @@ Only if this Supabase project is **never** used on Vercel:
 
 1. **Production:** open https://www.mycubicle.app/login → Google → must stay on mycubicle.app (never localhost)  
 2. **Local:** `npm run dev` → http://localhost:3000/login with allowlisted account  
-3. Confirm carts load (Oak, Maple, …)  
+3. Confirm the schedule loads empty (no sample carts) until you add inventory  
 4. Create a booking → refresh → still there  
 5. Sign out → sign in with a **non-allowlisted** Google account → blocked  
 6. (Admin) open Maintenance → manage carts / staff allowlist  

@@ -23,7 +23,7 @@ import { RemoteRequiredScreen } from "@/components/app/remote-required-screen";
  * Loads platform data from Supabase, then keeps it live via Realtime.
  *
  * Production: always remote Postgres. Code deploys never wipe that data.
- * Local demo: seed + localStorage only when Supabase env is absent and not
+ * Local demo: empty localStorage scaffold when Supabase env is absent and not
  * on a production host.
  */
 export function PlatformBootstrap({

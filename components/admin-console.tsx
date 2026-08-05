@@ -144,9 +144,9 @@ export function AdminConsole({
   ]
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 w-full flex-col gap-4">
       <nav
-        className="inline-flex h-9 w-full max-w-full items-center gap-0.5 overflow-x-auto overflow-y-hidden rounded-lg border border-[var(--hairline-strong)] bg-white p-0.5 shadow-[var(--shadow-surface)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:w-fit"
+        className="board-scroll inline-flex h-9 w-full max-w-full items-center gap-0.5 overflow-y-hidden rounded-lg border border-[var(--hairline-strong)] bg-white p-0.5 shadow-[var(--shadow-surface)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:w-fit"
         role="tablist"
         aria-label="Admin sections"
       >
@@ -1506,8 +1506,8 @@ function BookingsTable({
           </div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] table-fixed border-collapse text-left">
+            <div className="board-scroll">
+              <table className="w-full min-w-[36rem] table-fixed border-collapse text-left">
                 <colgroup>
                   <col className="w-12" />
                   <col className="w-[22%]" />
@@ -2404,8 +2404,8 @@ function ReportsPanel({
             No issues reported.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] table-fixed border-collapse text-left">
+          <div className="board-scroll">
+            <table className="w-full min-w-[42rem] table-fixed border-collapse text-left">
               <colgroup>
                 <col className="w-[14%]" />
                 <col className="w-[34%]" />
@@ -2590,16 +2590,16 @@ function DailyBoardLite({ bookings, carts }: { bookings: Booking[]; carts: Cart[
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border bg-white">
-        <div className="overflow-x-auto">
-          <div className="min-w-[760px]">
-            <div className="grid grid-cols-[160px_repeat(5,minmax(0,1fr))] border-b border-border bg-neutral-950">
-              <div className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-white/70">
+        <div className="board-scroll">
+          <div className="board-track">
+            <div className="board-cols grid border-b border-border bg-neutral-950">
+              <div className="board-sticky-label bg-neutral-950 px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-white/70 sm:px-4">
                 Cart
               </div>
               {BOARD_PERIODS.map((p) => (
                 <div
                   key={p}
-                  className="border-l border-white/10 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-white/70"
+                  className="border-l border-white/10 px-2 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-white/70 sm:px-3"
                 >
                   {p}
                 </div>
@@ -2609,9 +2609,9 @@ function DailyBoardLite({ bookings, carts }: { bookings: Booking[]; carts: Cart[
             {carts.map((cart) => (
               <div
                 key={cart.id}
-                className="grid grid-cols-[160px_repeat(5,minmax(0,1fr))] border-b border-border/70 last:border-b-0"
+                className="board-cols grid border-b border-border/70 last:border-b-0"
               >
-                <div className="flex min-h-14 items-center gap-2 border-r border-border/70 bg-neutral-50/60 px-4">
+                <div className="board-sticky-label flex min-h-12 items-center gap-2 border-r border-border/70 bg-neutral-50 px-3 sm:min-h-14 sm:px-4">
                   <div className="min-w-0">
                     <p className="truncate text-[13px] font-semibold text-foreground">{cart.name}</p>
                     {cart.location ? (

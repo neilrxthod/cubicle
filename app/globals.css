@@ -63,6 +63,17 @@
   --radius-surface: 0.75rem;
 
   /*
+    Fluid shell — adapts from phone → ultrawide without fixed chrome.
+    Padding scales with viewport; max width soft-caps on huge displays.
+  */
+  --shell-max: 96rem;
+  --shell-px: clamp(0.875rem, 2.4vw, 2rem);
+  --shell-py: clamp(1rem, 2.2vh, 2.25rem);
+  --board-label-col: minmax(6.5rem, 12rem);
+  --board-period-col: minmax(0, 1fr);
+  --board-track-min: 34rem;
+
+  /*
     Platform type scale — thin, sleek product typography.
     Display / brand: extralight · Titles: light · Body: regular · UI: medium
   */
@@ -170,6 +181,7 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  height: 100%;
   /*
     Keep layout width stable when content height changes and when Radix
     modals (Dialog / Select / Dropdown) lock body scroll.
@@ -178,13 +190,24 @@ html {
   */
   scrollbar-gutter: stable;
   overflow-y: scroll;
+  /* Clip horizontal bleed instead of page-wide sideways scroll */
+  overflow-x: clip;
 }
 
 body {
+  width: 100%;
+  min-height: 100%;
+  min-height: 100dvh;
+  overflow-x: clip;
   font-family: var(--font-sans);
   font-weight: var(--font-weight-body);
   letter-spacing: var(--tracking-body);
   font-feature-settings: "kern" 1, "liga" 1;
+}
+
+/* Flex children default to min-content width — force shrink for fluid layouts */
+.min-w-0-children > * {
+  min-width: 0;
 }
 
 /*
@@ -218,16 +241,11 @@ body[data-scroll-locked] [data-radix-portal] {
   }
 
   .type-page-title {
-    font-size: 1.875rem;
+    font-size: clamp(1.5rem, 2.5vw + 0.85rem, 2.25rem);
     font-weight: var(--font-weight-display);
     letter-spacing: var(--tracking-display);
     line-height: 1.05;
     color: var(--foreground);
-  }
-  @media (min-width: 640px) {
-    .type-page-title {
-      font-size: 2.25rem;
-    }
   }
 
   .type-heading {
@@ -309,6 +327,40 @@ body[data-scroll-locked] [data-radix-portal] {
   .control {
     height: var(--control-h);
     border-radius: var(--radius-control);
+  }
+
+  /* Shared product content width + fluid gutters (header / main / footer) */
+  .platform-shell {
+    width: 100%;
+    max-width: var(--shell-max);
+    margin-inline: auto;
+    padding-left: max(var(--shell-px), env(safe-area-inset-left, 0px));
+    padding-right: max(var(--shell-px), env(safe-area-inset-right, 0px));
+  }
+
+  /* Horizontal scroller for dense grids — touch-friendly, no page jank */
+  .board-scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+  }
+
+  /* Period boards fill available width; scroll only when viewport is tight */
+  .board-track {
+    width: 100%;
+    min-width: var(--board-track-min);
+  }
+
+  .board-cols {
+    grid-template-columns: var(--board-label-col) repeat(5, var(--board-period-col));
+  }
+
+  /* Keep cart labels readable while panning the grid */
+  .board-sticky-label {
+    position: sticky;
+    left: 0;
+    z-index: 1;
   }
 }
 

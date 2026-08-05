@@ -39,10 +39,8 @@ import { VerifiedBadge } from "@/components/verified-badge"
 
 const PERIODS: Period[] = ["P1", "P2", "P3", "P4", "P5"]
 
-const GRID_COLS = "minmax(10rem, 1.15fr) repeat(5, minmax(0, 1fr))"
-
 const cellBase =
-  "flex min-h-12 min-w-0 border-l border-[var(--hairline)] transition-colors duration-150 ease-out"
+  "flex min-h-11 min-w-0 border-l border-[var(--hairline)] transition-colors duration-150 ease-out sm:min-h-12"
 
 export function DailyBoard({
   session,
@@ -410,20 +408,17 @@ export function DailyBoard({
         </span>
       </div>
 
-      {/* ── Period grid ── */}
-      <div className="overflow-x-auto">
-        <div className="min-w-[54rem]">
-          <div
-            className="grid bg-neutral-950"
-            style={{ gridTemplateColumns: GRID_COLS }}
-          >
-            <div className="flex items-center px-4 py-3 text-[10px] font-medium uppercase tracking-[0.16em] text-white/45 sm:px-5">
+      {/* ── Period grid — fluid width; scrolls only on very narrow viewports ── */}
+      <div className="board-scroll">
+        <div className="board-track">
+          <div className="board-cols grid bg-neutral-950">
+            <div className="board-sticky-label flex items-center bg-neutral-950 px-3 py-2.5 text-[10px] font-medium uppercase tracking-[0.16em] text-white/45 sm:px-5 sm:py-3">
               Cart
             </div>
             {PERIODS.map((p) => (
               <div
                 key={p}
-                className="flex items-center justify-center border-l border-white/[0.08] px-2 py-3 text-[10px] font-medium uppercase tracking-[0.16em] text-white/45"
+                className="flex items-center justify-center border-l border-white/[0.08] px-1.5 py-2.5 text-[10px] font-medium uppercase tracking-[0.16em] text-white/45 sm:px-2 sm:py-3"
               >
                 {p}
               </div>
@@ -447,15 +442,16 @@ export function DailyBoard({
                 <div
                   key={cart.id}
                   className={cn(
-                    "group/row grid border-b border-[var(--hairline)] last:border-b-0",
+                    "board-cols group/row grid border-b border-[var(--hairline)] last:border-b-0",
                     isMaintenanceRow ? "bg-neutral-50/80" : "bg-white",
                   )}
-                  style={{ gridTemplateColumns: GRID_COLS }}
                 >
                   <div
                     className={cn(
-                      "flex items-center justify-between gap-2 border-r border-[var(--hairline)] px-4 py-3 sm:px-5",
-                      isMaintenanceRow && "opacity-70",
+                      "board-sticky-label flex items-center justify-between gap-1.5 border-r border-[var(--hairline)] px-3 py-2.5 sm:gap-2 sm:px-5 sm:py-3",
+                      isMaintenanceRow
+                        ? "bg-neutral-50/95 opacity-70"
+                        : "bg-white",
                     )}
                   >
                     <div className="min-w-0">

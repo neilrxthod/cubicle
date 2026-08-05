@@ -18,7 +18,7 @@ import type { UserRole } from "@/lib/auth/types";
 
 function LoadingScreen() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#fafafa]">
+    <div className="flex min-h-dvh w-full items-center justify-center bg-[#fafafa]">
       <div className="size-6 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
     </div>
   );

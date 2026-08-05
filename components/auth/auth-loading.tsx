@@ -1,7 +1,7 @@
 export function AuthLoadingSkeleton() {
   return (
-    <div className="flex min-h-screen w-full bg-white">
-      <div className="relative flex w-full flex-col lg:w-[46%] xl:w-[44%]">
+    <div className="flex min-h-dvh w-full min-w-0 bg-white">
+      <div className="relative flex w-full min-w-0 flex-col lg:w-[46%] xl:w-[42%]">
         <div className="flex flex-1 flex-col px-6 py-6 sm:px-10 sm:py-8 lg:px-12 xl:px-16">
           <div className="h-4 w-16 animate-pulse rounded bg-neutral-100" />
           <div className="mx-auto flex w-full max-w-[360px] flex-1 flex-col justify-center py-14">
@@ -18,8 +18,8 @@ export function AuthLoadingSkeleton() {
           <div className="h-3 w-20 animate-pulse rounded bg-neutral-50" />
         </div>
       </div>
-      <div className="hidden p-3 pl-0 lg:block lg:w-[54%] xl:w-[56%]">
-        <div className="h-full min-h-[calc(100vh-1.5rem)] animate-pulse rounded-[1.75rem] bg-neutral-100" />
+      <div className="hidden min-w-0 flex-1 p-3 pl-0 lg:block">
+        <div className="h-full min-h-[calc(100dvh-1.5rem)] animate-pulse rounded-[1.75rem] bg-neutral-100" />
       </div>
     </div>
   );
