@@ -198,6 +198,11 @@ body[data-scroll-locked] {
   padding-right: 0 !important;
 }
 
+body[data-scroll-locked] [data-radix-popper-content-wrapper],
+body[data-scroll-locked] [data-radix-portal] {
+  margin-right: 0 !important;
+}
+
 /*
   App typography — thin sleek product system (Apple / Linear / Tesla).
   Prefer these utilities over one-off font-semibold headings.

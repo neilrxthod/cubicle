@@ -955,7 +955,7 @@ function BatchToolsDialog({
                 aria-selected={tab === t.id}
                 onClick={() => setTab(t.id)}
                 className={cn(
-                  "h-7 rounded-md px-3 text-[12px] font-medium tracking-[-0.01em] transition-all duration-150",
+                  "h-7 rounded-md px-3 text-[12px] font-medium tracking-[-0.01em] transition-[background-color,color,box-shadow] duration-150",
                   tab === t.id
                     ? "bg-white text-neutral-950 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
                     : "text-neutral-500 hover:text-neutral-800",

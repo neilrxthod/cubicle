@@ -369,12 +369,12 @@ function CartsGrid({
                     onClick={() => toggle(cart)}
                     className={cn(
                       "inline-flex h-8 min-w-[4.75rem] items-center justify-center gap-1.5 rounded-full px-3.5",
-                      "text-[12px] font-medium tracking-[-0.01em] transition-all duration-150",
+                      "text-[12px] font-medium tracking-[-0.01em] transition-colors duration-150",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
                       "disabled:pointer-events-none disabled:opacity-40",
                       paused
-                        ? "bg-neutral-950 text-white hover:bg-neutral-800 active:scale-[0.98]"
-                        : "bg-neutral-100/90 text-neutral-600 hover:bg-neutral-200/80 hover:text-neutral-950 active:scale-[0.98]",
+                        ? "bg-neutral-950 text-white hover:bg-neutral-800"
+                        : "bg-neutral-100/90 text-neutral-600 hover:bg-neutral-200/80 hover:text-neutral-950",
                     )}
                   >
                     {isPending ? (
@@ -1637,7 +1637,7 @@ function BookingsTable({
                                 type="button"
                                 className={cn(
                                   "inline-flex size-8 items-center justify-center rounded-md text-neutral-400",
-                                  "opacity-0 transition-all hover:bg-neutral-100 hover:text-neutral-900",
+                                  "opacity-0 transition-[opacity,background-color,color] hover:bg-neutral-100 hover:text-neutral-900",
                                   "group-hover:opacity-100 data-[state=open]:bg-neutral-100 data-[state=open]:opacity-100 data-[state=open]:text-neutral-900",
                                 )}
                               >
@@ -1766,7 +1766,7 @@ function BookingsTable({
                         }
                       }}
                       className={cn(
-                        "flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-all",
+                        "flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-[border-color,background-color,box-shadow]",
                         hasConflict
                           ? "cursor-not-allowed border-transparent bg-neutral-50 opacity-50"
                           : "border-border bg-white hover:border-neutral-400 hover:shadow-sm",
