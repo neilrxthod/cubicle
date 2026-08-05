@@ -13,6 +13,7 @@ import type {
   SessionUser,
   SlotRestriction,
 } from "@/lib/types"
+import { bookingInvolvesUser } from "@/lib/types"
 
 type LockKind = "general" | "ap_exam" | "holiday"
 
@@ -84,6 +85,9 @@ const cellBase =
 /** Dominant face in the slot; cell height tracks so neighbors stay clear. */
 const SLOT_AVATAR =
   "size-11 shrink-0 rounded-full object-cover select-none sm:size-12"
+/** Slightly smaller face when stacking share partner. */
+const SLOT_AVATAR_STACK =
+  "size-9 shrink-0 rounded-full object-cover select-none ring-2 sm:size-10"
 
 function slotInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -97,12 +101,18 @@ function SlotPfp({
   name,
   src,
   onDark,
+  stacked,
+  className,
 }: {
   name: string
   src?: string | null
   /** Initials contrast on solid black vs translucent cells */
   onDark?: boolean
+  /** Compact size for dual-share stack */
+  stacked?: boolean
+  className?: string
 }) {
+  const sizeClass = stacked ? SLOT_AVATAR_STACK : SLOT_AVATAR
   if (src) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
@@ -111,7 +121,11 @@ function SlotPfp({
         alt=""
         referrerPolicy="no-referrer"
         draggable={false}
-        className={SLOT_AVATAR}
+        className={cn(
+          sizeClass,
+          stacked && (onDark ? "ring-white/25" : "ring-white"),
+          className,
+        )}
       />
     )
   }
@@ -119,14 +133,56 @@ function SlotPfp({
     <span
       aria-hidden
       className={cn(
-        SLOT_AVATAR,
-        "inline-flex items-center justify-center text-[13px] font-medium tracking-[-0.02em] sm:text-[14px]",
+        sizeClass,
+        "inline-flex items-center justify-center font-medium tracking-[-0.02em]",
+        stacked
+          ? "text-[11px] sm:text-[12px]"
+          : "text-[13px] sm:text-[14px]",
         onDark
           ? "bg-white/15 text-white"
           : "bg-neutral-900/10 text-neutral-600",
+        stacked && (onDark ? "ring-white/25" : "ring-white"),
+        className,
       )}
     >
       {slotInitials(name)}
+    </span>
+  )
+}
+
+/** Owner + optional co-teacher (share/borrow) faces. */
+function SlotPeople({
+  primaryName,
+  primarySrc,
+  shareName,
+  shareSrc,
+  onDark,
+}: {
+  primaryName: string
+  primarySrc?: string | null
+  shareName?: string
+  shareSrc?: string | null
+  onDark?: boolean
+}) {
+  if (!shareName) {
+    return <SlotPfp name={primaryName} src={primarySrc} onDark={onDark} />
+  }
+  return (
+    <span className="relative inline-flex items-center pr-2">
+      <SlotPfp
+        name={primaryName}
+        src={primarySrc}
+        onDark={onDark}
+        stacked
+        className="relative z-[1]"
+      />
+      <SlotPfp
+        name={shareName}
+        src={shareSrc}
+        onDark={onDark}
+        stacked
+        className="relative z-[2] -ml-3"
+      />
     </span>
   )
 }
@@ -434,8 +490,8 @@ export function DailyBoard({
 
     const existing = bookingMap.get(`${cart.id}:${period}`)
     if (existing) {
-      // Own booking → manage/cancel. Anyone else's (including admin) → swap.
-      if (existing.teacherId === session.id) {
+      // Owner or share partner → manage/cancel. Anyone else → swap.
+      if (bookingInvolvesUser(existing, session.id)) {
         setManageDialog(existing)
         return
       }
@@ -498,8 +554,8 @@ export function DailyBoard({
         15,
         Math.max(1, bookingPolicy.maxSlotsPerTeacherPerDay ?? 5),
       )
-      const mineToday = bookingsForDate.filter(
-        (b) => b.teacherId === session.id,
+      const mineToday = bookingsForDate.filter((b) =>
+        bookingInvolvesUser(b, session.id),
       ).length
       if (mineToday >= maxSlots) {
         toast({
@@ -931,7 +987,6 @@ export function DailyBoard({
                   {PERIODS.map((period) => {
                     const booking = bookingMap.get(`${cart.id}:${period}`)
                     const restriction = restrictionMap.get(`${cart.id}:${period}`)
-                    const isMine = booking?.teacherId === session.id
                     const isMaintenance = cart.status === "maintenance"
                     const isRestricted = !!restriction
                     const restrictionTitle = restriction
@@ -954,15 +1009,33 @@ export function DailyBoard({
                     }
 
                     if (booking) {
+                      const isInvolved = bookingInvolvesUser(
+                        booking,
+                        session.id,
+                      )
                       const personName =
                         nameByTeacherId.get(booking.teacherId) ||
                         booking.teacherName
                       const avatarSrc =
                         avatarByTeacherId.get(booking.teacherId) ??
-                        (isMine ? session.avatarUrl : undefined)
+                        (booking.teacherId === session.id
+                          ? session.avatarUrl
+                          : undefined)
+                      const shareName = booking.sharedWithId
+                        ? nameByTeacherId.get(booking.sharedWithId) ||
+                          booking.sharedWithName ||
+                          "Shared"
+                        : undefined
+                      const shareSrc = booking.sharedWithId
+                        ? (avatarByTeacherId.get(booking.sharedWithId) ??
+                          (booking.sharedWithId === session.id
+                            ? session.avatarUrl
+                            : undefined) ??
+                          booking.sharedWithAvatarUrl)
+                        : undefined
                       const classLabel = booking.className?.trim()
                       // Anyone (teacher or admin) may request a swap on someone else's slot.
-                      const isSwapTarget = !isMine
+                      const isSwapTarget = !isInvolved
                       const hasPendingSwap =
                         isSwapTarget &&
                         platform.swapRequests.some(
@@ -971,11 +1044,14 @@ export function DailyBoard({
                             s.bookingId === booking.id &&
                             s.requesterId === session.id,
                         )
-                      const title = isMine
-                        ? `${classLabel || "Your booking"} — click to manage or cancel`
+                      const shareBit = shareName
+                        ? ` · shared with ${shareName}`
+                        : ""
+                      const title = isInvolved
+                        ? `${classLabel || "Your booking"}${shareBit} — click to manage`
                         : hasPendingSwap
-                          ? `${classLabel || personName} · ${personName} — swap request pending`
-                          : `${classLabel || personName} · ${personName} — hover to swap (same period)`
+                          ? `${classLabel || personName} · ${personName}${shareBit} — swap pending`
+                          : `${classLabel || personName} · ${personName}${shareBit} — hover to swap`
 
                       return (
                         <button
@@ -988,10 +1064,10 @@ export function DailyBoard({
                             cellBase,
                             "group/slot relative items-center justify-center p-1.5",
                             // Booking ink #211d1d — distinct from period header
-                            isMine
+                            isInvolved
                               ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/20"
                               : "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#211d1d]/20",
-                            isMine
+                            isInvolved
                               ? "bg-[#211d1d] hover:bg-[#2a2525]"
                               : "bg-[#211d1d]/10 hover:bg-[#211d1d]/15",
                           )}
@@ -1003,10 +1079,12 @@ export function DailyBoard({
                                 "group-hover/slot:opacity-30 group-focus-visible/slot:opacity-30",
                             )}
                           >
-                            <SlotPfp
-                              name={personName}
-                              src={avatarSrc}
-                              onDark={isMine}
+                            <SlotPeople
+                              primaryName={personName}
+                              primarySrc={avatarSrc}
+                              shareName={shareName}
+                              shareSrc={shareSrc}
+                              onDark={isInvolved}
                             />
                           </span>
                           {isSwapTarget ? (

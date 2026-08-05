@@ -78,8 +78,11 @@ Copy from `.env.local.example`.
 | 5 | `supabase/realtime.sql` | Live multi-user board updates |
 | 6 | `supabase/employment-type.sql` | Permanent / sub / temp + blue tick |
 | 7 | `supabase/booking-policy-max-slots.sql` | Max cart slots per teacher per day |
+| 8 | `supabase/booking-share.sql` | Share / borrow second teacher on a slot |
 
 **If Settings → Booking policy shows a schema-cache error about `max_slots_per_teacher_per_day`:** run file **7** in the Supabase SQL Editor, then save again.
+
+**If share/borrow fails or dual PFPs never save:** run file **8** (`booking-share.sql`).
 
 Then seed real staff:
 

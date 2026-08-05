@@ -60,12 +60,25 @@ create table if not exists public.bookings (
   class_name text,
   subject text,
   notes text,
+  -- Optional co-teacher sharing/borrowing this cart (see booking-share.sql).
+  shared_with_id uuid references public.profiles (id) on delete set null,
+  shared_with_name text,
+  shared_with_avatar_url text,
   created_at timestamptz not null default now(),
   unique (cart_id, date, period)
 );
 
 create index if not exists bookings_date_idx on public.bookings (date);
 create index if not exists bookings_teacher_idx on public.bookings (teacher_id);
+create index if not exists bookings_shared_with_idx
+  on public.bookings (shared_with_id)
+  where shared_with_id is not null;
+
+-- Existing projects before share columns:
+alter table public.bookings
+  add column if not exists shared_with_id uuid references public.profiles (id) on delete set null,
+  add column if not exists shared_with_name text,
+  add column if not exists shared_with_avatar_url text;
 
 -- ---------------------------------------------------------------------------
 -- Issues

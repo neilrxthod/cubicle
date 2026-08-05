@@ -185,6 +185,7 @@ export async function createBooking(
   const className = String(formData.get("className") ?? "").trim();
   const subject = String(formData.get("subject") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
+  const sharedWithRaw = String(formData.get("sharedWithId") ?? "").trim();
 
   if (!cartId || !date || !period) {
     return { ok: false, error: "Missing booking details." };
@@ -205,15 +206,49 @@ export async function createBooking(
   );
   if (conflict) return { ok: false, error: "That slot is already booked." };
 
-  // One cart per teacher per period — prevents double-pulling fleet.
-  if (session.role !== "admin") {
-    const alreadyThisPeriod = state.bookings.find(
-      (booking) =>
-        booking.teacherId === session.id &&
-        booking.date === date &&
-        booking.period === period,
+  // Optional share / borrow partner (co-teacher on this slot).
+  let sharedWithId: string | undefined;
+  let sharedWithName: string | undefined;
+  let sharedWithAvatarUrl: string | undefined;
+  if (sharedWithRaw) {
+    if (sharedWithRaw === session.id) {
+      return { ok: false, error: "Pick a colleague to share with, not yourself." };
+    }
+    const partner = state.users.find(
+      (u) => u.id === sharedWithRaw && u.allowlisted !== false,
     );
-    if (alreadyThisPeriod) {
+    if (!partner || partner.pendingInvite) {
+      return {
+        ok: false,
+        error: "That colleague is not available to share with.",
+      };
+    }
+    sharedWithId = partner.id;
+    sharedWithName = partner.name;
+    sharedWithAvatarUrl = partner.avatarUrl;
+  }
+
+  function teacherBusyThisPeriod(userId: string): boolean {
+    return state.bookings.some(
+      (booking) =>
+        booking.date === date &&
+        booking.period === period &&
+        (booking.teacherId === userId || booking.sharedWithId === userId),
+    );
+  }
+
+  function teacherDaySlotCount(userId: string): number {
+    const dayKey = date.slice(0, 10);
+    return state.bookings.filter(
+      (booking) =>
+        booking.date.slice(0, 10) === dayKey &&
+        (booking.teacherId === userId || booking.sharedWithId === userId),
+    ).length;
+  }
+
+  // One cart per teacher per period — includes shared slots.
+  if (session.role !== "admin") {
+    if (teacherBusyThisPeriod(session.id)) {
       return {
         ok: false,
         error:
@@ -221,18 +256,11 @@ export async function createBooking(
       };
     }
 
-    // Daily slot cap from admin booking policy (admins unlimited).
-    const dayKey = date.slice(0, 10);
     const maxSlots = Math.min(
       15,
       Math.max(1, state.bookingPolicy.maxSlotsPerTeacherPerDay ?? 5),
     );
-    const dayCount = state.bookings.filter(
-      (booking) =>
-        booking.teacherId === session.id &&
-        booking.date.slice(0, 10) === dayKey,
-    ).length;
-    if (dayCount >= maxSlots) {
+    if (teacherDaySlotCount(session.id) >= maxSlots) {
       return {
         ok: false,
         error:
@@ -240,6 +268,27 @@ export async function createBooking(
             ? "You can book at most 1 cart slot per day. Cancel another booking first."
             : `You can book at most ${maxSlots} cart slots per day. Cancel another booking first.`,
       };
+    }
+  }
+
+  if (sharedWithId) {
+    if (teacherBusyThisPeriod(sharedWithId)) {
+      return {
+        ok: false,
+        error: `${sharedWithName ?? "That colleague"} already has a cart this period.`,
+      };
+    }
+    if (session.role !== "admin") {
+      const maxSlots = Math.min(
+        15,
+        Math.max(1, state.bookingPolicy.maxSlotsPerTeacherPerDay ?? 5),
+      );
+      if (teacherDaySlotCount(sharedWithId) >= maxSlots) {
+        return {
+          ok: false,
+          error: `${sharedWithName ?? "That colleague"} is at their daily cart limit.`,
+        };
+      }
     }
   }
 
@@ -260,6 +309,9 @@ export async function createBooking(
         error: "Your account is not linked yet. Sign out and sign in with Google again.",
       };
     }
+    if (sharedWithId && !isUuid(sharedWithId)) {
+      return { ok: false, error: "Invalid share partner." };
+    }
     const { id: remoteId, error } = await dbCreateBooking({
       cartId,
       date,
@@ -269,6 +321,9 @@ export async function createBooking(
       className: className || undefined,
       subject: subject || undefined,
       notes: notes || undefined,
+      sharedWithId,
+      sharedWithName,
+      sharedWithAvatarUrl,
       lastEditedById: session.id,
       lastEditedByName: session.name,
       lastEditedByAvatarUrl: session.avatarUrl,
@@ -327,6 +382,9 @@ export async function createBooking(
       className: className || undefined,
       subject: subject || undefined,
       notes: notes || undefined,
+      sharedWithId,
+      sharedWithName,
+      sharedWithAvatarUrl,
       createdAt: now,
       lastEditedById: session.id,
       lastEditedByName: session.name,

@@ -84,6 +84,13 @@ export type Booking = {
   notes?: string;
   createdAt: string;
   /**
+   * Optional co-teacher sharing/borrowing this cart for the period.
+   * Board shows both profile photos when set.
+   */
+  sharedWithId?: string;
+  sharedWithName?: string;
+  sharedWithAvatarUrl?: string;
+  /**
    * Who last created or changed this slot (teacher booker or admin editor).
    * Shown to all roles so multi-admin edits are visible on the board.
    */
@@ -92,6 +99,15 @@ export type Booking = {
   lastEditedByAvatarUrl?: string;
   lastEditedAt?: string;
 };
+
+/** True when user owns or co-shares the booking. */
+export function bookingInvolvesUser(
+  booking: Pick<Booking, "teacherId" | "sharedWithId">,
+  userId: string | undefined | null,
+): boolean {
+  if (!userId) return false;
+  return booking.teacherId === userId || booking.sharedWithId === userId;
+}
 
 export type Issue = {
   id: string;

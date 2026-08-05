@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import {
@@ -11,17 +11,27 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { createBooking } from "@/lib/actions";
 import { getSessionSnapshot } from "@/lib/auth/session";
 import {
   getOnboarding,
   isAssignmentComplete,
 } from "@/lib/onboarding/storage";
+import { usePlatformStore } from "@/lib/data/platform-store";
 import { toast } from "@/hooks/use-toast";
 import type { Cart, Period } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
-/** One-tap book. Subject comes from onboarding loads for this period.
- *  Admins get an optional Custom label field. */
+const SHARE_NONE = "__none__";
+
+/** One-tap book. Optional share/borrow with a colleague (dual PFP on board). */
 export function BookDialog({
   cart,
   period,
@@ -34,12 +44,29 @@ export function BookDialog({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const platform = usePlatformStore();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [custom, setCustom] = useState("");
+  const [shareWith, setShareWith] = useState(SHARE_NONE);
 
   const session = getSessionSnapshot();
   const isAdmin = session?.role === "admin";
+
+  const colleagues = useMemo(() => {
+    if (!session) return [];
+    return platform.users
+      .filter(
+        (u) =>
+          u.id !== session.id &&
+          !u.pendingInvite &&
+          u.allowlisted !== false &&
+          Boolean(u.id) &&
+          !u.id.startsWith("pending:"),
+      )
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [platform.users, session]);
 
   const dateLabel = (() => {
     try {
@@ -59,7 +86,7 @@ export function BookDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="gap-0 overflow-hidden rounded-2xl border-border/60 bg-white p-0 shadow-xl sm:max-w-xs">
+      <DialogContent className="gap-0 overflow-hidden rounded-2xl border-border/60 bg-white p-0 shadow-xl sm:max-w-sm">
         <DialogHeader className="space-y-0 px-5 pb-0 pt-5 text-left">
           <DialogTitle className="text-[15px] font-light tracking-[-0.02em] text-neutral-950">
             Book {cart.name}?
@@ -71,7 +98,7 @@ export function BookDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-5 px-5 pb-5 pt-4">
+        <div className="flex flex-col gap-4 px-5 pb-5 pt-4">
           {isAdmin ? (
             <div className="space-y-1.5">
               <label
@@ -92,8 +119,59 @@ export function BookDialog({
             </div>
           ) : null}
 
+          {colleagues.length > 0 ? (
+            <div className="space-y-1.5">
+              <label
+                htmlFor="book-share"
+                className="text-[11px] font-medium tracking-[0.04em] text-neutral-400"
+              >
+                Share / borrow
+              </label>
+              <Select
+                value={shareWith}
+                onValueChange={setShareWith}
+                disabled={pending}
+              >
+                <SelectTrigger
+                  id="book-share"
+                  size="default"
+                  className={cn(
+                    "h-9 w-full rounded-lg border-neutral-200 bg-white px-3",
+                    "text-[13px] font-medium text-neutral-900 shadow-none",
+                    "data-[size=default]:h-9",
+                  )}
+                >
+                  <SelectValue placeholder="Just me" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  className="z-[80] rounded-lg border-neutral-200 shadow-lg"
+                >
+                  <SelectItem
+                    value={SHARE_NONE}
+                    className="cursor-pointer rounded-md py-2 text-[13px]"
+                  >
+                    Just me
+                  </SelectItem>
+                  {colleagues.map((u) => (
+                    <SelectItem
+                      key={u.id}
+                      value={u.id}
+                      className="cursor-pointer rounded-md py-2 text-[13px] font-medium"
+                    >
+                      {u.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] leading-snug text-neutral-400">
+                Shared slots show both profile photos on the board.
+              </p>
+            </div>
+          ) : null}
+
           {error ? (
-            <p className="text-[12.5px] text-red-600">{error}</p>
+            <p className="text-[12.5px] font-medium text-red-600">{error}</p>
           ) : null}
 
           <div className="flex items-center justify-end gap-3">
@@ -122,6 +200,9 @@ export function BookDialog({
                   formData.set("subject", subject);
                   formData.set("className", subject);
                 }
+                if (shareWith && shareWith !== SHARE_NONE) {
+                  formData.set("sharedWithId", shareWith);
+                }
                 startTransition(async () => {
                   const res = await createBooking(formData);
                   if (res && "error" in res && res.error) {
@@ -134,9 +215,15 @@ export function BookDialog({
                     router.refresh();
                     return;
                   }
+                  const partner =
+                    shareWith !== SHARE_NONE
+                      ? colleagues.find((c) => c.id === shareWith)?.name
+                      : undefined;
                   toast({
-                    title: "Cart booked",
-                    description: `${cart.name} · ${period}`,
+                    title: partner ? "Cart booked & shared" : "Cart booked",
+                    description: partner
+                      ? `${cart.name} · ${period} · with ${partner}`
+                      : `${cart.name} · ${period}`,
                   });
                   router.refresh();
                   onClose();

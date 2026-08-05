@@ -261,6 +261,9 @@ export async function dbCreateBooking(input: {
   className?: string;
   subject?: string;
   notes?: string;
+  sharedWithId?: string;
+  sharedWithName?: string;
+  sharedWithAvatarUrl?: string;
   lastEditedById?: string;
   lastEditedByName?: string;
   lastEditedByAvatarUrl?: string;
@@ -277,9 +280,15 @@ export async function dbCreateBooking(input: {
     subject: input.subject ?? null,
     notes: input.notes ?? null,
   };
-  // Prefer columns from booking-last-editor.sql; fall back if not migrated yet.
-  const withEditor = {
+  const withShare = {
     ...base,
+    shared_with_id: input.sharedWithId ?? null,
+    shared_with_name: input.sharedWithName ?? null,
+    shared_with_avatar_url: input.sharedWithAvatarUrl ?? null,
+  };
+  // Prefer share + editor columns; peel off migrations if not applied yet.
+  const withEditor = {
+    ...withShare,
     last_edited_by_id: input.lastEditedById ?? null,
     last_edited_by_name: input.lastEditedByName ?? null,
     last_edited_by_avatar_url: input.lastEditedByAvatarUrl ?? null,
@@ -290,10 +299,49 @@ export async function dbCreateBooking(input: {
     .insert(withEditor)
     .select("id")
     .single();
+  if (error && /shared_with/i.test(error.message ?? "")) {
+    const withoutShare = {
+      ...base,
+      last_edited_by_id: input.lastEditedById ?? null,
+      last_edited_by_name: input.lastEditedByName ?? null,
+      last_edited_by_avatar_url: input.lastEditedByAvatarUrl ?? null,
+      last_edited_at: editedAt,
+    };
+    const retryShare = await supabase
+      .from("bookings")
+      .insert(withoutShare)
+      .select("id")
+      .single();
+    data = retryShare.data;
+    error = retryShare.error;
+    if (!error && input.sharedWithId) {
+      return {
+        id: data?.id ? String(data.id) : undefined,
+        error:
+          "Cart booked, but share needs a database update. Run supabase/booking-share.sql in the Supabase SQL Editor.",
+      };
+    }
+  }
   if (error && /last_edited/i.test(error.message ?? "")) {
-    const retry = await supabase.from("bookings").insert(base).select("id").single();
+    const retry = await supabase
+      .from("bookings")
+      .insert(withShare)
+      .select("id")
+      .single();
     data = retry.data;
     error = retry.error;
+    if (error && /shared_with/i.test(error.message ?? "")) {
+      const bare = await supabase.from("bookings").insert(base).select("id").single();
+      data = bare.data;
+      error = bare.error;
+      if (!error && input.sharedWithId) {
+        return {
+          id: data?.id ? String(data.id) : undefined,
+          error:
+            "Cart booked, but share needs a database update. Run supabase/booking-share.sql in the Supabase SQL Editor.",
+        };
+      }
+    }
   }
   return {
     id: data?.id ? String(data.id) : undefined,
