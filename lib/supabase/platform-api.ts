@@ -136,8 +136,11 @@ export async function fetchPlatformState(): Promise<PlatformState> {
     const allowlisted = allowlistKnown ? Boolean(allowed) : undefined;
     return {
       ...mapped,
-      // Prefer allowlist role/name/employment when present (source of access truth).
-      role: (allowed?.role as Role | undefined) ?? mapped.role,
+      // Prefer profile admin over allowlist teacher (don't demote active admins).
+      role:
+        mapped.role === "admin"
+          ? "admin"
+          : ((allowed?.role as Role | undefined) ?? mapped.role),
       name: allowed?.name?.trim() || mapped.name,
       employmentType: allowed
         ? mapEmploymentType(allowed.employment_type)
@@ -518,17 +521,38 @@ export async function dbUpsertRestrictions(
 ): Promise<{ error?: string }> {
   if (rows.length === 0) return {};
   const supabase = client();
-  const { error } = await supabase.from("slot_restrictions").upsert(
-    rows.map((row) => ({
-      cart_id: row.cartId,
-      date: row.date,
-      period: row.period,
-      category: row.category,
-      reason: row.reason ?? null,
-    })),
-    { onConflict: "cart_id,date,period", ignoreDuplicates: true },
-  );
-  return { error: error?.message };
+  // Chunk writes — large day × cart × period batches can fail as one request.
+  const payload = rows.map((row) => ({
+    cart_id: row.cartId,
+    date: row.date,
+    period: row.period,
+    category: row.category,
+    reason: row.reason ?? null,
+  }));
+  const CHUNK = 80;
+  for (let i = 0; i < payload.length; i += CHUNK) {
+    const slice = payload.slice(i, i + CHUNK);
+    // Prefer plain insert (clearer RLS errors). Fall back to upsert on conflict.
+    const insert = await supabase.from("slot_restrictions").insert(slice);
+    if (!insert.error) continue;
+
+    const msg = insert.error.message?.toLowerCase() ?? "";
+    const isConflict =
+      insert.error.code === "23505" ||
+      msg.includes("duplicate") ||
+      msg.includes("unique");
+
+    if (isConflict) {
+      const upsert = await supabase.from("slot_restrictions").upsert(slice, {
+        onConflict: "cart_id,date,period",
+      });
+      if (upsert.error) return { error: upsert.error.message };
+      continue;
+    }
+
+    return { error: insert.error.message };
+  }
+  return {};
 }
 
 export async function dbDeleteRestrictionsMatching(

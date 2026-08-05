@@ -11,11 +11,35 @@ create table if not exists public.allowed_emails (
   role text not null default 'teacher' check (role in ('teacher', 'admin')),
   name text,
   notes text,
+  -- permanent = blue verified tick; substitute/temporary = no tick
+  employment_type text not null default 'permanent'
+    check (employment_type in ('permanent', 'substitute', 'temporary')),
   created_at timestamptz not null default now(),
   -- Only Regina board school Google accounts
   constraint allowed_emails_school_domain_check
     check (lower(email) ~* '^[a-z0-9._%+\-]+@rbe\.sk\.ca$')
 );
+
+-- Existing DBs created before employment_type: add columns idempotently
+alter table public.allowed_emails
+  add column if not exists employment_type text not null default 'permanent';
+
+alter table public.allowed_emails
+  drop constraint if exists allowed_emails_employment_type_check;
+
+alter table public.allowed_emails
+  add constraint allowed_emails_employment_type_check
+  check (employment_type in ('permanent', 'substitute', 'temporary'));
+
+alter table public.profiles
+  add column if not exists employment_type text not null default 'permanent';
+
+alter table public.profiles
+  drop constraint if exists profiles_employment_type_check;
+
+alter table public.profiles
+  add constraint profiles_employment_type_check
+  check (employment_type in ('permanent', 'substitute', 'temporary'));
 
 -- Normalize emails to lowercase on write
 create or replace function public.normalize_allowed_email()
@@ -99,7 +123,7 @@ $$;
 revoke all on function public.get_allowed_email_role(text) from public;
 grant execute on function public.get_allowed_email_role(text) to service_role;
 
--- When a profile is created, prefer role/name from the allowlist
+-- When a profile is created, prefer role/name/employment from the allowlist
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -109,16 +133,17 @@ as $$
 declare
   allowed_role text;
   allowed_name text;
+  allowed_employment text;
 begin
-  select a.role, a.name
-  into allowed_role, allowed_name
+  select a.role, a.name, a.employment_type
+  into allowed_role, allowed_name, allowed_employment
   from public.allowed_emails a
   where a.email = lower(trim(coalesce(new.email, '')))
   limit 1;
 
   -- Still create profile for allowlisted users; unauthorized users are
   -- removed in the app callback. Role defaults to teacher if somehow missing.
-  insert into public.profiles (id, email, name, role)
+  insert into public.profiles (id, email, name, role, employment_type)
   values (
     new.id,
     coalesce(new.email, ''),
@@ -128,7 +153,8 @@ begin
       new.raw_user_meta_data ->> 'full_name',
       split_part(coalesce(new.email, 'user'), '@', 1)
     ),
-    coalesce(allowed_role, new.raw_user_meta_data ->> 'role', 'teacher')
+    coalesce(allowed_role, new.raw_user_meta_data ->> 'role', 'teacher'),
+    coalesce(allowed_employment, 'permanent')
   );
   return new;
 end;

@@ -148,10 +148,13 @@ export function mapIssue(row: DbIssue): Issue {
 }
 
 export function mapSlotRestriction(row: DbSlotRestriction): SlotRestriction {
+  // Postgres `date` may arrive as `YYYY-MM-DD` or a full ISO timestamp.
+  const rawDate = String(row.date ?? "");
+  const date = rawDate.length >= 10 ? rawDate.slice(0, 10) : rawDate;
   return {
     id: row.id,
     cartId: row.cart_id,
-    date: row.date,
+    date,
     period: row.period as Period,
     category: row.category as SlotRestriction["category"],
     reason: row.reason ?? undefined,

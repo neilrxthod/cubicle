@@ -33,7 +33,9 @@ export function toPlatformSession(user: AuthSessionUser): SessionUser {
       firstName: user.firstName,
       lastName: user.lastName,
       email: match.email,
-      role: match.role,
+      // Never demote a live admin session if the store/allowlist briefly lags.
+      role:
+        user.role === "admin" || match.role === "admin" ? "admin" : match.role,
       // Prefer session first so a just-saved photo hits the header immediately;
       // platform store (Realtime / refresh) fills in when session is empty.
       avatarUrl: pickAvatar(user.avatarUrl, match.avatarUrl),

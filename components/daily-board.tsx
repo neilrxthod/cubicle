@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { format, parseISO, addDays } from "date-fns"
@@ -13,6 +13,29 @@ import type {
   SessionUser,
   SlotRestriction,
 } from "@/lib/types"
+
+type LockKind = "general" | "ap_exam" | "holiday"
+
+const LOCK_KINDS: ReadonlyArray<{
+  id: LockKind
+  label: string
+  hint: string
+}> = [
+  { id: "general", label: "General", hint: "Block open slots" },
+  { id: "ap_exam", label: "AP exam", hint: "Reserve for AP exams" },
+  { id: "holiday", label: "Holiday", hint: "School closed / no carts" },
+]
+
+function restrictionLabel(restriction: SlotRestriction): string {
+  if (restriction.category === "ap_exam") return "AP exam"
+  if (
+    restriction.category === "other" &&
+    (restriction.reason ?? "").toLowerCase().includes("holiday")
+  ) {
+    return restriction.reason?.trim() || "Holiday"
+  }
+  return restriction.reason?.trim() || "Locked"
+}
 
 const BookDialog = dynamic(() => import("./book-dialog").then((mod) => mod.BookDialog), {
   ssr: false,
@@ -31,13 +54,6 @@ const ManageBookingDialog = dynamic(
 
 import { batchRestrictSlots } from "@/lib/actions"
 import { Calendar } from "@/components/ui/calendar"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
@@ -48,15 +64,18 @@ import {
   AlertTriangle,
   Lock,
   Loader2,
-  Pencil,
-  Shield,
-  Unlock,
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { usePlatformStore } from "@/lib/data/platform-store"
 
 const PERIODS: Period[] = ["P1", "P2", "P3", "P4", "P5"]
+
+/** Parse yyyy-MM-dd as local calendar day (no UTC shift). */
+function parseLocalYmd(ymd: string): Date {
+  const [y, m, d] = ymd.split("-").map(Number)
+  return new Date(y ?? 0, (m ?? 1) - 1, d ?? 1)
+}
 
 const cellBase =
   "flex min-h-14 min-w-0 border-l border-[var(--hairline)] transition-colors duration-150 ease-out sm:min-h-16"
@@ -154,20 +173,227 @@ export function DailyBoard({
   const [swapDialog, setSwapDialog] = useState<Booking | null>(null)
   const [manageDialog, setManageDialog] = useState<Booking | null>(null)
   const [datePickerOpen, setDatePickerOpen] = useState(false)
-  const [dayLockDate, setDayLockDate] = useState<string | null>(null)
+  /** Admin must pick a lock type before Lock becomes active. */
+  const [lockKind, setLockKind] = useState<LockKind | null>(null)
+  const [lockReason, setLockReason] = useState("")
+  const [lockBusy, setLockBusy] = useState<"lock" | "unlock" | null>(null)
+  const lockInFlight = useRef(false)
 
-  const restrictedDateMatchers = useMemo(() => {
-    const keys = new Set(slotRestrictions.map((r) => r.date))
-    return Array.from(keys).map((d) => parseISO(d))
-  }, [slotRestrictions])
+  const isAdmin = session.role === "admin"
 
-  const bookingsForDate = bookings.filter((b) => b.date === date)
+  /** Carts that can receive day locks (prefer active; fall back to all). */
+  const lockableCarts = useMemo(() => {
+    const active = carts.filter((c) => c.status === "active")
+    return active.length > 0 ? active : carts
+  }, [carts])
+
+  /** Live day occupancy for the selected board date (drives Unlock enablement). */
+  const dayLockStats = useMemo(() => {
+    const cartIds = new Set(lockableCarts.map((c) => c.id))
+    const total = lockableCarts.length * PERIODS.length
+    const bookedKeys = new Set<string>()
+    for (const b of bookings) {
+      if (b.date.slice(0, 10) !== date || !cartIds.has(b.cartId)) continue
+      bookedKeys.add(`${b.cartId}:${b.period}`)
+    }
+    const lockedKeys = new Set<string>()
+    const kinds = { ap: 0, holiday: 0, general: 0 }
+    for (const r of slotRestrictions) {
+      if (r.date.slice(0, 10) !== date || !cartIds.has(r.cartId)) continue
+      lockedKeys.add(`${r.cartId}:${r.period}`)
+      if (r.category === "ap_exam") kinds.ap += 1
+      else if (
+        r.category === "other" &&
+        (r.reason ?? "").toLowerCase().includes("holiday")
+      ) {
+        kinds.holiday += 1
+      } else {
+        kinds.general += 1
+      }
+    }
+    let open = 0
+    for (const cart of lockableCarts) {
+      for (const period of PERIODS) {
+        const key = `${cart.id}:${period}`
+        if (!bookedKeys.has(key) && !lockedKeys.has(key)) open += 1
+      }
+    }
+    // Dominant type for this day (for panel label — not under the date cell)
+    const dominant: LockKind | null =
+      kinds.ap > 0
+        ? "ap_exam"
+        : kinds.holiday > 0
+          ? "holiday"
+          : kinds.general > 0
+            ? "general"
+            : null
+    return {
+      total,
+      booked: bookedKeys.size,
+      locked: lockedKeys.size,
+      open,
+      dominant,
+    }
+  }, [bookings, date, lockableCarts, slotRestrictions])
+
+  function resetLockDraft() {
+    setLockKind(null)
+    setLockReason("")
+    setLockBusy(null)
+  }
+
+  function resolveLockPayload(): {
+    category: RestrictionCategory
+    reason?: string
+  } | null {
+    if (!lockKind) return null
+    const note = lockReason.trim().slice(0, 120)
+    if (lockKind === "ap_exam") {
+      return { category: "ap_exam", reason: note || undefined }
+    }
+    if (lockKind === "holiday") {
+      // DB allows ap_exam | general | other — holiday maps to other.
+      return { category: "other", reason: note || "Holiday" }
+    }
+    return { category: "general", reason: note || undefined }
+  }
+
+  async function applyDayLock(action: "restrict" | "available") {
+    if (lockInFlight.current) return
+    if (!isAdmin) {
+      toast({
+        title: "Admin only",
+        description: "Sign in with an admin account to lock carts.",
+        variant: "destructive",
+      })
+      return
+    }
+    if (lockableCarts.length === 0) {
+      toast({
+        title: "No carts",
+        description: "Add carts under Admin → Inventory first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (action === "restrict" && !lockKind) {
+      toast({
+        title: "Choose a lock type",
+        description: "Select General, AP exam, or Holiday first.",
+      })
+      return
+    }
+
+    if (action === "available" && dayLockStats.locked === 0) {
+      toast({
+        title: "Nothing to unlock",
+        description: "There are no locks on this day.",
+      })
+      return
+    }
+
+    if (action === "restrict" && dayLockStats.open === 0 && dayLockStats.locked === 0) {
+      toast({
+        title: "Nothing to lock",
+        description: "Every slot is booked — locks never overwrite bookings.",
+      })
+      return
+    }
+
+    const shortDate = format(parseLocalYmd(date), "MMM d")
+    const cartIds = lockableCarts.map((c) => c.id)
+    const payload = action === "restrict" ? resolveLockPayload() : undefined
+
+    lockInFlight.current = true
+    setLockBusy(action === "restrict" ? "lock" : "unlock")
+    try {
+      const res = await batchRestrictSlots(
+        cartIds,
+        date,
+        date,
+        PERIODS,
+        action,
+        payload ?? undefined,
+      )
+      if (!res.ok) {
+        toast({
+          title:
+            action === "restrict"
+              ? "Could not lock carts"
+              : "Could not unlock day",
+          description: res.error || "Try again.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const count = res.data?.restrictedCount ?? 0
+      const skipped = res.data?.skippedBookedCount ?? 0
+
+      if (action === "restrict" && count === 0) {
+        toast({
+          title: "Nothing to lock",
+          description:
+            skipped > 0
+              ? `All open slots are booked (${skipped} skipped).`
+              : "Slots may already be locked for this day.",
+        })
+        return
+      }
+
+      if (action === "available" && count === 0) {
+        toast({
+          title: "Nothing to unlock",
+          description: "There are no locks on this day.",
+        })
+        return
+      }
+
+      toast({
+        title: action === "restrict" ? "Carts locked" : "Day unlocked",
+        description:
+          action === "restrict"
+            ? `${count} slots locked for ${shortDate}${
+                skipped ? ` · ${skipped} booked skipped` : ""
+              }`
+            : `${count} locks cleared for ${shortDate}`,
+      })
+      if (action === "restrict") {
+        // Keep type selected so admin can re-lock another day quickly;
+        // only clear custom note after a successful lock.
+        setLockReason("")
+      }
+      // Soft refresh — platform store already rehydrated inside batchRestrictSlots.
+      router.refresh()
+    } catch (err) {
+      toast({
+        title: "Could not update locks",
+        description: err instanceof Error ? err.message : "Unexpected error.",
+        variant: "destructive",
+      })
+    } finally {
+      lockInFlight.current = false
+      setLockBusy(null)
+    }
+  }
+
+  const bookingsForDate = bookings.filter(
+    (b) => (b.date.length >= 10 ? b.date.slice(0, 10) : b.date) === date,
+  )
   const bookingMap = new Map<string, Booking>()
   for (const b of bookingsForDate) bookingMap.set(`${b.cartId}:${b.period}`, b)
   const restrictionMap = new Map<string, SlotRestriction>()
   for (const restriction of slotRestrictions) {
-    if (restriction.date === date) {
-      restrictionMap.set(`${restriction.cartId}:${restriction.period}`, restriction)
+    const rDate =
+      restriction.date.length >= 10
+        ? restriction.date.slice(0, 10)
+        : restriction.date
+    if (rDate === date) {
+      restrictionMap.set(
+        `${restriction.cartId}:${restriction.period}`,
+        restriction,
+      )
     }
   }
 
@@ -188,13 +414,17 @@ export function DailyBoard({
       })
       return
     }
+    if (next !== date) {
+      // New day → admin must pick a lock type again before Lock activates.
+      resetLockDraft()
+    }
     const url = new URL(window.location.href)
     url.searchParams.set("date", next)
     router.push(url.pathname + url.search, { scroll: false })
   }
 
   function go(offsetDays: number) {
-    const next = format(addDays(parseISO(date), offsetDays), "yyyy-MM-dd")
+    const next = format(addDays(parseLocalYmd(date), offsetDays), "yyyy-MM-dd")
     setDate(next)
   }
 
@@ -248,34 +478,40 @@ export function DailyBoard({
     ? carts.find((c) => c.id === manageDialog.cartId)
     : undefined
 
+  /** Single day-lock control: Lock when a type is picked, Unlock when day already locked. */
+  const canLockDay = Boolean(lockKind)
+  const canUnlockDay = dayLockStats.locked > 0 && !lockKind
+  const dayLockActionReady = canLockDay || canUnlockDay
+
   const navBtn = cn(
-    "flex size-8 items-center justify-center rounded-md",
-    "text-neutral-500 transition-colors",
-    "hover:bg-neutral-100 hover:text-neutral-950",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
-    "disabled:pointer-events-none disabled:opacity-30",
+    "flex size-8 items-center justify-center rounded-full",
+    "text-neutral-400 transition-colors duration-200",
+    "hover:bg-black/[0.04] hover:text-black",
+    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
+    "disabled:pointer-events-none disabled:opacity-25",
   )
 
   const legendItem =
-    "inline-flex items-center gap-1.5 text-[11px] text-neutral-500"
+    "inline-flex items-center gap-1.5 text-[10.5px] font-normal tracking-[-0.01em] text-neutral-400"
 
   return (
-    <section className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white shadow-[var(--shadow-surface)]">
-      {/* ── Toolbar: date identity + day controls ── */}
-      <div className="flex flex-col gap-3 border-b border-[var(--hairline)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-5">
+    <section className="overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-[0_1px_0_rgba(0,0,0,0.03),0_8px_32px_rgba(0,0,0,0.04)]">
+      {/* ── Toolbar ── */}
+      <div className="flex flex-col gap-3 border-b border-black/[0.06] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-5">
         <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-            <h2 className="truncate text-[15px] font-medium tracking-[-0.015em] text-neutral-950 sm:text-[16px]">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+            <h2 className="truncate text-[17px] font-normal tracking-[-0.035em] text-black sm:text-[18px]">
               {heading}
             </h2>
             {isViewingToday ? (
-              <span className="text-[12px] text-neutral-400">Today</span>
+              <span className="text-[11px] font-normal uppercase tracking-[0.14em] text-neutral-400">
+                Today
+              </span>
             ) : null}
           </div>
           {session.role !== "admin" && date >= today ? (
-            <p className="mt-0.5 text-[12px] text-neutral-400">
-              Booking window through{" "}
-              {format(parseISO(lastBookableDate), "MMM d")}
+            <p className="mt-1 text-[12px] font-normal tracking-[-0.01em] text-neutral-400">
+              Booking through {format(parseISO(lastBookableDate), "MMM d")}
             </p>
           ) : null}
         </div>
@@ -299,63 +535,218 @@ export function DailyBoard({
               <button
                 type="button"
                 aria-label="Choose date"
+                aria-expanded={datePickerOpen}
                 className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5",
-                  "text-[13px] tabular-nums text-neutral-700",
-                  "transition-colors hover:bg-neutral-100 hover:text-neutral-950",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+                  "inline-flex h-8 items-center gap-1.5 rounded-full px-2.5",
+                  "border border-black/[0.08] bg-white",
+                  "text-[12px] font-normal tabular-nums tracking-[-0.02em] text-black",
+                  "transition-colors duration-150",
+                  "hover:bg-black/[0.03]",
+                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/10",
+                  "data-[state=open]:border-black data-[state=open]:bg-black data-[state=open]:text-white",
                 )}
               >
                 <CalendarIcon
-                  className="size-3.5 shrink-0 text-neutral-400"
+                  className={cn(
+                    "size-3 shrink-0",
+                    datePickerOpen ? "text-white/60" : "text-neutral-400",
+                  )}
                   strokeWidth={1.5}
                 />
-                <span>{format(parseISO(date), "MMM d, yyyy")}</span>
+                <span>{format(parseLocalYmd(date), "MMM d")}</span>
               </button>
             </PopoverTrigger>
             <PopoverContent
-              className="w-auto overflow-hidden rounded-lg border border-neutral-200 p-0 shadow-md"
+              className={cn(
+                // Landscape panel: wide rectangle, viewport-safe.
+                "z-[60] w-[min(28rem,calc(100vw-1.25rem))] max-w-[calc(100vw-1.25rem)]",
+                "max-h-[min(28rem,calc(100dvh-1.25rem))] overflow-x-hidden overflow-y-auto p-0",
+                "rounded-2xl border border-black/[0.08] bg-white",
+                "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_40px_rgba(0,0,0,0.1)]",
+              )}
               align="end"
+              side="bottom"
+              sideOffset={8}
+              collisionPadding={12}
+              avoidCollisions
             >
-              <Calendar
-                mode="single"
-                selected={parseISO(date)}
-                onSelect={(val) => {
-                  if (!val) return
-                  setDate(format(val, "yyyy-MM-dd"))
-                }}
-                disabled={(day) => {
-                  if (
-                    isTeacherWindowEnforced &&
-                    format(day, "yyyy-MM-dd") > lastBookableDate
-                  ) {
-                    return true
-                  }
-                  return false
-                }}
-                modifiers={{
-                  locked: restrictedDateMatchers,
-                }}
-                modifiersClassNames={{
-                  locked:
-                    "relative after:pointer-events-none after:absolute after:bottom-1 after:left-1 after:size-1 after:rounded-full after:bg-neutral-950 aria-selected:after:bg-white",
-                }}
-                onEditDay={
-                  session.role === "admin"
-                    ? (day) => {
-                        const key = format(day, "yyyy-MM-dd")
-                        setDate(key)
-                        setDatePickerOpen(false)
-                        setDayLockDate(key)
+              <div
+                className={cn(
+                  "flex min-w-0 flex-col",
+                  // Admin: calendar + locks sit side-by-side on wider screens.
+                  isAdmin && "sm:flex-row sm:items-stretch",
+                )}
+              >
+                <div
+                  className={cn(
+                    "min-w-0 flex-1",
+                    isAdmin && "sm:border-r sm:border-black/[0.05]",
+                  )}
+                >
+                  <Calendar
+                    mode="single"
+                    selected={parseLocalYmd(date)}
+                    defaultMonth={parseLocalYmd(date)}
+                    onSelect={(val) => {
+                      if (!val) return
+                      setDate(format(val, "yyyy-MM-dd"))
+                      // Keep open for admins so they can lock the chosen day.
+                      if (!isAdmin) setDatePickerOpen(false)
+                    }}
+                    disabled={(day) => {
+                      if (
+                        isTeacherWindowEnforced &&
+                        format(day, "yyyy-MM-dd") > lastBookableDate
+                      ) {
+                        return true
                       }
-                    : undefined
-                }
-              />
-              {session.role === "admin" ? (
-                <p className="border-t border-neutral-100 px-3.5 py-2 text-[11px] leading-snug text-neutral-400">
-                  Select a date, then tap the pencil to edit booking locks.
-                </p>
-              ) : null}
+                      return false
+                    }}
+                  />
+                </div>
+
+                {isAdmin ? (
+                  <div
+                    className={cn(
+                      "flex min-w-0 flex-col gap-2 border-t border-black/[0.05] bg-neutral-50/70 px-3 py-2.5",
+                      "sm:w-[11.5rem] sm:shrink-0 sm:border-t-0 sm:px-3 sm:py-3",
+                    )}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    {dayLockStats.dominant ? (
+                      <p className="text-[11px] tracking-[-0.01em] text-neutral-500">
+                        This day:{" "}
+                        <span className="font-medium text-neutral-900">
+                          {dayLockStats.dominant === "ap_exam"
+                            ? "AP exam"
+                            : dayLockStats.dominant === "holiday"
+                              ? "Holiday"
+                              : "General"}
+                        </span>
+                        {dayLockStats.locked > 0
+                          ? ` · ${dayLockStats.locked} locked`
+                          : null}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] tracking-[-0.01em] text-neutral-400">
+                        Lock this day
+                      </p>
+                    )}
+
+                    <div
+                      role="radiogroup"
+                      aria-label="Lock type"
+                      className="grid min-w-0 grid-cols-3 gap-1 sm:grid-cols-1"
+                    >
+                      {LOCK_KINDS.map((opt) => {
+                        const active = lockKind === opt.id
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            title={opt.hint}
+                            disabled={lockBusy !== null}
+                            onClick={() =>
+                              setLockKind((prev) =>
+                                prev === opt.id ? null : opt.id,
+                              )
+                            }
+                            className={cn(
+                              "flex h-7 min-w-0 items-center justify-center truncate rounded-md border px-1.5",
+                              "text-[11px] tracking-[-0.01em] transition-colors sm:h-8 sm:justify-start sm:text-[12px]",
+                              active
+                                ? "border-neutral-900 bg-neutral-900 text-white"
+                                : "border-black/[0.08] bg-white text-neutral-600 hover:border-black/[0.14]",
+                              "disabled:opacity-40",
+                              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
+                            )}
+                          >
+                            {opt.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    <Input
+                      type="text"
+                      value={lockReason}
+                      onChange={(e) => setLockReason(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          if (
+                            lockKind &&
+                            lockableCarts.length > 0 &&
+                            !lockBusy
+                          ) {
+                            void applyDayLock("restrict")
+                          }
+                        }
+                      }}
+                      placeholder={
+                        lockKind === "holiday"
+                          ? "Note (Holiday)"
+                          : "Note (optional)"
+                      }
+                      maxLength={120}
+                      autoComplete="off"
+                      disabled={lockBusy !== null || !lockKind}
+                      className="h-7 rounded-md border-black/[0.08] bg-white text-[12px] shadow-none sm:h-8 sm:text-[13px]"
+                    />
+
+                    <button
+                      type="button"
+                      disabled={lockBusy !== null || !dayLockActionReady}
+                      onClick={() => {
+                        if (canUnlockDay) {
+                          void applyDayLock("available")
+                          return
+                        }
+                        if (!lockKind) {
+                          toast({
+                            title: "Choose a type",
+                            description: "General, AP exam, or Holiday.",
+                          })
+                          return
+                        }
+                        if (lockableCarts.length === 0) {
+                          toast({
+                            title: "No carts",
+                            description: "Add carts in Admin → Inventory.",
+                            variant: "destructive",
+                          })
+                          return
+                        }
+                        void applyDayLock("restrict")
+                      }}
+                      className={cn(
+                        "mt-auto inline-flex h-7 w-full items-center justify-center gap-1.5 rounded-md",
+                        "text-[11px] tracking-[-0.01em] transition-colors sm:h-8 sm:text-[12px]",
+                        canUnlockDay
+                          ? "border border-black/[0.08] bg-white text-neutral-700 hover:bg-neutral-50 hover:text-neutral-950"
+                          : dayLockActionReady
+                            ? "bg-neutral-900 text-white hover:bg-neutral-800"
+                            : "bg-neutral-100 text-neutral-400",
+                        "disabled:pointer-events-none disabled:opacity-40",
+                        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
+                      )}
+                    >
+                      {lockBusy !== null ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : canUnlockDay ? (
+                        "Unlock"
+                      ) : (
+                        <>
+                          <Lock className="size-3" strokeWidth={2} />
+                          Lock
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </PopoverContent>
           </Popover>
 
@@ -373,15 +764,15 @@ export function DailyBoard({
             <>
               <span
                 aria-hidden
-                className="mx-1 h-4 w-px shrink-0 bg-neutral-200"
+                className="mx-1.5 h-3.5 w-px shrink-0 bg-black/10"
               />
               <button
                 type="button"
                 onClick={() => setDate(today)}
                 className={cn(
-                  "h-8 rounded-md px-2.5 text-[12px] font-medium text-neutral-600",
-                  "transition-colors hover:bg-neutral-100 hover:text-neutral-950",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+                  "h-8 rounded-full px-3 text-[12px] font-normal tracking-[-0.02em] text-neutral-500",
+                  "transition-colors duration-200 hover:bg-black/[0.04] hover:text-black",
+                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
                 )}
               >
                 Today
@@ -391,24 +782,18 @@ export function DailyBoard({
         </div>
       </div>
 
-      {/* ── Legend strip: aligned with toolbar padding ── */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-[var(--hairline)] bg-neutral-50/80 px-4 py-2 sm:px-5">
+      {/* ── Legend ── */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 border-b border-black/[0.05] bg-[#fafafa] px-4 py-2.5 sm:px-5">
         <span className={legendItem}>
-          <span className="size-2 shrink-0 rounded-[1px] border border-neutral-300 bg-white" />
+          <span className="size-1.5 shrink-0 rounded-full border border-black/15 bg-white" />
           Open
         </span>
         <span className={legendItem}>
-          <span
-            className="size-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: "#211d1d" }}
-          />
+          <span className="size-1.5 shrink-0 rounded-full bg-black" />
           Yours
         </span>
         <span className={legendItem}>
-          <span
-            className="size-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: "rgba(33, 29, 29, 0.15)" }}
-          />
+          <span className="size-1.5 shrink-0 rounded-full bg-black/20" />
           Booked
         </span>
         <span className={legendItem}>
@@ -421,17 +806,17 @@ export function DailyBoard({
         </span>
       </div>
 
-      {/* ── Period grid — fluid width; scrolls only on very narrow viewports ── */}
+      {/* ── Period grid ── */}
       <div className="board-scroll">
         <div className="board-track">
-          <div className="board-cols grid bg-neutral-950">
-            <div className="board-sticky-label flex items-center bg-neutral-950 px-3 py-2.5 text-[10px] font-medium uppercase tracking-[0.16em] text-white/45 sm:px-5 sm:py-3">
+          <div className="board-cols grid bg-black">
+            <div className="board-sticky-label flex items-center bg-black px-3 py-2.5 text-[10px] font-normal uppercase tracking-[0.18em] text-white/40 sm:px-5 sm:py-3">
               Cart
             </div>
             {PERIODS.map((p) => (
               <div
                 key={p}
-                className="flex items-center justify-center border-l border-white/[0.08] px-1.5 py-2.5 text-[10px] font-medium uppercase tracking-[0.16em] text-white/45 sm:px-2 sm:py-3"
+                className="flex items-center justify-center border-l border-white/[0.08] px-1.5 py-2.5 text-[10px] font-normal uppercase tracking-[0.18em] text-white/40 sm:px-2 sm:py-3"
               >
                 {p}
               </div>
@@ -505,10 +890,9 @@ export function DailyBoard({
                     const isMine = booking?.teacherId === session.id
                     const isMaintenance = cart.status === "maintenance"
                     const isRestricted = !!restriction
-                    const restrictionTitle =
-                      restriction?.category === "ap_exam"
-                        ? "AP exam slot"
-                        : restriction?.reason || "Restricted by admin"
+                    const restrictionTitle = restriction
+                      ? restrictionLabel(restriction)
+                      : "Restricted by admin"
 
                     if (isMaintenance) {
                       return (
@@ -577,7 +961,14 @@ export function DailyBoard({
                         >
                           <Lock className="size-3" strokeWidth={1.25} />
                           <span className="text-[9px] font-medium uppercase tracking-[0.14em] text-neutral-400">
-                            {restriction?.category === "ap_exam" ? "AP" : "Locked"}
+                            {restriction?.category === "ap_exam"
+                              ? "AP"
+                              : restriction?.category === "other" &&
+                                  (restriction.reason ?? "")
+                                    .toLowerCase()
+                                    .includes("holiday")
+                                ? "Off"
+                                : "Locked"}
                           </span>
                         </div>
                       )
@@ -677,257 +1068,6 @@ export function DailyBoard({
           onClose={() => setManageDialog(null)}
         />
       )}
-      {session.role === "admin" && dayLockDate ? (
-        <AdminDayLockDialog
-          date={dayLockDate}
-          carts={carts}
-          bookings={bookings}
-          slotRestrictions={slotRestrictions}
-          open={Boolean(dayLockDate)}
-          onOpenChange={(open) => {
-            if (!open) setDayLockDate(null)
-          }}
-          onApplied={() => router.refresh()}
-        />
-      ) : null}
     </section>
-  )
-}
-
-/* ─── Admin: lock / unlock all open cart slots for one day ─── */
-
-function AdminDayLockDialog({
-  date,
-  carts,
-  bookings,
-  slotRestrictions,
-  open,
-  onOpenChange,
-  onApplied,
-}: {
-  date: string
-  carts: Cart[]
-  bookings: Booking[]
-  slotRestrictions: SlotRestriction[]
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onApplied: () => void
-}) {
-  const [category, setCategory] = useState<RestrictionCategory>("general")
-  const [reason, setReason] = useState("")
-  const [busy, setBusy] = useState<"lock" | "unlock" | null>(null)
-
-  const activeCarts = useMemo(
-    () => carts.filter((c) => c.status !== "maintenance"),
-    [carts],
-  )
-  const totalSlots = activeCarts.length * PERIODS.length
-  const dayBookings = useMemo(
-    () =>
-      bookings.filter(
-        (b) =>
-          b.date === date &&
-          activeCarts.some((c) => c.id === b.cartId),
-      ),
-    [bookings, date, activeCarts],
-  )
-  const dayLocks = useMemo(
-    () =>
-      slotRestrictions.filter(
-        (r) =>
-          r.date === date &&
-          activeCarts.some((c) => c.id === r.cartId),
-      ),
-    [slotRestrictions, date, activeCarts],
-  )
-  const openSlots = Math.max(0, totalSlots - dayBookings.length - dayLocks.length)
-
-  async function apply(action: "restrict" | "available") {
-    if (activeCarts.length === 0) {
-      toast({
-        title: "No carts",
-        description: "Add carts under Admin → Inventory first.",
-        variant: "destructive",
-      })
-      return
-    }
-    setBusy(action === "restrict" ? "lock" : "unlock")
-    try {
-      const res = await batchRestrictSlots(
-        activeCarts.map((c) => c.id),
-        date,
-        date,
-        PERIODS,
-        action,
-        action === "restrict"
-          ? {
-              category,
-              reason: reason.trim() || undefined,
-            }
-          : undefined,
-      )
-      if (!res.ok) {
-        toast({
-          title: action === "restrict" ? "Could not lock day" : "Could not unlock day",
-          description: res.error,
-          variant: "destructive",
-        })
-        return
-      }
-      toast({
-        title: action === "restrict" ? "Day locked" : "Day unlocked",
-        description:
-          action === "restrict"
-            ? `${res.data?.restrictedCount ?? 0} slots locked${
-                res.data?.skippedBookedCount
-                  ? ` · ${res.data.skippedBookedCount} booked skipped`
-                  : ""
-              }`
-            : `${res.data?.restrictedCount ?? 0} locks cleared`,
-      })
-      onApplied()
-      onOpenChange(false)
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-0 overflow-hidden rounded-xl border border-neutral-200 bg-white p-0 shadow-[0_8px_30px_rgba(0,0,0,0.08)] sm:max-w-sm">
-        <DialogHeader className="space-y-1 border-b border-neutral-100 px-5 py-4 text-left">
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-7 items-center justify-center rounded-md border border-neutral-200 bg-neutral-50 text-neutral-950">
-              <Pencil className="size-3.5" strokeWidth={1.75} />
-            </span>
-            <div className="min-w-0">
-              <DialogTitle className="text-[14px] font-semibold tracking-[-0.02em] text-neutral-950">
-                Edit day locks
-              </DialogTitle>
-              <DialogDescription className="mt-0.5 text-[12px] tabular-nums text-neutral-500">
-                {format(parseISO(date), "EEEE, MMM d, yyyy")}
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <div className="space-y-4 px-5 py-4">
-          <div className="grid grid-cols-3 divide-x divide-neutral-100 rounded-md border border-neutral-200 bg-white text-center">
-            <div className="px-2 py-2.5">
-              <p className="text-[15px] font-semibold tabular-nums tracking-[-0.02em] text-neutral-950">
-                {openSlots}
-              </p>
-              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-                Open
-              </p>
-            </div>
-            <div className="px-2 py-2.5">
-              <p className="text-[15px] font-semibold tabular-nums tracking-[-0.02em] text-neutral-950">
-                {dayBookings.length}
-              </p>
-              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-                Booked
-              </p>
-            </div>
-            <div className="px-2 py-2.5">
-              <p className="text-[15px] font-semibold tabular-nums tracking-[-0.02em] text-neutral-950">
-                {dayLocks.length}
-              </p>
-              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-                Locked
-              </p>
-            </div>
-          </div>
-
-          <div>
-            <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-              Lock type
-            </p>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => setCategory("general")}
-                className={cn(
-                  "flex h-9 items-center justify-center gap-1.5 rounded-md border text-[12.5px] font-medium transition-colors",
-                  category === "general"
-                    ? "border-neutral-950 bg-neutral-950 text-white"
-                    : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50",
-                )}
-              >
-                <Lock className="size-3.5" strokeWidth={1.5} />
-                General
-              </button>
-              <button
-                type="button"
-                onClick={() => setCategory("ap_exam")}
-                className={cn(
-                  "flex h-9 items-center justify-center gap-1.5 rounded-md border text-[12.5px] font-medium transition-colors",
-                  category === "ap_exam"
-                    ? "border-neutral-950 bg-neutral-950 text-white"
-                    : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50",
-                )}
-              >
-                <Shield className="size-3.5" strokeWidth={1.5} />
-                AP exam
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-              Note
-            </p>
-            <Input
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Optional (shown to teachers)"
-              className="h-9 rounded-md border-neutral-200 bg-white text-[13px] shadow-none focus-visible:ring-neutral-950/10"
-            />
-          </div>
-
-          <p className="text-[11.5px] leading-relaxed text-neutral-400">
-            Locks open slots for all active carts and periods. Existing bookings
-            are never overwritten.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-2 border-t border-neutral-100 bg-neutral-50/60 px-5 py-3.5 sm:flex-row-reverse">
-          <button
-            type="button"
-            disabled={busy !== null || openSlots === 0}
-            onClick={() => void apply("restrict")}
-            className={cn(
-              "inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md",
-              "bg-neutral-950 text-[13px] font-medium text-white",
-              "hover:bg-neutral-800 disabled:opacity-40",
-            )}
-          >
-            {busy === "lock" ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Lock className="size-3.5" strokeWidth={1.5} />
-            )}
-            Lock open slots
-          </button>
-          <button
-            type="button"
-            disabled={busy !== null || dayLocks.length === 0}
-            onClick={() => void apply("available")}
-            className={cn(
-              "inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md",
-              "border border-neutral-200 bg-white text-[13px] font-medium text-neutral-700",
-              "hover:bg-neutral-50 disabled:opacity-40",
-            )}
-          >
-            {busy === "unlock" ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Unlock className="size-3.5" strokeWidth={1.5} />
-            )}
-            Unlock day
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
   )
 }

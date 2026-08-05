@@ -128,6 +128,12 @@ function requireSession(): SessionUser | null {
     (entry) => entry.email.toLowerCase() === session.email.toLowerCase(),
   );
 
+  // Never demote a live admin session because allowlist/store lagged as teacher.
+  const role =
+    session.role === "admin" || user?.role === "admin"
+      ? ("admin" as const)
+      : (user?.role ?? session.role);
+
   if (user) {
     return {
       id: user.id.startsWith("pending:") ? session.id ?? user.id : user.id,
@@ -135,7 +141,7 @@ function requireSession(): SessionUser | null {
       firstName: session.firstName,
       lastName: session.lastName,
       email: user.email,
-      role: user.role,
+      role,
       avatarUrl: user.avatarUrl ?? session.avatarUrl,
       title: user.title ?? session.title,
       department: user.department ?? session.department,
@@ -151,7 +157,7 @@ function requireSession(): SessionUser | null {
     id: session.id ?? session.email,
     name: session.name,
     email: session.email,
-    role: session.role,
+    role,
     avatarUrl: session.avatarUrl,
     employmentType: session.employmentType,
     title: session.title,
@@ -942,7 +948,9 @@ export async function toggleSlotRestriction(
   options?: { category?: RestrictionCategory; reason?: string },
 ): Promise<Result> {
   const session = requireSession();
-  if (!session || session.role !== "admin") {
+  const isAdmin =
+    session?.role === "admin" || getSession()?.role === "admin";
+  if (!session || !isAdmin) {
     return { ok: false, error: "Admin only." };
   }
 
@@ -996,6 +1004,12 @@ export async function toggleSlotRestriction(
   return { ok: true };
 }
 
+/** Parse `yyyy-MM-dd` as a local calendar day (avoids UTC shift from parseISO). */
+function parseLocalYmd(ymd: string): Date {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y ?? 0, (m ?? 1) - 1, d ?? 1);
+}
+
 export async function batchRestrictSlots(
   cartIds: string[],
   startDate: string,
@@ -1009,44 +1023,84 @@ export async function batchRestrictSlots(
   },
 ): Promise<Result<{ restrictedCount: number; skippedBookedCount: number }>> {
   const session = requireSession();
-  if (!session || session.role !== "admin") {
+  // Prefer live session role; store profile can lag after promote-to-admin.
+  const isAdmin =
+    session?.role === "admin" || getSession()?.role === "admin";
+  if (!session || !isAdmin) {
     return { ok: false, error: "Admin only." };
   }
 
   let restrictedCount = 0;
   let skippedBookedCount = 0;
 
-  const start = parseISO(startDate);
-  const end = parseISO(endDate);
+  const uniqueCartIds = Array.from(new Set(cartIds.filter(Boolean)));
+  if (uniqueCartIds.length === 0) {
+    return { ok: false, error: "No carts selected." };
+  }
+  if (periods.length === 0) {
+    return { ok: false, error: "No periods selected." };
+  }
+
+  // Local midnights so "2026-08-13" stays Aug 13 in every timezone.
+  const start = parseLocalYmd(startDate);
+  const end = parseLocalYmd(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return { ok: false, error: "Invalid date range." };
+  }
+  if (start > end) {
+    return { ok: false, error: "Start date must be on or before end date." };
+  }
+
   const days = eachDayOfInterval({ start, end }).filter((day) => {
     if (!options?.weekdaysOnly) return true;
     const weekday = day.getDay();
     return weekday !== 0 && weekday !== 6;
   });
   const dates = days.map((day) => format(day, "yyyy-MM-dd"));
+  if (dates.length === 0) {
+    return { ok: false, error: "No dates in range." };
+  }
 
   if (isRemoteEnabled()) {
     const state = getState();
+    const normalizeDate = (value: string) =>
+      value.length >= 10 ? value.slice(0, 10) : value;
+    const dateSet = new Set(dates);
 
     if (action === "available") {
+      restrictedCount = state.slotRestrictions.filter(
+        (entry) =>
+          uniqueCartIds.includes(entry.cartId) &&
+          dateSet.has(normalizeDate(entry.date)) &&
+          periods.includes(entry.period),
+      ).length;
       const { error } = await dbDeleteRestrictionsMatching(
-        cartIds,
+        uniqueCartIds,
         dates,
         periods,
       );
       if (error) return { ok: false, error };
-      restrictedCount = state.slotRestrictions.filter(
-        (entry) =>
-          cartIds.includes(entry.cartId) &&
-          dates.includes(entry.date) &&
-          periods.includes(entry.period),
-      ).length;
-      const refreshed = await refreshRemote();
-      if (!refreshed.ok) return refreshed;
+
+      mutate((draft) => {
+        draft.slotRestrictions = draft.slotRestrictions.filter(
+          (entry) =>
+            !(
+              uniqueCartIds.includes(entry.cartId) &&
+              dateSet.has(normalizeDate(entry.date)) &&
+              periods.includes(entry.period)
+            ),
+        );
+      });
+
+      try {
+        await refreshRemote();
+      } catch {
+        // keep optimistic clear
+      }
       return { ok: true, data: { restrictedCount, skippedBookedCount } };
     }
 
-    const toInsert: Array<{
+    const toWrite: Array<{
       cartId: string;
       date: string;
       period: Period;
@@ -1054,62 +1108,103 @@ export async function batchRestrictSlots(
       reason?: string;
     }> = [];
 
+    const category: RestrictionCategory = options?.category ?? "general";
+
     for (const date of dates) {
-      for (const cartId of cartIds) {
+      for (const cartId of uniqueCartIds) {
         for (const period of periods) {
           const booked = state.bookings.some(
             (booking) =>
               booking.cartId === cartId &&
-              booking.date === date &&
+              normalizeDate(booking.date) === date &&
               booking.period === period,
           );
           if (booked) {
             skippedBookedCount += 1;
             continue;
           }
-          const exists = state.slotRestrictions.some(
-            (entry) =>
-              entry.cartId === cartId &&
-              entry.date === date &&
-              entry.period === period,
-          );
-          if (exists) continue;
-          toInsert.push({
+          // Always upsert non-booked slots so re-lock can update type/note.
+          toWrite.push({
             cartId,
             date,
             period,
-            category: options?.category ?? "other",
+            category,
             reason: options?.reason,
           });
         }
       }
     }
 
-    const { error } = await dbUpsertRestrictions(toInsert);
+    if (toWrite.length === 0) {
+      return {
+        ok: true,
+        data: { restrictedCount: 0, skippedBookedCount },
+      };
+    }
+
+    const { error } = await dbUpsertRestrictions(toWrite);
     if (error) return { ok: false, error };
-    restrictedCount = toInsert.length;
-    const refreshed = await refreshRemote();
-    if (!refreshed.ok) return refreshed;
+    restrictedCount = toWrite.length;
+
+    // Optimistic local update so the board paints locks immediately even if
+    // the follow-up hydrate is slow or fails in local dev.
+    mutate((draft) => {
+      for (const row of toWrite) {
+        const idx = draft.slotRestrictions.findIndex(
+          (entry) =>
+            entry.cartId === row.cartId &&
+            normalizeDate(entry.date) === row.date &&
+            entry.period === row.period,
+        );
+        if (idx >= 0) {
+          draft.slotRestrictions[idx] = {
+            ...draft.slotRestrictions[idx]!,
+            category: row.category,
+            reason: row.reason,
+            date: row.date,
+          };
+          continue;
+        }
+        draft.slotRestrictions.push({
+          id: makeId("sr"),
+          cartId: row.cartId,
+          date: row.date,
+          period: row.period,
+          category: row.category,
+          reason: row.reason,
+        });
+      }
+    });
+
+    // Best-effort rehydrate from Postgres (do not fail the lock if this errors).
+    try {
+      await refreshRemote();
+    } catch {
+      // keep optimistic state
+    }
     return { ok: true, data: { restrictedCount, skippedBookedCount } };
   }
 
   const __demo = assertLocalDemoAllowed();
   if (!__demo.ok) return __demo;
+  const category: RestrictionCategory = options?.category ?? "general";
+  const normalizeDate = (value: string) =>
+    value.length >= 10 ? value.slice(0, 10) : value;
   mutate((draft) => {
     for (const day of days) {
       const date = format(day, "yyyy-MM-dd");
-      for (const cartId of cartIds) {
+      for (const cartId of uniqueCartIds) {
         for (const period of periods) {
           const booked = draft.bookings.some(
             (booking) =>
               booking.cartId === cartId &&
-              booking.date === date &&
+              normalizeDate(booking.date) === date &&
               booking.period === period,
           );
           const existingIndex = draft.slotRestrictions.findIndex(
             (entry) =>
               entry.cartId === cartId &&
-              entry.date === date &&
+              normalizeDate(entry.date) === date &&
               entry.period === period,
           );
 
@@ -1125,14 +1220,23 @@ export async function batchRestrictSlots(
             skippedBookedCount += 1;
             continue;
           }
-          if (existingIndex >= 0) continue;
+          if (existingIndex >= 0) {
+            draft.slotRestrictions[existingIndex] = {
+              ...draft.slotRestrictions[existingIndex]!,
+              category,
+              reason: options?.reason,
+              date,
+            };
+            restrictedCount += 1;
+            continue;
+          }
 
           draft.slotRestrictions.push({
             id: makeId("sr"),
             cartId,
             date,
             period,
-            category: options?.category ?? "other",
+            category,
             reason: options?.reason,
           });
           restrictedCount += 1;
