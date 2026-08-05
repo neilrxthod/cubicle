@@ -9,7 +9,7 @@ Cubicle is an internal operations tool for teachers and IT. It provides period-b
 | **Production** | [https://mycubicle.app](https://mycubicle.app) |
 | **School domain** | `@rbe.sk.ca` |
 | **IT contact** | [it-support@rbe.sk.ca](mailto:it-support@rbe.sk.ca) |
-| **Platform version** | `1.0.40` (bumped on each git commit via hook) |
+| **Platform version** | Shown in the product header (auto-bumped on each git commit) |
 | **Repository** | Private — all rights reserved |
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
@@ -59,11 +59,10 @@ Cubicle processes **staff operational data** (identity from Google Sign-In, book
 
 | Tab | Description |
 |-----|-------------|
-| **Inventory** | Cart cards with status rails; **Pause** / **Resume**; conflict dialog to move or cancel bookings before pause |
-| **Reservations** | Filterable table with teacher PFPs; quick chips (Today / Tomorrow / This week / On paused carts); CSV + PDF export; reassign / delete |
-| **Reports** | Brand-mesh KPI strip, teacher usage, issue mix; export bookings / usage / issues |
-| **Staff** | Allowlist invite/restore/remove; verified badge; credentials |
-| **Restrictions** | Day grid locks (general / AP exam); booking window; batch tools |
+| **Inventory** | Add / edit / delete carts (name + location); **Pause** / **Resume**; conflict dialog before pause; optional full operational reset |
+| **Reservations** | Filterable table; quick chips; LiquidMetal CSV/PDF export; reassign / delete |
+| **Reports** | KPI strip, usage charts, issue mix; LiquidMetal export |
+| **Staff** | Allowlist invite/restore/remove; verified badge |
 
 ### Auth & setup
 
@@ -323,17 +322,6 @@ Permanent staff may show a **verified** indicator; substitute / temporary staff 
 | [`supabase/DATA_DURABILITY.md`](./supabase/DATA_DURABILITY.md) | Why deploys never erase school data |
 | [`components/tool-ui/stats-display/README.md`](./components/tool-ui/stats-display/README.md) | Schedule stats component |
 | [`AGENTS.md`](./AGENTS.md) | Agent notes for this Next.js version |
-
----
-
-## Changelog
-
-Product release notes are also available in-app at [`/changelog`](https://mycubicle.app/changelog). Recent platform themes:
-
-- Corporate admin inventory, reservations, and reports
-- Pause-cart conflict flow (stage moves / cancels, then pause)
-- One-time production onboarding; Settings for teaching schedule and booking window
-- Clearer product copy and export tools
 
 ---
 
