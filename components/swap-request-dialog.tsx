@@ -29,13 +29,14 @@ export function SwapRequestDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="gap-0 overflow-hidden rounded-2xl border-border/60 bg-white p-0 shadow-xl sm:max-w-md">
         <DialogHeader className="space-y-2 border-b border-border/60 px-5 py-5 text-left sm:px-6">
-          <DialogTitle>Request slot swap</DialogTitle>
+          <DialogTitle>Request cart swap</DialogTitle>
           <DialogDescription>
-            Ask {booking.teacherName} to give you this slot
+            Ask {booking.teacherName} to swap carts for this period
             {booking.className?.trim()
               ? ` (${booking.className.trim()})`
               : ""}
-            .
+            . If you already have a cart booked, you will exchange slots when
+            they accept.
           </DialogDescription>
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <span className="type-label rounded-full border border-border bg-muted/20 px-2.5 py-1">

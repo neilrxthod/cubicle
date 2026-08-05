@@ -336,8 +336,10 @@ create policy "Users can create swap requests"
   to authenticated
   with check (auth.uid() = requester_id);
 
+-- Booking owner (receiver), requester, or admin can accept/decline.
 drop policy if exists "Requester or admin can update swaps" on public.swap_requests;
-create policy "Requester or admin can update swaps"
+drop policy if exists "Owner requester or admin can update swaps" on public.swap_requests;
+create policy "Owner requester or admin can update swaps"
   on public.swap_requests for update
   to authenticated
   using (
@@ -345,6 +347,23 @@ create policy "Requester or admin can update swaps"
     or exists (
       select 1 from public.profiles p
       where p.id = auth.uid() and p.role = 'admin'
+    )
+    or exists (
+      select 1 from public.bookings b
+      where b.id = swap_requests.booking_id
+        and b.teacher_id = auth.uid()
+    )
+  )
+  with check (
+    auth.uid() = requester_id
+    or exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+    or exists (
+      select 1 from public.bookings b
+      where b.id = swap_requests.booking_id
+        and b.teacher_id = auth.uid()
     )
   );
 

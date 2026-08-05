@@ -30,6 +30,7 @@ Run each file fully, wait for **Success**:
 | 5 | `realtime.sql` | **Live multi-user board updates** |
 | 6 | `employment-type.sql` | Permanent / sub / temp + blue tick |
 | 7 | `issues-delete.sql` | Allow reporters/admins to **delete issues** from Postgres |
+| 8 | `swap-accept.sql` | **Two-way cart swap accept** (owners can accept; both slots exchange) |
 
 **Durability:** App deploys never touch this data. See [`DATA_DURABILITY.md`](./DATA_DURABILITY.md).  
 Never `drop table` / `truncate` on a live school project without a backup.

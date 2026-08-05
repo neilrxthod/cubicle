@@ -820,8 +820,40 @@ export async function acceptSwap(requestId: string): Promise<Result> {
     return { ok: false, error: "Only the owner can accept." };
   }
 
+  // Requester's cart for the same date/period — needed for a true two-way swap.
+  const counterparty = state.bookings.find(
+    (entry) =>
+      entry.teacherId === request.requesterId &&
+      entry.date === booking.date &&
+      entry.period === booking.period &&
+      entry.id !== booking.id,
+  );
+
+  const editor = {
+    id: session.id,
+    name: session.name,
+    avatarUrl: session.avatarUrl,
+  };
+
   if (isRemoteEnabled()) {
-    const { error } = await dbAcceptSwap(request);
+    const { error } = await dbAcceptSwap(request, {
+      counterpartyBookingId: counterparty?.id,
+      originalOwner: {
+        teacherId: booking.teacherId,
+        teacherName: booking.teacherName,
+        className: booking.className,
+        subject: booking.subject,
+        notes: booking.notes,
+      },
+      requesterSlot: counterparty
+        ? {
+            className: counterparty.className,
+            subject: counterparty.subject,
+            notes: counterparty.notes,
+          }
+        : undefined,
+      editor,
+    });
     if (error) return { ok: false, error };
     return refreshRemote();
   }
@@ -831,15 +863,55 @@ export async function acceptSwap(requestId: string): Promise<Result> {
   mutate((draft) => {
     const target = draft.bookings.find((entry) => entry.id === request.bookingId);
     const swap = draft.swapRequests.find((entry) => entry.id === requestId);
-    if (target && swap) {
+    if (!target || !swap) return;
+
+    const source = draft.bookings.find(
+      (entry) =>
+        entry.teacherId === swap.requesterId &&
+        entry.date === target.date &&
+        entry.period === target.period &&
+        entry.id !== target.id,
+    );
+
+    const editedAt = new Date().toISOString();
+    const stamp = {
+      lastEditedById: session.id,
+      lastEditedByName: session.name,
+      lastEditedByAvatarUrl: session.avatarUrl,
+      lastEditedAt: editedAt,
+    };
+
+    if (source) {
+      // True cart swap: each teacher keeps class/subject/notes, cart cells exchange people.
+      const targetSnap = {
+        teacherId: target.teacherId,
+        teacherName: target.teacherName,
+        className: target.className,
+        subject: target.subject,
+        notes: target.notes,
+      };
+
+      target.teacherId = source.teacherId;
+      target.teacherName = source.teacherName;
+      target.className = source.className;
+      target.subject = source.subject;
+      target.notes = source.notes;
+      Object.assign(target, stamp);
+
+      source.teacherId = targetSnap.teacherId;
+      source.teacherName = targetSnap.teacherName;
+      source.className = targetSnap.className;
+      source.subject = targetSnap.subject;
+      source.notes = targetSnap.notes;
+      Object.assign(source, stamp);
+    } else {
+      // Requester has no cart this period — one-way handoff of this slot.
       target.teacherId = swap.requesterId;
       target.teacherName = swap.requesterName;
-      target.lastEditedById = session.id;
-      target.lastEditedByName = session.name;
-      target.lastEditedByAvatarUrl = session.avatarUrl;
-      target.lastEditedAt = new Date().toISOString();
-      swap.status = "accepted";
+      Object.assign(target, stamp);
     }
+
+    swap.status = "accepted";
   });
 
   return { ok: true };

@@ -49,7 +49,7 @@ export function SwapRequestsList({
               <div className="min-w-0">
                 <p className="truncate text-[13px] text-neutral-900">
                   <span className="font-semibold">{req.requesterName}</span>
-                  <span className="text-neutral-500"> wants </span>
+                  <span className="text-neutral-500"> wants to swap for </span>
                   {cart?.name} · {booking.period} ·{" "}
                   {format(parseISO(booking.date), "MMM d")}
                 </p>

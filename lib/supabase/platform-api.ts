@@ -448,18 +448,155 @@ export async function dbRequestSwap(input: {
   return { error: error?.message };
 }
 
+export type AcceptSwapOptions = {
+  /** Requester's booking for the same date/period (true two-way swap). */
+  counterpartyBookingId?: string;
+  originalOwner: {
+    teacherId: string;
+    teacherName: string;
+    className?: string;
+    subject?: string;
+    notes?: string;
+  };
+  requesterSlot?: {
+    className?: string;
+    subject?: string;
+    notes?: string;
+  };
+  editor?: {
+    id: string;
+    name: string;
+    avatarUrl?: string;
+  };
+};
+
+/**
+ * Accept a swap: exchange both cart slots when the requester also has a booking
+ * for the same date/period; otherwise transfer the requested slot one-way.
+ *
+ * Prefers the security-definer RPC (see supabase/swap-accept.sql) so RLS allows
+ * updating the counterparty booking. Falls back to direct updates when the RPC
+ * is not yet installed (admins can update both rows under RLS).
+ */
 export async function dbAcceptSwap(
   request: SwapRequest,
+  options: AcceptSwapOptions,
 ): Promise<{ error?: string }> {
   const supabase = client();
-  const { error: bookingError } = await supabase
-    .from("bookings")
-    .update({
+  const editedAt = new Date().toISOString();
+  const editor = options.editor;
+
+  // Atomic path: two-way swap + status update under security definer.
+  const { error: rpcError } = await supabase.rpc("accept_swap_request", {
+    p_request_id: request.id,
+    p_editor_id: editor?.id ?? null,
+    p_editor_name: editor?.name ?? null,
+    p_editor_avatar_url: editor?.avatarUrl ?? null,
+  });
+
+  if (!rpcError) return {};
+
+  const rpcMissing =
+    /could not find the function|function .* does not exist|PGRST202/i.test(
+      rpcError.message ?? "",
+    );
+  if (!rpcMissing) {
+    return { error: rpcError.message };
+  }
+
+  // Fallback when swap-accept.sql has not been applied yet.
+  const ownerPatch = {
+    teacher_id: options.originalOwner.teacherId,
+    teacher_name: options.originalOwner.teacherName,
+    class_name: options.originalOwner.className ?? null,
+    subject: options.originalOwner.subject ?? null,
+    notes: options.originalOwner.notes ?? null,
+  };
+  const requesterPatch = {
+    teacher_id: request.requesterId,
+    teacher_name: request.requesterName,
+    class_name: options.requesterSlot?.className ?? null,
+    subject: options.requesterSlot?.subject ?? null,
+    notes: options.requesterSlot?.notes ?? null,
+  };
+
+  const stamp = editor
+    ? {
+        last_edited_by_id: editor.id,
+        last_edited_by_name: editor.name,
+        last_edited_by_avatar_url: editor.avatarUrl ?? null,
+        last_edited_at: editedAt,
+      }
+    : {};
+
+  if (options.counterpartyBookingId) {
+    // Target slot ← requester (keeps requester class info).
+    let { error: targetError } = await supabase
+      .from("bookings")
+      .update({ ...requesterPatch, ...stamp })
+      .eq("id", request.bookingId);
+    if (targetError && /last_edited/i.test(targetError.message ?? "")) {
+      const retry = await supabase
+        .from("bookings")
+        .update(requesterPatch)
+        .eq("id", request.bookingId);
+      targetError = retry.error;
+    }
+    if (targetError) return { error: targetError.message };
+
+    // Counterparty slot ← original owner (keeps owner class info).
+    let { error: sourceError } = await supabase
+      .from("bookings")
+      .update({ ...ownerPatch, ...stamp })
+      .eq("id", options.counterpartyBookingId);
+    if (sourceError && /last_edited/i.test(sourceError.message ?? "")) {
+      const retry = await supabase
+        .from("bookings")
+        .update(ownerPatch)
+        .eq("id", options.counterpartyBookingId);
+      sourceError = retry.error;
+    }
+    if (sourceError) {
+      // Roll back target so we don't leave a one-sided transfer.
+      await supabase
+        .from("bookings")
+        .update({
+          teacher_id: options.originalOwner.teacherId,
+          teacher_name: options.originalOwner.teacherName,
+          class_name: options.originalOwner.className ?? null,
+          subject: options.originalOwner.subject ?? null,
+          notes: options.originalOwner.notes ?? null,
+        })
+        .eq("id", request.bookingId);
+      return {
+        error:
+          sourceError.message ||
+          "Could not update the requester's cart. Run supabase/swap-accept.sql in the SQL Editor, then try again.",
+      };
+    }
+  } else {
+    // One-way: requester has no cart this period — hand over this slot only.
+    const oneWay = {
       teacher_id: request.requesterId,
       teacher_name: request.requesterName,
-    })
-    .eq("id", request.bookingId);
-  if (bookingError) return { error: bookingError.message };
+      ...stamp,
+    };
+    let { error: bookingError } = await supabase
+      .from("bookings")
+      .update(oneWay)
+      .eq("id", request.bookingId);
+    if (bookingError && /last_edited/i.test(bookingError.message ?? "")) {
+      const retry = await supabase
+        .from("bookings")
+        .update({
+          teacher_id: request.requesterId,
+          teacher_name: request.requesterName,
+        })
+        .eq("id", request.bookingId);
+      bookingError = retry.error;
+    }
+    if (bookingError) return { error: bookingError.message };
+  }
 
   const { error } = await supabase
     .from("swap_requests")

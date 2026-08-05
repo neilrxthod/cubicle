@@ -57,6 +57,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
+  ArrowLeftRight,
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
@@ -917,9 +918,13 @@ export function DailyBoard({
                         avatarByTeacherId.get(booking.teacherId) ??
                         (isMine ? session.avatarUrl : undefined)
                       const classLabel = booking.className?.trim()
+                      // Teachers request swap on someone else's slot; owners/admins manage.
+                      const isSwapTarget = !isMine && session.role !== "admin"
                       const title = isMine
                         ? `${classLabel || "Your booking"} — click to manage or cancel`
-                        : `${classLabel || personName} · ${personName} — click to request swap`
+                        : isSwapTarget
+                          ? `${classLabel || personName} · ${personName} — click to request swap`
+                          : `${classLabel || personName} · ${personName} — click to manage`
 
                       return (
                         <button
@@ -930,7 +935,7 @@ export function DailyBoard({
                           aria-label={title}
                           className={cn(
                             cellBase,
-                            "items-center justify-center p-1.5",
+                            "group/slot relative items-center justify-center p-1.5",
                             // Booking ink #211d1d — distinct from period header
                             isMine
                               ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/20"
@@ -940,11 +945,42 @@ export function DailyBoard({
                               : "bg-[#211d1d]/10 hover:bg-[#211d1d]/15",
                           )}
                         >
-                          <SlotPfp
-                            name={personName}
-                            src={avatarSrc}
-                            onDark={isMine}
-                          />
+                          <span
+                            className={cn(
+                              "inline-flex transition-[opacity,transform] duration-150 ease-out",
+                              isSwapTarget &&
+                                "group-hover/slot:opacity-30 group-focus-visible/slot:opacity-30",
+                            )}
+                          >
+                            <SlotPfp
+                              name={personName}
+                              src={avatarSrc}
+                              onDark={isMine}
+                            />
+                          </span>
+                          {isSwapTarget ? (
+                            <span
+                              aria-hidden
+                              className={cn(
+                                "pointer-events-none absolute inset-0 flex items-center justify-center",
+                                "opacity-0 transition-opacity duration-150 ease-out",
+                                "group-hover/slot:opacity-100 group-focus-visible/slot:opacity-100",
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "flex size-8 items-center justify-center rounded-full",
+                                  "bg-white/90 text-neutral-900 shadow-sm ring-1 ring-black/10",
+                                  "sm:size-9",
+                                )}
+                              >
+                                <ArrowLeftRight
+                                  className="size-3.5 sm:size-4"
+                                  strokeWidth={1.75}
+                                />
+                              </span>
+                            </span>
+                          ) : null}
                         </button>
                       )
                     }
