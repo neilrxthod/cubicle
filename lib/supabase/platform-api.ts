@@ -181,12 +181,14 @@ export async function fetchPlatformState(): Promise<PlatformState> {
   );
 
   // Profiles keep history/names; allowlist is source of access + employment type.
-  // If allowlist could not be loaded, leave allowlisted undefined (not "revoked").
+  // Teachers cannot read allowed_emails (admin-only RLS) — that returns [] without
+  // error. Do NOT treat empty allowlist as “everyone revoked” or share UI empties.
+  const trustAllowlist = allowlistKnown && allowlist.length > 0;
   const profileUsers: User[] = profiles.map((row) => {
     const mapped = mapProfile(row);
     const emailKey = mapped.email.toLowerCase().trim();
     const allowed = allowlistByEmail.get(emailKey);
-    const allowlisted = allowlistKnown ? Boolean(allowed) : undefined;
+    const allowlisted = trustAllowlist ? Boolean(allowed) : undefined;
     return {
       ...mapped,
       // Prefer profile admin over allowlist teacher (don't demote active admins).

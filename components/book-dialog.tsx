@@ -1,8 +1,14 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import {
+  useMemo,
+  useState,
+  useTransition,
+  type ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
+import { User } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,13 +17,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { createBooking } from "@/lib/actions";
 import { getSessionSnapshot } from "@/lib/auth/session";
 import {
@@ -26,12 +25,10 @@ import {
 } from "@/lib/onboarding/storage";
 import { usePlatformStore } from "@/lib/data/platform-store";
 import { toast } from "@/hooks/use-toast";
-import type { Cart, Period } from "@/lib/types";
+import type { Cart, Period, User as StaffUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const SHARE_NONE = "__none__";
-
-/** One-tap book. Optional share/borrow with a colleague (dual PFP on board). */
+/** One-tap book. Optional share via colleague avatar icons. */
 export function BookDialog({
   cart,
   period,
@@ -48,13 +45,16 @@ export function BookDialog({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [custom, setCustom] = useState("");
-  const [shareWith, setShareWith] = useState(SHARE_NONE);
+  /** null = just me; string = colleague id */
+  const [shareWithId, setShareWithId] = useState<string | null>(null);
 
   const session = getSessionSnapshot();
   const isAdmin = session?.role === "admin";
 
+  // All signed-in staff (teachers + admins) — not pending invites.
+  // Share is available to every role that can book, not admin-only.
   const colleagues = useMemo(() => {
-    if (!session) return [];
+    if (!session) return [] as StaffUser[];
     return platform.users
       .filter(
         (u) =>
@@ -67,6 +67,10 @@ export function BookDialog({
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [platform.users, session]);
+
+  const selectedPartner = shareWithId
+    ? colleagues.find((c) => c.id === shareWithId)
+    : undefined;
 
   const dateLabel = (() => {
     try {
@@ -84,6 +88,11 @@ export function BookDialog({
     return match?.subject.trim() || loads[0]?.subject.trim() || "";
   }
 
+  function togglePartner(id: string) {
+    setShareWithId((cur) => (cur === id ? null : id));
+    setError(null);
+  }
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="gap-0 overflow-hidden rounded-2xl border-border/60 bg-white p-0 shadow-xl sm:max-w-sm">
@@ -95,6 +104,14 @@ export function BookDialog({
             {period}
             <span className="text-neutral-300"> · </span>
             {dateLabel}
+            {selectedPartner ? (
+              <>
+                <span className="text-neutral-300"> · </span>
+                <span className="text-neutral-600">
+                  with {selectedPartner.name.split(/\s+/)[0]}
+                </span>
+              </>
+            ) : null}
           </DialogDescription>
         </DialogHeader>
 
@@ -119,56 +136,92 @@ export function BookDialog({
             </div>
           ) : null}
 
-          {colleagues.length > 0 ? (
-            <div className="space-y-1.5">
-              <label
-                htmlFor="book-share"
-                className="text-[11px] font-medium tracking-[0.04em] text-neutral-400"
+          {/* Share row for every role that can book — icon picker */}
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-medium tracking-[0.04em] text-neutral-400">
+              Share with
+            </p>
+            {colleagues.length > 0 ? (
+              <div
+                className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                role="listbox"
+                aria-label="Share with colleague"
               >
-                Share / borrow
-              </label>
-              <Select
-                value={shareWith}
-                onValueChange={setShareWith}
-                disabled={pending}
-              >
-                <SelectTrigger
-                  id="book-share"
-                  size="default"
-                  className={cn(
-                    "h-9 w-full rounded-lg border-neutral-200 bg-white px-3",
-                    "text-[13px] font-medium text-neutral-900 shadow-none",
-                    "data-[size=default]:h-9",
-                  )}
-                >
-                  <SelectValue placeholder="Just me" />
-                </SelectTrigger>
-                <SelectContent
-                  position="popper"
-                  className="z-[80] rounded-lg border-neutral-200 shadow-lg"
-                >
-                  <SelectItem
-                    value={SHARE_NONE}
-                    className="cursor-pointer rounded-md py-2 text-[13px]"
-                  >
-                    Just me
-                  </SelectItem>
-                  {colleagues.map((u) => (
-                    <SelectItem
-                      key={u.id}
-                      value={u.id}
-                      className="cursor-pointer rounded-md py-2 text-[13px] font-medium"
+                <ShareIconButton
+                  selected={shareWithId === null}
+                  disabled={pending}
+                  label="Just me"
+                  onClick={() => {
+                    setShareWithId(null);
+                    setError(null);
+                  }}
+                  face={
+                    <span
+                      className={cn(
+                        "flex size-full items-center justify-center",
+                        shareWithId === null
+                          ? "bg-neutral-950 text-white"
+                          : "bg-neutral-100 text-neutral-500",
+                      )}
                     >
-                      {u.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-[11px] leading-snug text-neutral-400">
-                Shared slots show both profile photos on the board.
+                      <User className="size-4" strokeWidth={1.75} />
+                    </span>
+                  }
+                />
+
+                {colleagues.map((u) => {
+                  const selected = shareWithId === u.id;
+                  const first = u.name.trim().split(/\s+/)[0] || u.name;
+                  return (
+                    <ShareIconButton
+                      key={u.id}
+                      selected={selected}
+                      disabled={pending}
+                      label={u.name}
+                      onClick={() => togglePartner(u.id)}
+                      face={
+                        u.avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={u.avatarUrl}
+                            alt=""
+                            referrerPolicy="no-referrer"
+                            draggable={false}
+                            className="size-full object-cover"
+                          />
+                        ) : (
+                          <span
+                            className={cn(
+                              "flex size-full items-center justify-center text-[11px] font-medium",
+                              selected
+                                ? "bg-neutral-950 text-white"
+                                : "bg-neutral-100 text-neutral-600",
+                            )}
+                          >
+                            {initials(u.name)}
+                          </span>
+                        )
+                      }
+                      caption={
+                        <span
+                          className={cn(
+                            "mt-1 max-w-[2.75rem] truncate text-center text-[10px] font-medium leading-tight",
+                            selected ? "text-neutral-950" : "text-neutral-400",
+                          )}
+                        >
+                          {first}
+                        </span>
+                      }
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[12px] text-neutral-400">
+                No other staff signed in yet — only you can be on this slot.
               </p>
-            </div>
-          ) : null}
+            )}
+          </div>
 
           {error ? (
             <p className="text-[12.5px] font-medium text-red-600">{error}</p>
@@ -200,8 +253,8 @@ export function BookDialog({
                   formData.set("subject", subject);
                   formData.set("className", subject);
                 }
-                if (shareWith && shareWith !== SHARE_NONE) {
-                  formData.set("sharedWithId", shareWith);
+                if (shareWithId) {
+                  formData.set("sharedWithId", shareWithId);
                 }
                 startTransition(async () => {
                   const res = await createBooking(formData);
@@ -215,10 +268,6 @@ export function BookDialog({
                     router.refresh();
                     return;
                   }
-                  const partner =
-                    shareWith !== SHARE_NONE
-                      ? colleagues.find((c) => c.id === shareWith)?.name
-                      : undefined;
                   if (res.ok && res.data?.shareSkipped) {
                     toast({
                       title: "Cart booked",
@@ -227,9 +276,11 @@ export function BookDialog({
                     });
                   } else {
                     toast({
-                      title: partner ? "Cart booked & shared" : "Cart booked",
-                      description: partner
-                        ? `${cart.name} · ${period} · with ${partner}`
+                      title: selectedPartner
+                        ? "Cart booked & shared"
+                        : "Cart booked",
+                      description: selectedPartner
+                        ? `${cart.name} · ${period} · with ${selectedPartner.name}`
                         : `${cart.name} · ${period}`,
                     });
                   }
@@ -245,5 +296,60 @@ export function BookDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
+  }
+  return (parts[0]?.slice(0, 2) ?? "?").toUpperCase();
+}
+
+function ShareIconButton({
+  selected,
+  disabled,
+  label,
+  onClick,
+  face,
+  caption,
+}: {
+  selected: boolean;
+  disabled?: boolean;
+  label: string;
+  onClick: () => void;
+  face: ReactNode;
+  caption?: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={selected}
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "flex w-11 shrink-0 flex-col items-center outline-none",
+        "disabled:pointer-events-none disabled:opacity-40",
+        "focus-visible:ring-2 focus-visible:ring-neutral-900/15 focus-visible:ring-offset-2",
+        "rounded-lg",
+      )}
+    >
+      <span
+        className={cn(
+          "size-10 overflow-hidden rounded-full transition-[box-shadow,transform]",
+          selected
+            ? "ring-2 ring-neutral-950 ring-offset-2 ring-offset-white"
+            : "ring-1 ring-black/[0.08]",
+          "active:scale-[0.97]",
+        )}
+      >
+        {face}
+      </span>
+      {caption ?? null}
+    </button>
   );
 }

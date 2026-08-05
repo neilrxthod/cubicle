@@ -53,7 +53,7 @@ const ManageBookingDialog = dynamic(
   { ssr: false }
 )
 
-import { batchRestrictSlots } from "@/lib/actions"
+import { batchRestrictSlots, cancelBooking } from "@/lib/actions"
 import { Calendar } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -66,6 +66,7 @@ import {
   AlertTriangle,
   Lock,
   Loader2,
+  Trash2,
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -235,8 +236,31 @@ export function DailyBoard({
   const [lockReason, setLockReason] = useState("")
   const [lockBusy, setLockBusy] = useState<"lock" | "unlock" | null>(null)
   const lockInFlight = useRef(false)
+  const [deletingBookingId, setDeletingBookingId] = useState<string | null>(
+    null,
+  )
 
   const isAdmin = session.role === "admin"
+
+  async function adminDeleteBooking(booking: Booking) {
+    if (deletingBookingId) return
+    setDeletingBookingId(booking.id)
+    try {
+      const res = await cancelBooking(booking.id)
+      if (res && "error" in res && res.error) {
+        toast({
+          title: "Could not delete booking",
+          description: res.error,
+          variant: "destructive",
+        })
+        return
+      }
+      toast({ title: "Booking deleted" })
+      router.refresh()
+    } finally {
+      setDeletingBookingId(null)
+    }
+  }
 
   /** Carts that can receive day locks (prefer active; fall back to all). */
   const lockableCarts = useMemo(() => {
@@ -1051,66 +1075,119 @@ export function DailyBoard({
                         ? `${classLabel || "Your booking"}${shareBit} — click to manage`
                         : hasPendingSwap
                           ? `${classLabel || personName} · ${personName}${shareBit} — swap pending`
-                          : `${classLabel || personName} · ${personName}${shareBit} — hover to swap`
+                          : isAdmin
+                            ? `${classLabel || personName} · ${personName}${shareBit} — swap or delete`
+                            : `${classLabel || personName} · ${personName}${shareBit} — hover to swap`
+                      const deleting = deletingBookingId === booking.id
 
                       return (
-                        <button
+                        <div
                           key={period}
-                          type="button"
-                          onClick={() => onCellClick(cart, period)}
-                          title={title}
-                          aria-label={title}
                           className={cn(
                             cellBase,
                             "group/slot relative items-center justify-center p-1.5",
-                            // Booking ink #211d1d — distinct from period header
-                            isInvolved
-                              ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/20"
-                              : "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#211d1d]/20",
                             isInvolved
                               ? "bg-[#211d1d] hover:bg-[#2a2525]"
                               : "bg-[#211d1d]/10 hover:bg-[#211d1d]/15",
                           )}
                         >
-                          <span
+                          <button
+                            type="button"
+                            onClick={() => onCellClick(cart, period)}
+                            title={title}
+                            aria-label={title}
+                            disabled={deleting}
                             className={cn(
-                              "inline-flex transition-[opacity,transform] duration-150 ease-out",
-                              isSwapTarget &&
-                                "group-hover/slot:opacity-30 group-focus-visible/slot:opacity-30",
+                              "absolute inset-0 flex items-center justify-center p-1.5",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset",
+                              isInvolved
+                                ? "focus-visible:ring-white/20"
+                                : "focus-visible:ring-[#211d1d]/20",
+                              "disabled:pointer-events-none",
                             )}
                           >
-                            <SlotPeople
-                              primaryName={personName}
-                              primarySrc={avatarSrc}
-                              shareName={shareName}
-                              shareSrc={shareSrc}
-                              onDark={isInvolved}
-                            />
-                          </span>
-                          {isSwapTarget ? (
                             <span
-                              aria-hidden
                               className={cn(
-                                "pointer-events-none absolute inset-0 flex items-center justify-center",
-                                "opacity-0 transition-opacity duration-150 ease-out",
-                                "group-hover/slot:opacity-100 group-focus-visible/slot:opacity-100",
+                                "inline-flex transition-[opacity,transform] duration-150 ease-out",
+                                isSwapTarget &&
+                                  "group-hover/slot:opacity-30 group-focus-within/slot:opacity-30",
                               )}
                             >
-                              <span
+                              <SlotPeople
+                                primaryName={personName}
+                                primarySrc={avatarSrc}
+                                shareName={shareName}
+                                shareSrc={shareSrc}
+                                onDark={isInvolved}
+                              />
+                            </span>
+                          </button>
+
+                          {isSwapTarget ? (
+                            <div
+                              className={cn(
+                                "absolute inset-0 z-[1] flex items-center justify-center gap-1",
+                                "opacity-0 transition-opacity duration-150 ease-out",
+                                "pointer-events-none group-hover/slot:pointer-events-auto group-hover/slot:opacity-100",
+                                "group-focus-within/slot:pointer-events-auto group-focus-within/slot:opacity-100",
+                              )}
+                            >
+                              <button
+                                type="button"
+                                title="Request swap"
+                                aria-label={`Request swap for ${personName}`}
+                                disabled={deleting}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onCellClick(cart, period)
+                                }}
                                 className={cn(
-                                  "flex size-8 items-center justify-center rounded-full",
-                                  "bg-white/90 text-neutral-900 shadow-sm ring-1 ring-black/10",
-                                  "sm:size-9",
+                                  "flex size-8 items-center justify-center rounded-full sm:size-9",
+                                  "bg-white/95 text-neutral-900 shadow-sm ring-1 ring-black/10",
+                                  "transition-transform hover:scale-105 active:scale-95",
+                                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20",
+                                  "disabled:opacity-50",
                                 )}
                               >
                                 <ArrowLeftRight
                                   className="size-3.5 sm:size-4"
                                   strokeWidth={1.75}
                                 />
-                              </span>
-                            </span>
+                              </button>
+                              {isAdmin ? (
+                                <button
+                                  type="button"
+                                  title="Delete booking"
+                                  aria-label={`Delete booking for ${personName}`}
+                                  disabled={deleting}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    void adminDeleteBooking(booking)
+                                  }}
+                                  className={cn(
+                                    "flex size-8 items-center justify-center rounded-full sm:size-9",
+                                    "bg-white/95 text-red-600 shadow-sm ring-1 ring-black/10",
+                                    "transition-transform hover:scale-105 hover:bg-red-50 active:scale-95",
+                                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/25",
+                                    "disabled:opacity-50",
+                                  )}
+                                >
+                                  {deleting ? (
+                                    <Loader2
+                                      className="size-3.5 animate-spin sm:size-4"
+                                      strokeWidth={1.75}
+                                    />
+                                  ) : (
+                                    <Trash2
+                                      className="size-3.5 sm:size-4"
+                                      strokeWidth={1.75}
+                                    />
+                                  )}
+                                </button>
+                              ) : null}
+                            </div>
                           ) : null}
-                        </button>
+                        </div>
                       )
                     }
 

@@ -216,10 +216,16 @@ export async function createBooking(
     if (sharedWithRaw === session.id) {
       return { ok: false, error: "Pick a colleague to share with, not yourself." };
     }
+    // Any signed-in staff profile (teacher or admin) may be a share partner.
+    // Do not require allowlisted=true — teachers often cannot read the allowlist.
     const partner = state.users.find(
-      (u) => u.id === sharedWithRaw && u.allowlisted !== false,
+      (u) =>
+        u.id === sharedWithRaw &&
+        !u.pendingInvite &&
+        !u.id.startsWith("pending:") &&
+        u.allowlisted !== false,
     );
-    if (!partner || partner.pendingInvite) {
+    if (!partner) {
       return {
         ok: false,
         error: "That colleague is not available to share with.",
