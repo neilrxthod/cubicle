@@ -1,14 +1,12 @@
 /**
  * Cart swap rules — single source of truth for request / accept / decline.
  *
- * Product model (intentionally narrow so the board stays consistent):
- * - Swaps are **same calendar day + same period only** (never cross-period).
- * - Teachers hold **at most one cart per period** (booking rules enforce this).
- * - **Exchange**: requester already has a cart that period → both cells swap people
- *   (each keeps their class/subject/notes).
- * - **Handoff**: requester has no cart that period → owner gives the slot away.
- * - Cross-period “trade P1 for P2” is not supported (different times; would break
- *   one-cart-per-period and bell schedules).
+ * Product model:
+ * - Exchange is **same calendar day** (any period the requester already holds).
+ * - Requester picks which of their carts to offer when they hold more than one.
+ * - Teachers hold **at most one cart per period** — accept checks period conflicts.
+ * - **Exchange**: both cells swap people (each keeps class/subject/notes).
+ * - **Handoff**: requester offers no cart → owner gives the slot away.
  */
 
 import { addDays, format } from "date-fns";
@@ -16,11 +14,16 @@ import type {
   Booking,
   BookingPolicy,
   Cart,
+  Period,
   SessionUser,
   SwapRequest,
 } from "@/lib/types";
+import { PERIODS } from "@/lib/types";
 
 export const SWAP_REASON_MAX = 280;
+
+/** Sent from the request form when the user chooses a pure handoff. */
+export const SWAP_OFFER_HANDOFF = "__handoff__";
 
 export type SwapMode = "exchange" | "handoff";
 
@@ -45,7 +48,73 @@ function normalizeDate(ymd: string): string {
   return ymd.slice(0, 10);
 }
 
-/** Requester's other booking on the same date + period (true cart exchange). */
+const PERIOD_ORDER = new Map(
+  PERIODS.map((period, index) => [period as string, index]),
+);
+
+function sortByPeriodThenCreated(a: Booking, b: Booking): number {
+  const pa = PERIOD_ORDER.get(a.period) ?? 99;
+  const pb = PERIOD_ORDER.get(b.period) ?? 99;
+  if (pa !== pb) return pa - pb;
+  return a.createdAt.localeCompare(b.createdAt);
+}
+
+/**
+ * Requester's bookings they may offer in exchange for a target slot.
+ * Same calendar day only; sorted by period.
+ */
+export function listOfferableBookings(
+  bookings: Booking[],
+  requesterId: string,
+  target: Booking,
+): Booking[] {
+  const day = normalizeDate(target.date);
+  return bookings
+    .filter(
+      (b) =>
+        b.teacherId === requesterId &&
+        normalizeDate(b.date) === day &&
+        b.id !== target.id,
+    )
+    .sort(sortByPeriodThenCreated);
+}
+
+/**
+ * Default cart to pre-select: same period if the requester has one, else first.
+ */
+export function defaultOfferedBookingId(
+  offerable: Booking[],
+  targetPeriod: Period | string,
+): string | undefined {
+  const samePeriod = offerable.find((b) => b.period === targetPeriod);
+  return (samePeriod ?? offerable[0])?.id;
+}
+
+/** Resolve the booking offered on a request (explicit id or legacy same-period). */
+export function resolveOfferedBooking(
+  bookings: Booking[],
+  request: Pick<SwapRequest, "requesterId" | "offeredBookingId" | "bookingId">,
+  target: Booking,
+): Booking | undefined {
+  if (request.offeredBookingId) {
+    const explicit = bookings.find(
+      (b) =>
+        b.id === request.offeredBookingId &&
+        b.teacherId === request.requesterId,
+    );
+    if (explicit) return explicit;
+  }
+  // Legacy requests without offered_booking_id: same day + period.
+  return findCounterpartyBooking(
+    bookings,
+    request.requesterId,
+    target.date,
+    target.period,
+    target.id,
+  );
+}
+
+/** Requester's other booking on the same date + period (legacy / default). */
 export function findCounterpartyBooking(
   bookings: Booking[],
   requesterId: string,
@@ -61,16 +130,57 @@ export function findCounterpartyBooking(
       b.period === period &&
       b.id !== excludeBookingId,
   );
-  // Prefer oldest booking if data ever violates one-cart-per-period.
   matches.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   return matches[0];
+}
+
+/**
+ * After an exchange, neither teacher may end up with two carts in one period.
+ */
+function periodConflictAfterExchange(
+  bookings: Booking[],
+  target: Booking,
+  offered: Booking,
+): string | null {
+  // Requester keeps offered.period unless offered.period === target.period (pure swap).
+  // After: requester owns target cell (target.period); owner owns offered cell (offered.period).
+  if (offered.period !== target.period) {
+    const requesterAlreadyOnTargetPeriod = bookings.some(
+      (b) =>
+        b.teacherId === offered.teacherId &&
+        normalizeDate(b.date) === normalizeDate(target.date) &&
+        b.period === target.period &&
+        b.id !== offered.id &&
+        b.id !== target.id,
+    );
+    if (requesterAlreadyOnTargetPeriod) {
+      return "You already have a cart that period. Pick a different cart to offer, or cancel that booking first.";
+    }
+    const ownerAlreadyOnOfferedPeriod = bookings.some(
+      (b) =>
+        b.teacherId === target.teacherId &&
+        normalizeDate(b.date) === normalizeDate(offered.date) &&
+        b.period === offered.period &&
+        b.id !== target.id &&
+        b.id !== offered.id,
+    );
+    if (ownerAlreadyOnOfferedPeriod) {
+      return "They already have a cart in the period you are offering. Choose another cart.";
+    }
+  }
+  return null;
 }
 
 export function swapModeFor(
   bookings: Booking[],
   requesterId: string,
   target: Booking,
+  offeredBookingId?: string | null,
 ): SwapMode {
+  if (offeredBookingId && offeredBookingId !== SWAP_OFFER_HANDOFF) {
+    return "exchange";
+  }
+  if (offeredBookingId === SWAP_OFFER_HANDOFF) return "handoff";
   return findCounterpartyBooking(
     bookings,
     requesterId,
@@ -97,6 +207,7 @@ function pendingDup(
 
 /**
  * Validate creating a swap request against live platform state.
+ * `offeredBookingId` is the requester's cart to give (or SWAP_OFFER_HANDOFF).
  */
 export function evaluateSwapRequest(input: {
   session: SessionUser;
@@ -106,9 +217,18 @@ export function evaluateSwapRequest(input: {
   swaps: SwapRequest[];
   bookingPolicy: BookingPolicy;
   reason: string;
+  offeredBookingId?: string | null;
 }): SwapEval {
-  const { session, booking, cart, bookings, swaps, bookingPolicy, reason } =
-    input;
+  const {
+    session,
+    booking,
+    cart,
+    bookings,
+    swaps,
+    bookingPolicy,
+    reason,
+    offeredBookingId,
+  } = input;
 
   if (!booking) return { ok: false, error: "Booking not found." };
   if (booking.teacherId === session.id) {
@@ -158,18 +278,40 @@ export function evaluateSwapRequest(input: {
     };
   }
 
-  // Cross-period is not a product feature — counterparty is always same day/period.
-  const counterparty = findCounterpartyBooking(
-    bookings,
-    session.id,
-    booking.date,
-    booking.period,
-    booking.id,
-  );
+  const offerable = listOfferableBookings(bookings, session.id, booking);
+  const rawOffer = (offeredBookingId ?? "").trim();
+
+  // No carts that day → handoff only.
+  if (offerable.length === 0) {
+    return { ok: true, mode: "handoff" };
+  }
+
+  // Explicit handoff while holding carts that day (allowed).
+  if (rawOffer === SWAP_OFFER_HANDOFF || rawOffer === "") {
+    // Prefer forcing a selection when they have carts — empty is invalid.
+    if (rawOffer === "") {
+      return {
+        ok: false,
+        error: "Select which cart you want to offer, or choose handoff only.",
+      };
+    }
+    return { ok: true, mode: "handoff" };
+  }
+
+  const counterparty = offerable.find((b) => b.id === rawOffer);
+  if (!counterparty) {
+    return {
+      ok: false,
+      error: "That cart is not available to offer for this swap.",
+    };
+  }
+
+  const conflict = periodConflictAfterExchange(bookings, booking, counterparty);
+  if (conflict) return { ok: false, error: conflict };
 
   return {
     ok: true,
-    mode: counterparty ? "exchange" : "handoff",
+    mode: "exchange",
     counterparty,
   };
 }
@@ -270,20 +412,42 @@ export function evaluateSwapAccept(input: {
     };
   }
 
-  // Never create a second cart for the requester in this period via handoff.
-  const counterparty = findCounterpartyBooking(
+  const counterparty = resolveOfferedBooking(bookings, request, booking);
+
+  if (counterparty) {
+    // Offered booking must still belong to the requester.
+    if (counterparty.teacherId !== request.requesterId) {
+      return {
+        ok: false,
+        error: "Their offered cart is no longer available. Decline the request.",
+      };
+    }
+    const conflict = periodConflictAfterExchange(
+      bookings,
+      booking,
+      counterparty,
+    );
+    if (conflict) return { ok: false, error: conflict };
+    return { ok: true, mode: "exchange", counterparty };
+  }
+
+  // Handoff: requester must not already hold this period (would double-book).
+  const already = findCounterpartyBooking(
     bookings,
     request.requesterId,
     booking.date,
     booking.period,
     booking.id,
   );
+  if (already) {
+    return {
+      ok: false,
+      error:
+        "Requester already has a cart this period — ask them to re-send as an exchange.",
+    };
+  }
 
-  return {
-    ok: true,
-    mode: counterparty ? "exchange" : "handoff",
-    counterparty,
-  };
+  return { ok: true, mode: "handoff" };
 }
 
 /** Pending requests to close after a successful accept (client demo path). */

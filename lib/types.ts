@@ -120,6 +120,11 @@ export type BookingPolicy = {
 export type SwapRequest = {
   id: string;
   bookingId: string;
+  /**
+   * Requester's booking they are offering in a two-way exchange.
+   * Absent / null → one-way handoff (no cart offered).
+   */
+  offeredBookingId?: string;
   requesterId: string;
   requesterName: string;
   reason?: string;

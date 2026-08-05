@@ -434,12 +434,13 @@ export function DailyBoard({
 
     const existing = bookingMap.get(`${cart.id}:${period}`)
     if (existing) {
-      if (existing.teacherId === session.id || session.role === "admin") {
+      // Own booking → manage/cancel. Anyone else's (including admin) → swap.
+      if (existing.teacherId === session.id) {
         setManageDialog(existing)
         return
       }
-      // Swap target (not owner, not admin): same day/period only.
-      if (date < today) {
+      // Same day/period only. Admins may still request past-date swaps.
+      if (date < today && session.role !== "admin") {
         toast({
           title: "Past date",
           description: "Cannot request swaps for past dates.",
@@ -940,8 +941,8 @@ export function DailyBoard({
                         avatarByTeacherId.get(booking.teacherId) ??
                         (isMine ? session.avatarUrl : undefined)
                       const classLabel = booking.className?.trim()
-                      // Teachers request swap on someone else's slot; owners/admins manage.
-                      const isSwapTarget = !isMine && session.role !== "admin"
+                      // Anyone (teacher or admin) may request a swap on someone else's slot.
+                      const isSwapTarget = !isMine
                       const hasPendingSwap =
                         isSwapTarget &&
                         platform.swapRequests.some(
@@ -952,11 +953,9 @@ export function DailyBoard({
                         )
                       const title = isMine
                         ? `${classLabel || "Your booking"} — click to manage or cancel`
-                        : isSwapTarget
-                          ? hasPendingSwap
-                            ? `${classLabel || personName} · ${personName} — swap request pending`
-                            : `${classLabel || personName} · ${personName} — hover to swap (same period)`
-                          : `${classLabel || personName} · ${personName} — click to manage`
+                        : hasPendingSwap
+                          ? `${classLabel || personName} · ${personName} — swap request pending`
+                          : `${classLabel || personName} · ${personName} — hover to swap (same period)`
 
                       return (
                         <button
