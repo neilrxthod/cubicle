@@ -19,6 +19,7 @@ import {
   findCounterpartyBooking,
 } from "@/lib/booking/swap-rules"
 import { getSession } from "@/lib/auth/session"
+import { SwapCartRoute } from "@/components/swap-cart-route"
 
 export function SwapRequestDialog({
   booking,
@@ -49,6 +50,7 @@ export function SwapRequestDialog({
     ? platform.carts.find((c) => c.id === counterparty.cartId)
     : undefined
   const isExchange = Boolean(counterparty)
+  const whenLabel = `${booking.period} · ${format(parseISO(booking.date), "EEE, MMM d")}`
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -60,40 +62,43 @@ export function SwapRequestDialog({
           <DialogDescription>
             {isExchange ? (
               <>
-                Swap with {booking.teacherName} for the same period: you keep
-                your class details, they keep theirs — only the carts move.
-                Cross-period trades are not supported.
+                You and {booking.teacherName} keep your own class details —
+                only the carts move for this period.
               </>
             ) : (
               <>
-                Ask {booking.teacherName} to give you this slot for the same
-                period. You do not have a cart that period, so this is a one-way
-                handoff (they lose the slot if they accept).
+                Ask {booking.teacherName} to give you this slot. You do not have
+                a cart this period, so this is a one-way handoff.
               </>
             )}
           </DialogDescription>
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <span className="type-label rounded-full border border-border bg-muted/20 px-2.5 py-1">
-              {booking.teacherName}
-            </span>
-            {targetCart ? (
-              <span className="type-label rounded-full border border-border bg-muted/20 px-2.5 py-1">
-                {targetCart.name}
-              </span>
-            ) : null}
-            <span className="type-label rounded-full border border-border bg-muted/20 px-2.5 py-1">
-              {booking.period}
-            </span>
-            <span className="type-label rounded-full border border-border bg-muted/20 px-2.5 py-1">
-              {format(parseISO(booking.date), "EEE, MMM d")}
-            </span>
-            {isExchange && myCart ? (
-              <span className="type-label rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-900">
-                Your {myCart.name} · {counterparty?.period}
-              </span>
-            ) : null}
-          </div>
         </DialogHeader>
+
+        <div className="border-b border-border/50 bg-neutral-50/60 px-5 py-4 sm:px-6">
+          <SwapCartRoute
+            mode={isExchange ? "exchange" : "handoff"}
+            meta={whenLabel}
+            from={{
+              eyebrow: isExchange ? "You give" : "You have",
+              cartName: isExchange
+                ? (myCart?.name ?? "Your cart")
+                : "No cart",
+              detail: isExchange
+                ? counterparty?.className?.trim() ||
+                  session?.name ||
+                  "Your slot"
+                : "This period",
+            }}
+            to={{
+              eyebrow: isExchange ? "You get" : "You want",
+              cartName: targetCart?.name ?? "Their cart",
+              detail:
+                booking.className?.trim() ||
+                booking.teacherName ||
+                "Their slot",
+            }}
+          />
+        </div>
 
         <form
           className="flex flex-col gap-5 px-5 py-5 sm:px-6"
@@ -109,8 +114,8 @@ export function SwapRequestDialog({
               toast({
                 title: "Swap request sent",
                 description: isExchange
-                  ? `Exchange with ${booking.teacherName}`
-                  : `Handoff request to ${booking.teacherName}`,
+                  ? `${myCart?.name ?? "Your cart"} ⇄ ${targetCart?.name ?? "their cart"}`
+                  : `Handoff request → ${targetCart?.name ?? "their cart"}`,
               })
               router.refresh()
               onClose()

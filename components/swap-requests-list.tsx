@@ -7,6 +7,7 @@ import type { Booking, Cart, SwapRequest } from "@/lib/types"
 import { acceptSwap, declineSwap } from "@/lib/actions"
 import { toast } from "@/hooks/use-toast"
 import { findCounterpartyBooking } from "@/lib/booking/swap-rules"
+import { SwapCartRoute } from "@/components/swap-cart-route"
 import { cn } from "@/lib/utils"
 
 export function SwapRequestsList({
@@ -121,7 +122,7 @@ export function SwapRequestsList({
             )
           }
 
-          const cart = cartMap.get(booking.cartId)
+          const theirCart = cartMap.get(booking.cartId)
           const counterparty = findCounterpartyBooking(
             bookings,
             req.requesterId,
@@ -135,13 +136,57 @@ export function SwapRequestsList({
           const isExchange = Boolean(counterparty)
           const busy = busyId === req.id
           const blocked = busyId !== null
+          const whenLabel = `${booking.period} · ${format(parseISO(booking.date), "MMM d")}`
+
+          // Perspective:
+          // - Incoming (you own the target slot): they offer → your cart
+          // - Outgoing (you requested): you give → you get
+          const route = isOutgoing
+            ? {
+                from: {
+                  eyebrow: isExchange ? "You give" : "You have",
+                  cartName: isExchange
+                    ? (offeredCart?.name ?? "Your cart")
+                    : "No cart",
+                  detail: isExchange
+                    ? counterparty?.className?.trim() || req.requesterName
+                    : "This period",
+                },
+                to: {
+                  eyebrow: isExchange ? "You get" : "You want",
+                  cartName: theirCart?.name ?? "Their cart",
+                  detail:
+                    booking.className?.trim() ||
+                    booking.teacherName ||
+                    "Their slot",
+                },
+              }
+            : {
+                from: {
+                  eyebrow: isExchange ? "They offer" : "They have",
+                  cartName: isExchange
+                    ? (offeredCart?.name ?? "Their cart")
+                    : "No cart",
+                  detail: isExchange
+                    ? counterparty?.className?.trim() || req.requesterName
+                    : req.requesterName,
+                },
+                to: {
+                  eyebrow: isExchange ? "Your cart" : "They want",
+                  cartName: theirCart?.name ?? "Your cart",
+                  detail:
+                    booking.className?.trim() ||
+                    booking.teacherName ||
+                    "Your slot",
+                },
+              }
 
           return (
             <div
               key={req.id}
-              className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
             >
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1 space-y-2.5">
                 <p className="truncate text-[13px] text-neutral-900">
                   {isOutgoing ? (
                     <>
@@ -149,45 +194,34 @@ export function SwapRequestsList({
                       <span className="font-semibold">
                         {booking.teacherName}
                       </span>
-                      <span className="text-neutral-500">
-                        {" "}
-                        · {cart?.name} · {booking.period} ·{" "}
-                        {format(parseISO(booking.date), "MMM d")}
-                      </span>
                     </>
                   ) : (
                     <>
                       <span className="font-semibold">{req.requesterName}</span>
                       <span className="text-neutral-500">
                         {isExchange
-                          ? " wants to exchange carts for "
-                          : " wants a handoff of "}
+                          ? " wants to exchange carts"
+                          : " wants a handoff"}
                       </span>
-                      {cart?.name} · {booking.period} ·{" "}
-                      {format(parseISO(booking.date), "MMM d")}
-                      {isExchange && offeredCart ? (
-                        <span className="text-neutral-500">
-                          {" "}
-                          (offers {offeredCart.name})
-                        </span>
-                      ) : null}
                     </>
                   )}
                 </p>
+
+                <SwapCartRoute
+                  size="sm"
+                  mode={isExchange ? "exchange" : "handoff"}
+                  meta={whenLabel}
+                  from={route.from}
+                  to={route.to}
+                />
+
                 {req.reason ? (
-                  <p className="mt-0.5 truncate text-[12px] text-neutral-500">
+                  <p className="truncate text-[12px] text-neutral-500">
                     {req.reason}
                   </p>
                 ) : null}
-                {!isOutgoing ? (
-                  <p className="mt-1 text-[11px] text-neutral-400">
-                    {isExchange
-                      ? "Accept exchanges both carts for this period only."
-                      : "Accept gives them this slot (you will not get a cart back)."}
-                  </p>
-                ) : null}
               </div>
-              <div className="flex shrink-0 items-center gap-1.5">
+              <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-center">
                 {isOutgoing ? (
                   <button
                     type="button"
