@@ -8,11 +8,18 @@ export function cn(...inputs: ClassValue[]) {
 /**
  * Cryptographically secure integer in [min, max) via Web Crypto.
  * Uses rejection sampling so results are unbiased (CodeQL-safe).
- * Works in browser and modern Node (globalThis.crypto).
+ *
+ * Uses `globalThis.crypto.getRandomValues` only — never Node's
+ * `crypto.randomInt`, which is not on the browser `Crypto` type and breaks
+ * client bundles (`"use client"` actions).
  */
 export function secureRandomInt(min: number, max: number): number {
   if (!Number.isInteger(min) || !Number.isInteger(max) || max <= min) {
     throw new Error("secureRandomInt: expected integers with max > min");
+  }
+  const webCrypto = globalThis.crypto;
+  if (!webCrypto || typeof webCrypto.getRandomValues !== "function") {
+    throw new Error("secureRandomInt: Web Crypto getRandomValues unavailable");
   }
   const range = max - min;
   const maxUint = 0x1_0000_0000;
@@ -20,8 +27,13 @@ export function secureRandomInt(min: number, max: number): number {
   const buf = new Uint32Array(1);
   let x: number;
   do {
-    crypto.getRandomValues(buf);
+    webCrypto.getRandomValues(buf);
     x = buf[0]!;
   } while (x >= limit);
   return min + (x % range);
+}
+
+/** Demo / invite placeholder password — Web Crypto safe (no crypto.randomInt). */
+export function generateDemoPassword(): string {
+  return `Cubicle${secureRandomInt(1000, 10000)}`;
 }

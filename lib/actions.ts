@@ -16,7 +16,7 @@ import {
   localWriteBlockReason,
 } from "@/lib/data/durability";
 
-import { secureRandomInt } from "@/lib/utils";
+import { generateDemoPassword } from "@/lib/utils";
 import {
   dbAcceptSwap,
   dbAddAllowedEmail,
@@ -1511,9 +1511,9 @@ export async function createTeacherCredentials(
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const role = parseStaffRole(formData.get("role"));
   const employmentType = parseEmploymentType(formData.get("employmentType"));
+  // Web Crypto only — never crypto.randomInt (Node-only; breaks client TS).
   const password =
-    String(formData.get("password") ?? "").trim() ||
-    `Cubicle${secureRandomInt(1000, 10000)}`;
+    String(formData.get("password") ?? "").trim() || generateDemoPassword();
 
   if (!name) return { ok: false, error: "Name is required." };
   if (!email) return { ok: false, error: "Email is required." };
@@ -1823,7 +1823,8 @@ export async function resetTeacherPassword(
     };
   }
 
-  const password = `Cubicle${secureRandomInt(1000, 10000)}`;
+  // Web Crypto only — never crypto.randomInt (Node-only; breaks client TS).
+  const password = generateDemoPassword();
   let found = false;
   const __demo = assertLocalDemoAllowed();
   if (!__demo.ok) return __demo;
