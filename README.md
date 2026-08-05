@@ -9,7 +9,7 @@ Cubicle is an internal operations tool for teachers and IT. It provides period-b
 | **Production** | [https://mycubicle.app](https://mycubicle.app) |
 | **School domain** | `@rbe.sk.ca` |
 | **IT contact** | [it-support@rbe.sk.ca](mailto:it-support@rbe.sk.ca) |
-| **Platform version** | `1.0.19` (bumped on each git commit via hook) |
+| **Platform version** | `1.0.40` (bumped on each git commit via hook) |
 | **Repository** | Private — all rights reserved |
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
