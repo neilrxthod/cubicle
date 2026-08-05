@@ -13,7 +13,8 @@ import { AnimatedCancelButton } from "@/components/animated-cancel-button"
 import { cancelBooking } from "@/lib/actions"
 import { getSessionSnapshot } from "@/lib/auth/session"
 import { toast } from "@/hooks/use-toast"
-import type { Booking, Cart } from "@/lib/types"
+import { getBookingPurpose, type Booking, type Cart } from "@/lib/types"
+import { cn } from "@/lib/utils"
 
 /**
  * Minimal booking sheet — identity + cancel. No form chrome.
@@ -42,14 +43,19 @@ export function ManageBookingDialog({
     }
   })()
 
+  const purpose = getBookingPurpose(booking)
   const classLabel = booking.className?.trim()
   const subjectLabel = booking.subject?.trim()
   const notesLabel = booking.notes?.trim()
+  const isTaggedPurpose = purpose && purpose.id !== "class"
   // One soft line only — no field labels
   const detailParts = [
     booking.teacherName?.trim(),
-    classLabel,
-    subjectLabel,
+    isTaggedPurpose ? null : classLabel,
+    isTaggedPurpose ? null : subjectLabel,
+    purpose?.id === "other" && notesLabel && notesLabel !== purpose.label
+      ? notesLabel
+      : null,
   ].filter(Boolean)
 
   const shareLabel = booking.sharedWithName?.trim() || booking.sharedWithId
@@ -77,6 +83,27 @@ export function ManageBookingDialog({
             <span className="text-neutral-300"> · </span>
             <span className="text-neutral-500">{dateLabel}</span>
           </p>
+
+          {isTaggedPurpose && purpose ? (
+            <p className="mt-1.5">
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-[0.04em]",
+                  purpose.id === "ap_exam"
+                    ? "bg-violet-100 text-violet-800"
+                    : purpose.id === "club"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : purpose.id === "spare"
+                        ? "bg-sky-100 text-sky-800"
+                        : purpose.id === "extra"
+                          ? "bg-amber-100 text-amber-900"
+                          : "bg-neutral-100 text-neutral-700",
+                )}
+              >
+                {purpose.label}
+              </span>
+            </p>
+          ) : null}
 
           {detailParts.length > 0 ? (
             <p className="mt-1 truncate text-[12px] text-neutral-400">

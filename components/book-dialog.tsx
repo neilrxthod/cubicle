@@ -25,10 +25,17 @@ import {
 } from "@/lib/onboarding/storage";
 import { usePlatformStore } from "@/lib/data/platform-store";
 import { toast } from "@/hooks/use-toast";
-import type { Cart, Period, User as StaffUser } from "@/lib/types";
+import {
+  BOOKING_PURPOSES,
+  getBookingPurposeOption,
+  type BookingPurposeId,
+  type Cart,
+  type Period,
+  type User as StaffUser,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-/** One-tap book. Optional share via colleague avatar icons. */
+/** One-tap book. Purpose tag + optional share via colleague avatars. */
 export function BookDialog({
   cart,
   period,
@@ -45,14 +52,13 @@ export function BookDialog({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [custom, setCustom] = useState("");
+  const [purposeId, setPurposeId] = useState<BookingPurposeId>("class");
   /** null = just me; string = colleague id */
   const [shareWithId, setShareWithId] = useState<string | null>(null);
 
   const session = getSessionSnapshot();
-  const isAdmin = session?.role === "admin";
+  const purpose = getBookingPurposeOption(purposeId);
 
-  // All signed-in staff (teachers + admins) — not pending invites.
-  // Share is available to every role that can book, not admin-only.
   const colleagues = useMemo(() => {
     if (!session) return [] as StaffUser[];
     return platform.users
@@ -83,7 +89,9 @@ export function BookDialog({
   function resolveSubject() {
     if (!session) return "";
     const prefs = getOnboarding(session.id || session.email);
-    const loads = (prefs.teachingAssignments ?? []).filter(isAssignmentComplete);
+    const loads = (prefs.teachingAssignments ?? []).filter(
+      isAssignmentComplete,
+    );
     const match = loads.find((a) => a.periods.includes(period));
     return match?.subject.trim() || loads[0]?.subject.trim() || "";
   }
@@ -104,6 +112,12 @@ export function BookDialog({
             {period}
             <span className="text-neutral-300"> · </span>
             {dateLabel}
+            {purposeId !== "class" ? (
+              <>
+                <span className="text-neutral-300"> · </span>
+                <span className="text-neutral-600">{purpose.label}</span>
+              </>
+            ) : null}
             {selectedPartner ? (
               <>
                 <span className="text-neutral-300"> · </span>
@@ -116,34 +130,59 @@ export function BookDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-4 px-5 pb-5 pt-4">
-          {isAdmin ? (
-            <div className="space-y-1.5">
-              <label
-                htmlFor="book-custom"
-                className="text-[11px] font-medium tracking-[0.04em] text-neutral-400"
-              >
-                Custom
-              </label>
+          {/* Purpose — all roles */}
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-medium tracking-[0.04em] text-neutral-400">
+              Purpose
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {BOOKING_PURPOSES.map((p) => {
+                const selected = purposeId === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    disabled={pending}
+                    onClick={() => {
+                      setPurposeId(p.id);
+                      if (p.id !== "other") setCustom("");
+                      setError(null);
+                    }}
+                    className={cn(
+                      "h-8 rounded-full px-3 text-[12.5px] font-medium transition-colors",
+                      selected
+                        ? p.id === "ap_exam"
+                          ? "bg-violet-700 text-white"
+                          : "bg-neutral-950 text-white"
+                        : "border border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:text-neutral-900",
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+            {purposeId === "other" ? (
               <Input
                 id="book-custom"
                 value={custom}
                 onChange={(e) => setCustom(e.target.value)}
-                placeholder="Optional label"
+                placeholder="What for? (optional)"
                 disabled={pending}
                 autoComplete="off"
-                className="h-9 rounded-lg border-neutral-200 bg-white text-[13px] tracking-[-0.01em] shadow-none placeholder:text-neutral-300"
+                className="mt-1 h-9 rounded-lg border-neutral-200 bg-white text-[13px] tracking-[-0.01em] shadow-none placeholder:text-neutral-300"
               />
-            </div>
-          ) : null}
+            ) : null}
+          </div>
 
-          {/* Share row for every role that can book — icon picker */}
-          <div className="space-y-1.5">
+          {/* Share row */}
+          <div className="space-y-2.5">
             <p className="text-[11px] font-medium tracking-[0.04em] text-neutral-400">
               Share with
             </p>
             {colleagues.length > 0 ? (
               <div
-                className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                className="flex gap-3 overflow-x-auto pb-1 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 role="listbox"
                 aria-label="Share with colleague"
               >
@@ -165,6 +204,18 @@ export function BookDialog({
                       )}
                     >
                       <User className="size-4" strokeWidth={1.75} />
+                    </span>
+                  }
+                  caption={
+                    <span
+                      className={cn(
+                        "max-w-[3rem] truncate text-center text-[10px] font-medium leading-tight",
+                        shareWithId === null
+                          ? "text-neutral-950"
+                          : "text-neutral-400",
+                      )}
+                    >
+                      You
                     </span>
                   }
                 />
@@ -205,7 +256,7 @@ export function BookDialog({
                       caption={
                         <span
                           className={cn(
-                            "mt-1 max-w-[2.75rem] truncate text-center text-[10px] font-medium leading-tight",
+                            "max-w-[3rem] truncate text-center text-[10px] font-medium leading-tight",
                             selected ? "text-neutral-950" : "text-neutral-400",
                           )}
                         >
@@ -244,15 +295,29 @@ export function BookDialog({
                 formData.set("cartId", cart.id);
                 formData.set("date", date);
                 formData.set("period", period);
-                const label = custom.trim();
-                const subject = resolveSubject();
-                if (isAdmin && label) {
-                  formData.set("className", label);
-                  formData.set("notes", label);
-                } else if (subject) {
-                  formData.set("subject", subject);
-                  formData.set("className", subject);
+
+                const teachingSubject = resolveSubject();
+                const otherNote = custom.trim();
+
+                if (purposeId === "class") {
+                  // Regular class — keep teaching subject when known
+                  if (teachingSubject) {
+                    formData.set("subject", teachingSubject);
+                    formData.set("className", teachingSubject);
+                  } else {
+                    formData.set("className", purpose.label);
+                    formData.set("subject", purpose.label);
+                  }
+                } else if (purposeId === "other" && otherNote) {
+                  // Store label so board can tag "Other"; keep free text in notes
+                  formData.set("className", purpose.label);
+                  formData.set("subject", purpose.label);
+                  formData.set("notes", otherNote);
+                } else {
+                  formData.set("className", purpose.label);
+                  formData.set("subject", purpose.label);
                 }
+
                 if (shareWithId) {
                   formData.set("sharedWithId", shareWithId);
                 }
@@ -276,12 +341,22 @@ export function BookDialog({
                     });
                   } else {
                     toast({
-                      title: selectedPartner
-                        ? "Cart booked & shared"
-                        : "Cart booked",
-                      description: selectedPartner
-                        ? `${cart.name} · ${period} · with ${selectedPartner.name}`
-                        : `${cart.name} · ${period}`,
+                      title:
+                        purposeId !== "class"
+                          ? `${purpose.label} booked`
+                          : selectedPartner
+                            ? "Cart booked & shared"
+                            : "Cart booked",
+                      description: [
+                        cart.name,
+                        period,
+                        purposeId !== "class" ? purpose.label : null,
+                        selectedPartner
+                          ? `with ${selectedPartner.name}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · "),
                     });
                   }
                   router.refresh();
@@ -332,24 +407,28 @@ function ShareIconButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex w-11 shrink-0 flex-col items-center outline-none",
+        "flex w-12 shrink-0 flex-col items-center gap-1 outline-none",
         "disabled:pointer-events-none disabled:opacity-40",
-        "focus-visible:ring-2 focus-visible:ring-neutral-900/15 focus-visible:ring-offset-2",
-        "rounded-lg",
+        "rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/15 focus-visible:ring-offset-2",
       )}
     >
       <span
         className={cn(
-          "size-10 overflow-hidden rounded-full transition-[box-shadow,transform]",
-          selected
-            ? "ring-2 ring-neutral-950 ring-offset-2 ring-offset-white"
-            : "ring-1 ring-black/[0.08]",
+          "box-border flex size-11 shrink-0 items-center justify-center rounded-full p-[2px] transition-[background-color,transform]",
+          selected ? "bg-neutral-950" : "bg-transparent",
           "active:scale-[0.97]",
         )}
       >
-        {face}
+        <span
+          className={cn(
+            "size-full overflow-hidden rounded-full",
+            !selected && "ring-1 ring-inset ring-black/[0.1]",
+          )}
+        >
+          {face}
+        </span>
       </span>
-      {caption ?? null}
+      {caption}
     </button>
   );
 }

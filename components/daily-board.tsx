@@ -13,7 +13,7 @@ import type {
   SessionUser,
   SlotRestriction,
 } from "@/lib/types"
-import { bookingInvolvesUser } from "@/lib/types"
+import { bookingInvolvesUser, getBookingPurpose } from "@/lib/types"
 
 type LockKind = "general" | "ap_exam" | "holiday"
 
@@ -1058,6 +1058,8 @@ export function DailyBoard({
                           booking.sharedWithAvatarUrl)
                         : undefined
                       const classLabel = booking.className?.trim()
+                      const purpose = getBookingPurpose(booking)
+                      const purposeTag = purpose?.tag
                       // Anyone (teacher or admin) may request a swap on someone else's slot.
                       const isSwapTarget = !isInvolved
                       const hasPendingSwap =
@@ -1071,13 +1073,17 @@ export function DailyBoard({
                       const shareBit = shareName
                         ? ` · shared with ${shareName}`
                         : ""
+                      const purposeBit =
+                        purpose && purpose.id !== "class"
+                          ? ` · ${purpose.label}`
+                          : ""
                       const title = isInvolved
-                        ? `${classLabel || "Your booking"}${shareBit} — click to manage`
+                        ? `${classLabel || "Your booking"}${purposeBit}${shareBit} — click to manage`
                         : hasPendingSwap
-                          ? `${classLabel || personName} · ${personName}${shareBit} — swap pending`
+                          ? `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — swap pending`
                           : isAdmin
-                            ? `${classLabel || personName} · ${personName}${shareBit} — swap or delete`
-                            : `${classLabel || personName} · ${personName}${shareBit} — hover to swap`
+                            ? `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — swap or delete`
+                            : `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — hover to swap`
                       const deleting = deletingBookingId === booking.id
 
                       return (
@@ -1091,6 +1097,19 @@ export function DailyBoard({
                               : "bg-[#211d1d]/10 hover:bg-[#211d1d]/15",
                           )}
                         >
+                          {purposeTag && purpose ? (
+                            <span
+                              className={cn(
+                                "pointer-events-none absolute top-1 right-1 z-[2]",
+                                "rounded px-1 py-px text-[8.5px] font-semibold uppercase tracking-[0.04em]",
+                                isInvolved
+                                  ? purpose.tagClassOnDark
+                                  : purpose.tagClass,
+                              )}
+                            >
+                              {purposeTag}
+                            </span>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => onCellClick(cart, period)}

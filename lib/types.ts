@@ -109,6 +109,126 @@ export function bookingInvolvesUser(
   return booking.teacherId === userId || booking.sharedWithId === userId;
 }
 
+/**
+ * Why the cart is booked — shown as a small tag on the board.
+ * Stored in className/subject for display + detection (no extra DB column).
+ */
+export type BookingPurposeId =
+  | "class"
+  | "spare"
+  | "club"
+  | "extra"
+  | "ap_exam"
+  | "other";
+
+export type BookingPurposeOption = {
+  id: BookingPurposeId;
+  /** Full label stored on the booking */
+  label: string;
+  /** Short board badge (omit for Class — default teaching, less noise) */
+  tag: string | null;
+  /** Badge styles (light cells / dark “mine” cells) */
+  tagClass: string;
+  tagClassOnDark: string;
+};
+
+export const BOOKING_PURPOSES: readonly BookingPurposeOption[] = [
+  {
+    id: "class",
+    label: "Class",
+    tag: null,
+    tagClass: "",
+    tagClassOnDark: "",
+  },
+  {
+    id: "spare",
+    label: "Spare",
+    tag: "Spare",
+    tagClass: "bg-sky-600 text-white",
+    tagClassOnDark: "bg-sky-400/25 text-sky-100",
+  },
+  {
+    id: "club",
+    label: "Club",
+    tag: "Club",
+    tagClass: "bg-emerald-600 text-white",
+    tagClassOnDark: "bg-emerald-400/25 text-emerald-100",
+  },
+  {
+    id: "extra",
+    label: "Extra",
+    tag: "Extra",
+    tagClass: "bg-amber-600 text-white",
+    tagClassOnDark: "bg-amber-400/25 text-amber-100",
+  },
+  {
+    id: "ap_exam",
+    label: "AP exam",
+    tag: "AP",
+    tagClass: "bg-violet-600 text-white",
+    tagClassOnDark: "bg-violet-400/25 text-violet-100",
+  },
+  {
+    id: "other",
+    label: "Other",
+    tag: "Other",
+    tagClass: "bg-neutral-600 text-white",
+    tagClassOnDark: "bg-white/15 text-white",
+  },
+] as const;
+
+/** @deprecated use BOOKING_PURPOSES / getBookingPurpose */
+export const AP_EXAM_BOOKING_LABEL = "AP exam";
+
+export function getBookingPurposeOption(
+  id: BookingPurposeId,
+): BookingPurposeOption {
+  return (
+    BOOKING_PURPOSES.find((p) => p.id === id) ?? BOOKING_PURPOSES[0]!
+  );
+}
+
+/**
+ * Resolve purpose from stored booking fields.
+ * Exact label match first; otherwise treat non-empty subject as Class.
+ */
+export function getBookingPurpose(
+  booking: Pick<Booking, "className" | "subject" | "notes">,
+): BookingPurposeOption | null {
+  const fields = [booking.className, booking.subject, booking.notes]
+    .map((v) => (v ?? "").trim().toLowerCase())
+    .filter(Boolean);
+
+  for (const purpose of BOOKING_PURPOSES) {
+    if (purpose.id === "class") continue;
+    const label = purpose.label.toLowerCase();
+    if (fields.some((f) => f === label || f.startsWith(`${label} ·`))) {
+      return purpose;
+    }
+  }
+
+  // Legacy / free-text AP variants
+  if (
+    fields.some(
+      (v) => v === "ap_exam" || v === "ap exam" || v.startsWith("ap exam"),
+    )
+  ) {
+    return getBookingPurposeOption("ap_exam");
+  }
+
+  if (fields.length > 0) {
+    return getBookingPurposeOption("class");
+  }
+  return null;
+}
+
+/** True when this booking was tagged as an AP exam reservation. */
+export function isApExamBooking(
+  booking: Pick<Booking, "className" | "subject" | "notes">,
+): boolean {
+  return getBookingPurpose(booking)?.id === "ap_exam";
+}
+
 export type Issue = {
   id: string;
   cartId: string;
