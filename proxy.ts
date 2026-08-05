@@ -4,6 +4,11 @@ import { updateSession } from "@/lib/supabase/middleware";
 export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
+  // Same-origin Supabase proxy (OAuth authorize) — do not touch session cookies.
+  if (pathname.startsWith("/__supabase")) {
+    return NextResponse.next();
+  }
+
   // Supabase Site URL fallback can land OAuth on `/` with ?code=…
   // Always finish the PKCE exchange on the dedicated callback route.
   if (pathname === "/" && searchParams.has("code")) {
@@ -18,8 +23,9 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except static assets and images.
+     * Match all request paths except static assets, images, and the
+     * same-origin Supabase OAuth proxy.
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|__supabase/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

@@ -16,6 +16,10 @@ const securityHeaders = [
   },
 ];
 
+/** Real Supabase project origin — used only server-side for rewrites. */
+const supabaseOrigin =
+  process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "").trim() || "";
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   images: {
@@ -32,6 +36,20 @@ const nextConfig: NextConfig = {
       {
         source: "/:path*",
         headers: securityHeaders,
+      },
+    ];
+  },
+  /**
+   * Proxy Supabase through this app so OAuth authorize never puts
+   * `*.supabase.co` in the staff browser address bar.
+   * Client navigates to `/__supabase/auth/v1/authorize…`; Next fetches upstream.
+   */
+  async rewrites() {
+    if (!supabaseOrigin) return [];
+    return [
+      {
+        source: "/__supabase/:path*",
+        destination: `${supabaseOrigin}/:path*`,
       },
     ];
   },

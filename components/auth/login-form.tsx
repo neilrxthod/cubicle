@@ -109,12 +109,16 @@ export default function LoginForm() {
     try {
       const supabase = createClient();
       const { getOAuthRedirectTo } = await import("@/lib/auth/oauth-redirect");
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      const { toSameOriginSupabaseUrl } = await import("@/lib/auth/oauth-proxy");
+      // skipBrowserRedirect so we can send staff through our same-origin
+      // proxy instead of navigating to *.supabase.co in the address bar.
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           // Must be allowlisted in Supabase Auth → URL Configuration.
           // If missing, Supabase falls back to Site URL (often localhost).
           redirectTo: getOAuthRedirectTo("/auth/callback"),
+          skipBrowserRedirect: true,
           queryParams: {
             hd: GOOGLE_HOSTED_DOMAIN,
             prompt: "select_account",
@@ -124,7 +128,14 @@ export default function LoginForm() {
       if (oauthError) {
         setError(oauthError.message);
         setGoogleLoading(false);
+        return;
       }
+      if (!data?.url) {
+        setError("Sign-in failed.");
+        setGoogleLoading(false);
+        return;
+      }
+      window.location.assign(toSameOriginSupabaseUrl(data.url));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed.");
       setGoogleLoading(false);
