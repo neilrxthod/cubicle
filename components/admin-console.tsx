@@ -1801,39 +1801,31 @@ function BookingsTable({
             ) : (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className={cn(
-                      "group inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--hairline-strong)] bg-white px-2.5",
-                      "text-[12.5px] font-medium leading-none text-neutral-700 transition-colors hover:bg-neutral-50",
-                      "data-[state=open]:border-neutral-400",
-                      "data-[state=open]:[&_svg.chevron]:rotate-180",
-                      "data-[state=open]:[&_svg.chevron]:text-neutral-600",
-                    )}
+                  <LiquidMetalButton
+                    icon={<Download strokeWidth={1.75} />}
+                    trailing={
+                      <svg
+                        aria-hidden
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        className="chevron origin-center transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                      >
+                        <path
+                          d="M4.75 6.5 8 9.75 11.25 6.5"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    }
                   >
-                    <Download
-                      className="size-3.5 shrink-0 text-neutral-400"
-                      strokeWidth={1.75}
-                    />
-                    <span>Export</span>
-                    <svg
-                      aria-hidden
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      className="chevron size-3 shrink-0 origin-center text-neutral-400 transition-[transform,color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
-                    >
-                      <path
-                        d="M4.75 6.5 8 9.75 11.25 6.5"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </button>
+                    Export
+                  </LiquidMetalButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="end"
+                  sideOffset={6}
                   className="w-56 rounded-lg border-[var(--hairline-strong)] p-1 shadow-[var(--shadow-soft)]"
                 >
                   <DropdownMenuLabel className="px-2 py-1.5 text-[11px] font-medium text-neutral-400">
