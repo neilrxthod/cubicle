@@ -1,6 +1,6 @@
 "use client";
 
-import { eachDayOfInterval, format, parseISO } from "date-fns";
+import { eachDayOfInterval, format } from "date-fns";
 import { getSession, setSession, clearSession } from "@/lib/auth/session";
 import { schoolEmailError } from "@/lib/auth/school-domain";
 import {

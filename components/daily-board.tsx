@@ -493,6 +493,26 @@ export function DailyBoard({
       })
       return
     }
+    if (session.role !== "admin") {
+      const maxSlots = Math.min(
+        5,
+        Math.max(1, bookingPolicy.maxSlotsPerTeacherPerDay ?? 5),
+      )
+      const mineToday = bookingsForDate.filter(
+        (b) => b.teacherId === session.id,
+      ).length
+      if (mineToday >= maxSlots) {
+        toast({
+          title: "Daily limit reached",
+          description:
+            maxSlots === 1
+              ? "You can book at most 1 cart slot per day."
+              : `You can book at most ${maxSlots} cart slots per day.`,
+          variant: "destructive",
+        })
+        return
+      }
+    }
     setBookDialog({ cart, period })
   }
 

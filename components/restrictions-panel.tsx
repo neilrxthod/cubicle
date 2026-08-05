@@ -871,17 +871,17 @@ function BatchToolsDialog({
 
   async function savePolicy() {
     const n = Number(maxAdvance)
-    if (!Number.isInteger(n) || n < 0 || n > 120) {
+    if (!Number.isInteger(n) || n < 1 || n > 60) {
       toast({
         title: "Invalid window",
-        description: "Use a whole number from 0–120 days.",
+        description: "Use a whole number from 1–60 days.",
         variant: "destructive",
       })
       return
     }
     setBusy(true)
     try {
-      const res = await updateBookingPolicy(n)
+      const res = await updateBookingPolicy({ maxAdvanceDays: n })
       if (!res.ok) {
         toast({
           title: "Could not save booking window",
@@ -976,8 +976,8 @@ function BatchToolsDialog({
                 <div className="mt-5 flex items-baseline gap-2">
                   <Input
                     type="number"
-                    min={0}
-                    max={120}
+                    min={1}
+                    max={60}
                     value={maxAdvance}
                     onChange={(e) => setMaxAdvance(e.target.value)}
                     className="h-10 w-[4.5rem] rounded-lg border-neutral-200 text-center text-[15px] font-medium tabular-nums tracking-tight shadow-none focus-visible:ring-neutral-900/10"
