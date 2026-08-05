@@ -81,6 +81,59 @@ async function fetchAllowlistRows(supabase: ReturnType<typeof client>): Promise<
   return { rows: [], known: false };
 }
 
+function isMissingMaxSlotsColumnError(message: string | undefined): boolean {
+  const msg = (message ?? "").toLowerCase();
+  return (
+    msg.includes("max_slots_per_teacher_per_day") &&
+    (msg.includes("schema cache") ||
+      msg.includes("could not find") ||
+      msg.includes("does not exist") ||
+      msg.includes("column"))
+  );
+}
+
+/** Load booking_policy; tolerate pre-migration DBs without max_slots column. */
+async function fetchBookingPolicyRow(
+  supabase: ReturnType<typeof client>,
+): Promise<{ data: DbBookingPolicy | null; error?: string }> {
+  const full = await supabase
+    .from("booking_policy")
+    .select("*")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (!full.error) {
+    return { data: (full.data as DbBookingPolicy | null) ?? null };
+  }
+
+  // Explicit column list can fail if PostgREST schema is mid-migration; retry lean.
+  if (isMissingMaxSlotsColumnError(full.error.message)) {
+    const legacy = await supabase
+      .from("booking_policy")
+      .select("id, max_advance_days")
+      .eq("id", 1)
+      .maybeSingle();
+    if (!legacy.error) {
+      return {
+        data: {
+          id: 1,
+          max_advance_days:
+            (legacy.data as { max_advance_days?: number } | null)
+              ?.max_advance_days ?? 14,
+          max_slots_per_teacher_per_day: 5,
+        },
+      };
+    }
+    console.error(
+      "[platform] booking_policy legacy load failed:",
+      legacy.error.message,
+    );
+    return { data: null, error: legacy.error.message };
+  }
+
+  return { data: null, error: full.error.message };
+}
+
 /** Load full platform state from Supabase (browser client + RLS). */
 export async function fetchPlatformState(): Promise<PlatformState> {
   const supabase = client();
@@ -91,7 +144,6 @@ export async function fetchPlatformState(): Promise<PlatformState> {
     issuesRes,
     restrictionsRes,
     swapsRes,
-    policyRes,
     profilesRes,
   ] = await Promise.all([
     supabase.from("carts").select("*").order("name"),
@@ -99,9 +151,10 @@ export async function fetchPlatformState(): Promise<PlatformState> {
     supabase.from("issues").select("*").order("created_at", { ascending: false }),
     supabase.from("slot_restrictions").select("*"),
     supabase.from("swap_requests").select("*").order("created_at", { ascending: false }),
-    supabase.from("booking_policy").select("*").eq("id", 1).maybeSingle(),
     supabase.from("profiles").select("*").order("name"),
   ]);
+
+  const policyLoad = await fetchBookingPolicyRow(supabase);
 
   const firstError =
     cartsRes.error ||
@@ -109,8 +162,8 @@ export async function fetchPlatformState(): Promise<PlatformState> {
     issuesRes.error ||
     restrictionsRes.error ||
     swapsRes.error ||
-    policyRes.error ||
-    profilesRes.error;
+    profilesRes.error ||
+    (policyLoad.error ? { message: policyLoad.error } : null);
 
   if (firstError) {
     throw new Error(firstError.message);
@@ -176,9 +229,7 @@ export async function fetchPlatformState(): Promise<PlatformState> {
     slotRestrictions: (
       (restrictionsRes.data as DbSlotRestriction[] | null) ?? []
     ).map(mapSlotRestriction),
-    bookingPolicy: mapBookingPolicy(
-      (policyRes.data as DbBookingPolicy | null) ?? null,
-    ),
+    bookingPolicy: mapBookingPolicy(policyLoad.data),
     swapRequests: ((swapsRes.data as DbSwapRequest[] | null) ?? []).map(
       mapSwapRequest,
     ),
@@ -750,6 +801,9 @@ export async function dbDeleteRestrictionsMatching(
   return { error: error?.message };
 }
 
+const MAX_SLOTS_MIGRATION_HINT =
+  "Run supabase/booking-policy-max-slots.sql in the Supabase SQL Editor (then retry Save).";
+
 export async function dbUpdateBookingPolicy(input: {
   maxAdvanceDays?: number;
   maxSlotsPerTeacherPerDay?: number;
@@ -765,11 +819,39 @@ export async function dbUpdateBookingPolicy(input: {
   if (Object.keys(payload).length === 0) {
     return { error: "Nothing to update." };
   }
+
   const { error } = await supabase
     .from("booking_policy")
     .update(payload)
     .eq("id", 1);
-  return { error: error?.message };
+
+  if (!error) return {};
+
+  // Pre-migration: column not on booking_policy yet.
+  if (
+    isMissingMaxSlotsColumnError(error.message) &&
+    payload.max_slots_per_teacher_per_day !== undefined
+  ) {
+    // Still save the booking window if it was part of this write.
+    if (typeof payload.max_advance_days === "number") {
+      const retry = await supabase
+        .from("booking_policy")
+        .update({ max_advance_days: payload.max_advance_days })
+        .eq("id", 1);
+      if (retry.error) return { error: retry.error.message };
+      return {
+        error:
+          "Booking window saved. Max cart slots needs a database column — " +
+          MAX_SLOTS_MIGRATION_HINT,
+      };
+    }
+    return {
+      error:
+        "Max cart slots is not in the database yet. " + MAX_SLOTS_MIGRATION_HINT,
+    };
+  }
+
+  return { error: error.message };
 }
 
 export async function dbUpdateProfile(
