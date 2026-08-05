@@ -108,7 +108,9 @@ function HomeBoard({ user }: { user: SessionUser }) {
 
   const stats = useMemo((): StatItem[] => {
     const todayBookings = state.bookings.filter((b) => b.date === date);
-    const mine = todayBookings.filter((b) => b.teacherId === user.id);
+    const mine = todayBookings.filter(
+      (b) => b.teacherId === user.id || b.sharedWithId === user.id,
+    );
     const activeCarts = state.carts.filter((c) => c.status === "active").length;
     const openIssues = state.issues.filter((i) => i.status === "open").length;
     const capacity = Math.max(activeCarts * 5, 1);
@@ -119,7 +121,9 @@ function HomeBoard({ user }: { user: SessionUser }) {
     const yesterdayKey = format(subDays(parseISO(date), 1), "yyyy-MM-dd");
     const yBooked = state.bookings.filter((b) => b.date === yesterdayKey).length;
     const yMine = state.bookings.filter(
-      (b) => b.date === yesterdayKey && b.teacherId === user.id,
+      (b) =>
+        b.date === yesterdayKey &&
+        (b.teacherId === user.id || b.sharedWithId === user.id),
     ).length;
     const yFree = Math.max(activeCarts * 5 - yBooked, 0);
     const yUtil = Math.round((yBooked / capacity) * 1000) / 10;
@@ -134,7 +138,7 @@ function HomeBoard({ user }: { user: SessionUser }) {
       state.bookings,
       date,
       SPARK_DAYS,
-      (b) => b.teacherId === user.id,
+      (b) => b.teacherId === user.id || b.sharedWithId === user.id,
     );
     const freeSpark = bookedSpark.map((n) =>
       Math.max(activeCarts * 5 - n, 0),

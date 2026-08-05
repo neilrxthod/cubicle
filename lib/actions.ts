@@ -69,6 +69,8 @@ type Result<T = undefined> = Ok<T> | Fail;
 export type CreateBookingResult = {
   bookingId: string;
   booking?: Booking;
+  /** True when the slot was booked but share columns are not migrated yet. */
+  shareSkipped?: boolean;
 };
 
 /** Platform data (carts, bookings, …) → Supabase. Isolated on local by default. */
@@ -330,7 +332,12 @@ export async function createBooking(
     });
     // Always refresh so a lost race shows the other teacher's booking on the board.
     const refreshed = await refreshRemote();
-    if (error) return { ok: false, error };
+    // Soft: booking row may exist without share columns (migration pending).
+    const shareSkipped =
+      Boolean(remoteId) &&
+      Boolean(error) &&
+      /booking-share\.sql|share\/borrow/i.test(error ?? "");
+    if (error && !shareSkipped) return { ok: false, error };
     if (!refreshed.ok) return refreshed;
 
     const matched =
@@ -343,13 +350,22 @@ export async function createBooking(
           b.teacherId === session.id,
       );
 
+    if (!matched && !remoteId) {
+      return { ok: false, error: error ?? "Could not create booking." };
+    }
+
     return {
       ok: true,
       data: matched
-        ? { bookingId: matched.id, booking: matched }
-        : remoteId
-          ? { bookingId: remoteId }
-          : undefined,
+        ? {
+            bookingId: matched.id,
+            booking: matched,
+            shareSkipped: shareSkipped || undefined,
+          }
+        : {
+            bookingId: remoteId!,
+            shareSkipped: shareSkipped || undefined,
+          },
     };
   }
 

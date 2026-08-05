@@ -219,12 +219,20 @@ export function BookDialog({
                     shareWith !== SHARE_NONE
                       ? colleagues.find((c) => c.id === shareWith)?.name
                       : undefined;
-                  toast({
-                    title: partner ? "Cart booked & shared" : "Cart booked",
-                    description: partner
-                      ? `${cart.name} · ${period} · with ${partner}`
-                      : `${cart.name} · ${period}`,
-                  });
+                  if (res.ok && res.data?.shareSkipped) {
+                    toast({
+                      title: "Cart booked",
+                      description:
+                        "Share needs a DB update — run supabase/booking-share.sql in Supabase.",
+                    });
+                  } else {
+                    toast({
+                      title: partner ? "Cart booked & shared" : "Cart booked",
+                      description: partner
+                        ? `${cart.name} · ${period} · with ${partner}`
+                        : `${cart.name} · ${period}`,
+                    });
+                  }
                   router.refresh();
                   onClose();
                 });

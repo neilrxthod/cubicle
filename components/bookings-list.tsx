@@ -22,6 +22,8 @@ export function BookingsList({
   emptyLabel,
   emptyAction,
   canCancel = false,
+  /** When set, cancel only shows on bookings this user owns (not share-only). */
+  viewerId,
 }: {
   title: string
   bookings: Booking[]
@@ -29,6 +31,7 @@ export function BookingsList({
   emptyLabel: string
   emptyAction?: { href: string; label: string }
   canCancel?: boolean
+  viewerId?: string
 }) {
   const router = useRouter()
   const cartMap = new Map(carts.map((c) => [c.id, c]))
@@ -61,14 +64,26 @@ export function BookingsList({
           {bookings.map((b, i) => {
             const cart = cartMap.get(b.cartId)
             const dt = parseISO(b.date)
+            const isSharePartner =
+              Boolean(viewerId) && b.sharedWithId === viewerId
+            const shareBit = b.sharedWithName?.trim()
+              ? isSharePartner
+                ? `With ${b.teacherName}`
+                : `Shared with ${b.sharedWithName.trim()}`
+              : null
             const detail = [
               dayLabel(dt),
               b.period,
               b.className?.trim(),
               b.subject?.trim(),
+              shareBit,
             ]
               .filter(Boolean)
               .join(" · ")
+
+            // Only the booking owner (not share partner) can cancel from this list.
+            const showCancel =
+              canCancel && (!viewerId || b.teacherId === viewerId)
 
             return (
               <li
@@ -87,7 +102,7 @@ export function BookingsList({
                   </p>
                 </div>
 
-                {canCancel ? (
+                {showCancel ? (
                   <CancelAction
                     bookingId={b.id}
                     onDone={() => router.refresh()}

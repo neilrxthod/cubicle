@@ -6,7 +6,7 @@ import { PageShell } from "@/components/app/page-shell";
 import { RequirePlatformAuth } from "@/components/app/require-platform-auth";
 import { BookingsList } from "@/components/bookings-list";
 import { usePlatformStore } from "@/lib/data/platform-store";
-import type { SessionUser } from "@/lib/types";
+import { bookingInvolvesUser, type SessionUser } from "@/lib/types";
 
 export default function MyBookingsPage() {
   return (
@@ -20,7 +20,7 @@ function MyBookings({ user }: { user: SessionUser }) {
   const state = usePlatformStore();
   const today = format(new Date(), "yyyy-MM-dd");
   const mine = state.bookings
-    .filter((booking) => booking.teacherId === user.id)
+    .filter((booking) => bookingInvolvesUser(booking, user.id))
     .sort(
       (a, b) =>
         a.date.localeCompare(b.date) || a.period.localeCompare(b.period),
@@ -38,12 +38,14 @@ function MyBookings({ user }: { user: SessionUser }) {
           emptyLabel="No upcoming bookings."
           emptyAction={{ href: "/", label: "Book a cart" }}
           canCancel
+          viewerId={user.id}
         />
         <BookingsList
           title="Past"
           bookings={past}
           carts={state.carts}
           emptyLabel="No past bookings."
+          viewerId={user.id}
         />
       </PageShell>
     </DashboardFrame>

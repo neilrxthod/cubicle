@@ -70,15 +70,16 @@ create table if not exists public.bookings (
 
 create index if not exists bookings_date_idx on public.bookings (date);
 create index if not exists bookings_teacher_idx on public.bookings (teacher_id);
-create index if not exists bookings_shared_with_idx
-  on public.bookings (shared_with_id)
-  where shared_with_id is not null;
 
--- Existing projects before share columns:
+-- Existing projects before share columns (must run before shared_with index).
 alter table public.bookings
   add column if not exists shared_with_id uuid references public.profiles (id) on delete set null,
   add column if not exists shared_with_name text,
   add column if not exists shared_with_avatar_url text;
+
+create index if not exists bookings_shared_with_idx
+  on public.bookings (shared_with_id)
+  where shared_with_id is not null;
 
 -- ---------------------------------------------------------------------------
 -- Issues

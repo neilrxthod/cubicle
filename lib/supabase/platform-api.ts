@@ -299,6 +299,8 @@ export async function dbCreateBooking(input: {
     .insert(withEditor)
     .select("id")
     .single();
+  let shareSkipped = false;
+
   if (error && /shared_with/i.test(error.message ?? "")) {
     const withoutShare = {
       ...base,
@@ -314,13 +316,7 @@ export async function dbCreateBooking(input: {
       .single();
     data = retryShare.data;
     error = retryShare.error;
-    if (!error && input.sharedWithId) {
-      return {
-        id: data?.id ? String(data.id) : undefined,
-        error:
-          "Cart booked, but share needs a database update. Run supabase/booking-share.sql in the Supabase SQL Editor.",
-      };
-    }
+    if (!error && input.sharedWithId) shareSkipped = true;
   }
   if (error && /last_edited/i.test(error.message ?? "")) {
     const retry = await supabase
@@ -331,21 +327,34 @@ export async function dbCreateBooking(input: {
     data = retry.data;
     error = retry.error;
     if (error && /shared_with/i.test(error.message ?? "")) {
-      const bare = await supabase.from("bookings").insert(base).select("id").single();
+      const bare = await supabase
+        .from("bookings")
+        .insert(base)
+        .select("id")
+        .single();
       data = bare.data;
       error = bare.error;
-      if (!error && input.sharedWithId) {
-        return {
-          id: data?.id ? String(data.id) : undefined,
-          error:
-            "Cart booked, but share needs a database update. Run supabase/booking-share.sql in the Supabase SQL Editor.",
-        };
-      }
+      if (!error && input.sharedWithId) shareSkipped = true;
     }
   }
+
+  if (error) {
+    return {
+      id: data?.id ? String(data.id) : undefined,
+      error: mapBookingDbError(error.message),
+    };
+  }
+
+  if (shareSkipped) {
+    return {
+      id: data?.id ? String(data.id) : undefined,
+      error:
+        "Cart booked. To enable share/borrow, run supabase/booking-share.sql in Supabase SQL Editor.",
+    };
+  }
+
   return {
     id: data?.id ? String(data.id) : undefined,
-    error: mapBookingDbError(error?.message),
   };
 }
 
