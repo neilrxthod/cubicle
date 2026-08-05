@@ -28,7 +28,7 @@ import {
   listOfferableBookings,
 } from "@/lib/booking/swap-rules"
 import { getSession } from "@/lib/auth/session"
-import { SwapCartRoute } from "@/components/swap-cart-route"
+import { cn } from "@/lib/utils"
 
 export function SwapRequestDialog({
   booking,
@@ -41,6 +41,7 @@ export function SwapRequestDialog({
   const platform = usePlatformStore()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [reason, setReason] = useState("")
 
   const session = getSession()
   const targetCart = platform.carts.find((c) => c.id === booking.cartId)
@@ -63,7 +64,6 @@ export function SwapRequestDialog({
 
   const [offeredId, setOfferedId] = useState(defaultOffer)
 
-  // Keep selection valid if bookings change while the dialog is open.
   useEffect(() => {
     if (offerable.length === 0) {
       setOfferedId(SWAP_OFFER_HANDOFF)
@@ -89,55 +89,82 @@ export function SwapRequestDialog({
     ? cartById.get(selectedOffer.cartId)
     : undefined
 
+  const dateLabel = format(parseISO(booking.date), "EEE, MMM d")
   const whenLabel = isExchange
     ? selectedOffer!.period === booking.period
-      ? `${booking.period} · ${format(parseISO(booking.date), "EEE, MMM d")}`
-      : `${selectedOffer!.period} ⇄ ${booking.period} · ${format(parseISO(booking.date), "EEE, MMM d")}`
-    : `${booking.period} · ${format(parseISO(booking.date), "EEE, MMM d")}`
+      ? `${booking.period} · ${dateLabel}`
+      : `${selectedOffer!.period} ⇄ ${booking.period} · ${dateLabel}`
+    : `${booking.period} · ${dateLabel}`
+
+  function submit() {
+    setError(null)
+    const formData = new FormData()
+    formData.set("bookingId", booking.id)
+    formData.set("offeredBookingId", offeredId)
+    formData.set("reason", reason.trim())
+    startTransition(async () => {
+      const res = await requestSwap(formData)
+      if (res && "error" in res && res.error) {
+        setError(res.error)
+        return
+      }
+      toast({
+        title: "Swap request sent",
+        description: isExchange
+          ? `${offeredCart?.name ?? "Your cart"} ⇄ ${targetCart?.name ?? "their cart"}`
+          : `Handoff request → ${targetCart?.name ?? "their cart"}`,
+      })
+      router.refresh()
+      onClose()
+    })
+  }
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="gap-0 overflow-hidden rounded-2xl border-border/60 bg-white p-0 shadow-xl sm:max-w-[28rem]">
-        <DialogHeader className="space-y-1.5 border-b border-border/60 px-5 py-5 text-left sm:px-6">
-          <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
-            Cart transfer
-          </p>
-          <DialogTitle className="text-[17px] tracking-tight">
-            {isExchange ? "Request cart exchange" : "Request cart handoff"}
-          </DialogTitle>
-          <DialogDescription className="text-[13px] leading-relaxed text-neutral-500">
-            {isExchange ? (
-              <>
-                Select which of your carts to offer {booking.teacherName}. You
-                both keep your class details — only cart assignments move.
-              </>
-            ) : (
-              <>
-                Ask {booking.teacherName} to give you this slot. No cart from
-                you is offered, so this is a one-way handoff.
-              </>
-            )}
-          </DialogDescription>
+      <DialogContent
+        showCloseButton
+        className={cn(
+          "gap-0 overflow-hidden rounded-2xl border border-black/[0.08] bg-white p-0 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.18)]",
+          "w-[calc(100%-1.5rem)] max-w-[40rem] sm:max-w-[44rem]",
+        )}
+      >
+        {/* Compact header — single row on sm+ */}
+        <DialogHeader className="flex flex-row items-start justify-between gap-4 space-y-0 border-b border-black/[0.06] px-4 py-3.5 pr-12 sm:px-5">
+          <div className="min-w-0 space-y-0.5 text-left">
+            <DialogTitle className="text-[15px] font-medium tracking-[-0.02em] text-neutral-950">
+              {isExchange ? "Request exchange" : "Request handoff"}
+              <span className="ml-2 text-[13px] font-normal text-neutral-400">
+                {whenLabel}
+              </span>
+            </DialogTitle>
+            <DialogDescription className="text-[12.5px] leading-snug text-neutral-500">
+              {isExchange
+                ? `Offer a cart to ${booking.teacherName}. Class details stay — only carts move.`
+                : `Ask ${booking.teacherName} for this slot (one-way, no cart offered).`}
+            </DialogDescription>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-4 border-b border-border/50 bg-[#f7f7f8] px-5 py-4 sm:px-6">
-          {/* Corporate cart selector */}
-          <div className="space-y-1.5">
-            <label
-              htmlFor="offered-cart"
-              className="text-[11px] font-semibold uppercase tracking-[0.1em] text-neutral-500"
-            >
-              Your cart to offer
-            </label>
+        {/* Horizontal body */}
+        <div className="grid gap-0 sm:grid-cols-[1fr_auto_1fr]">
+          {/* You give */}
+          <div className="flex min-w-0 flex-col gap-2 px-4 py-3.5 sm:px-5 sm:py-4">
+            <p className="text-[10.5px] font-semibold tracking-[0.1em] text-neutral-400 uppercase">
+              {isExchange ? "You give" : "You offer"}
+            </p>
             <Select
               value={offeredId}
               onValueChange={setOfferedId}
               disabled={offerable.length === 0}
             >
               <SelectTrigger
-                id="offered-cart"
                 size="default"
-                className="h-11 w-full rounded-lg border-neutral-200 bg-white px-3.5 text-[13.5px] font-medium text-neutral-900 shadow-none hover:border-neutral-300 focus-visible:border-neutral-400 data-[size=default]:h-11"
+                className={cn(
+                  "h-10 w-full rounded-lg border-neutral-200 bg-neutral-50/80 px-3",
+                  "text-[13px] font-medium text-neutral-900 shadow-none",
+                  "hover:border-neutral-300 focus-visible:border-neutral-400",
+                  "data-[size=default]:h-10",
+                )}
               >
                 <SelectValue placeholder="Select a cart" />
               </SelectTrigger>
@@ -148,18 +175,14 @@ export function SwapRequestDialog({
                 {offerable.map((b) => {
                   const c = cartById.get(b.cartId)
                   const classLabel = b.className?.trim()
-                  const label = [
-                    c?.name ?? "Cart",
-                    b.period,
-                    classLabel || undefined,
-                  ]
+                  const label = [c?.name ?? "Cart", b.period, classLabel]
                     .filter(Boolean)
                     .join(" · ")
                   return (
                     <SelectItem
                       key={b.id}
                       value={b.id}
-                      className="cursor-pointer rounded-md py-2.5 pl-3 pr-8 text-[13px] font-medium"
+                      className="cursor-pointer rounded-md py-2 pl-3 pr-8 text-[13px] font-medium"
                     >
                       {label}
                     </SelectItem>
@@ -167,122 +190,108 @@ export function SwapRequestDialog({
                 })}
                 <SelectItem
                   value={SWAP_OFFER_HANDOFF}
-                  className="cursor-pointer rounded-md py-2.5 pl-3 pr-8 text-[13px]"
+                  className="cursor-pointer rounded-md py-2 pl-3 pr-8 text-[13px]"
                 >
-                  Handoff only — no cart offered
+                  Handoff only — no cart
                 </SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-[11px] leading-snug text-neutral-400">
-              {offerable.length > 1
-                ? `${offerable.length} of your carts are booked this day — pick which one to exchange.`
-                : offerable.length === 1
-                  ? "You have one cart booked this day. Change to handoff if you prefer not to offer it."
-                  : "You have no cart booked this day, so only a handoff is available."}
+            <p className="truncate text-[11.5px] text-neutral-400">
+              {isExchange
+                ? [selectedOffer?.period, selectedOffer?.className?.trim()]
+                    .filter(Boolean)
+                    .join(" · ") || session?.name
+                : "No cart offered"}
             </p>
           </div>
 
-          <SwapCartRoute
-            mode={isExchange ? "exchange" : "handoff"}
-            meta={whenLabel}
-            from={{
-              eyebrow: isExchange ? "You give" : "You have",
-              cartName: isExchange
-                ? (offeredCart?.name ?? "Your cart")
-                : "No cart",
-              detail: isExchange
-                ? [
-                    selectedOffer?.period,
-                    selectedOffer?.className?.trim() || session?.name,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")
-                : "This period",
-            }}
-            to={{
-              eyebrow: isExchange ? "You get" : "You want",
-              cartName: targetCart?.name ?? "Their cart",
-              detail: [
-                booking.period,
-                booking.className?.trim() || booking.teacherName,
-              ]
+          {/* Arrow */}
+          <div
+            className="flex items-center justify-center border-black/[0.05] px-2 sm:border-x sm:px-3"
+            aria-hidden
+          >
+            <span className="flex size-8 items-center justify-center rounded-full border border-neutral-200 bg-white text-[14px] text-neutral-600">
+              {isExchange ? "⇄" : "→"}
+            </span>
+          </div>
+
+          {/* You get */}
+          <div className="flex min-w-0 flex-col gap-2 border-t border-black/[0.05] px-4 py-3.5 sm:border-t-0 sm:px-5 sm:py-4">
+            <p className="text-[10.5px] font-semibold tracking-[0.1em] text-emerald-700/70 uppercase">
+              You get
+            </p>
+            <div className="flex h-10 items-center rounded-lg border border-emerald-200/70 bg-emerald-50/40 px-3">
+              <p className="truncate text-[13px] font-medium tracking-[-0.01em] text-neutral-950">
+                {targetCart?.name ?? "Cart"}
+                <span className="ml-1.5 font-normal text-neutral-500">
+                  {booking.period}
+                </span>
+              </p>
+            </div>
+            <p className="truncate text-[11.5px] text-neutral-400">
+              {[booking.className?.trim(), booking.teacherName]
                 .filter(Boolean)
-                .join(" · "),
-            }}
-          />
+                .join(" · ")}
+            </p>
+          </div>
         </div>
 
-        <form
-          className="flex flex-col gap-5 px-5 py-5 sm:px-6"
-          action={(formData) => {
-            setError(null)
-            formData.set("bookingId", booking.id)
-            formData.set("offeredBookingId", offeredId)
-            startTransition(async () => {
-              const res = await requestSwap(formData)
-              if (res && "error" in res && res.error) {
-                setError(res.error)
-                return
-              }
-              toast({
-                title: "Swap request sent",
-                description: isExchange
-                  ? `${offeredCart?.name ?? "Your cart"} ⇄ ${targetCart?.name ?? "their cart"}`
-                  : `Handoff request → ${targetCart?.name ?? "their cart"}`,
-              })
-              router.refresh()
-              onClose()
-            })
-          }}
-        >
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="reason"
-              className="text-[11px] font-semibold uppercase tracking-[0.1em] text-neutral-500"
-            >
-              Business reason
-            </label>
-            <textarea
-              id="reason"
-              name="reason"
-              placeholder={
-                isExchange
-                  ? "Why you need their cart"
-                  : "Why you need this slot"
-              }
-              required
-              maxLength={SWAP_REASON_MAX}
-              rows={3}
-              className="w-full rounded-lg border border-neutral-200 bg-white p-3 text-[13.5px] tracking-[-0.011em] text-foreground placeholder:text-neutral-400 outline-none transition focus:border-neutral-400"
-            />
-            <p className="text-[11px] text-neutral-400">
-              Same day · max {SWAP_REASON_MAX} characters
-            </p>
+        {/* Reason + actions — single horizontal strip */}
+        <div className="border-t border-black/[0.06] px-4 py-3 sm:px-5">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1">
+              <input
+                id="reason"
+                name="reason"
+                value={reason}
+                onChange={(e) => {
+                  setReason(e.target.value.slice(0, SWAP_REASON_MAX))
+                  if (error) setError(null)
+                }}
+                placeholder={
+                  isExchange
+                    ? "Why you need their cart…"
+                    : "Why you need this slot…"
+                }
+                required
+                maxLength={SWAP_REASON_MAX}
+                autoComplete="off"
+                className={cn(
+                  "h-10 w-full rounded-lg border border-neutral-200 bg-white px-3",
+                  "text-[13px] tracking-[-0.01em] text-neutral-900 placeholder:text-neutral-400",
+                  "outline-none transition focus:border-neutral-400",
+                )}
+              />
+            </div>
+            <div className="flex shrink-0 items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={pending}
+                className="h-10 rounded-lg px-3.5 text-[13px] font-medium text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={pending || !reason.trim()}
+                onClick={submit}
+                className="h-10 rounded-lg bg-neutral-950 px-4 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+              >
+                {pending ? "Sending…" : "Send request"}
+              </button>
+            </div>
           </div>
 
           {error ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
+            <p
+              role="alert"
+              className="mt-2 truncate text-[12px] font-medium text-red-600"
+            >
               {error}
             </p>
           ) : null}
-
-          <div className="flex items-center justify-end gap-2 border-t border-neutral-100 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="h-9 rounded-lg px-4 text-[13px] font-medium text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={pending}
-              className="h-9 rounded-lg bg-neutral-950 px-5 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {pending ? "Sending…" : "Send request"}
-            </button>
-          </div>
-        </form>
+        </div>
       </DialogContent>
     </Dialog>
   )

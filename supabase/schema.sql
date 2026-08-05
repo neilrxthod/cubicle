@@ -125,9 +125,9 @@ create unique index if not exists swap_requests_pending_unique
 create table if not exists public.booking_policy (
   id integer primary key default 1 check (id = 1),
   max_advance_days integer not null default 14,
-  -- How many cart periods a teacher may hold on one calendar day (P1–P5).
+  -- How many cart periods a teacher may hold on one calendar day (1–15).
   max_slots_per_teacher_per_day integer not null default 5
-    check (max_slots_per_teacher_per_day >= 1 and max_slots_per_teacher_per_day <= 5)
+    check (max_slots_per_teacher_per_day >= 1 and max_slots_per_teacher_per_day <= 15)
 );
 
 insert into public.booking_policy (id, max_advance_days, max_slots_per_teacher_per_day)
@@ -143,7 +143,7 @@ alter table public.booking_policy
 
 alter table public.booking_policy
   add constraint booking_policy_max_slots_range
-  check (max_slots_per_teacher_per_day >= 1 and max_slots_per_teacher_per_day <= 5);
+  check (max_slots_per_teacher_per_day >= 1 and max_slots_per_teacher_per_day <= 15);
 
 -- ---------------------------------------------------------------------------
 -- Auto-create profile when a user signs up

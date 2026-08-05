@@ -224,7 +224,7 @@ export async function createBooking(
     // Daily slot cap from admin booking policy (admins unlimited).
     const dayKey = date.slice(0, 10);
     const maxSlots = Math.min(
-      5,
+      15,
       Math.max(1, state.bookingPolicy.maxSlotsPerTeacherPerDay ?? 5),
     );
     const dayCount = state.bookings.filter(
@@ -1439,11 +1439,11 @@ export async function updateBookingPolicy(input: {
     if (
       !Number.isInteger(input.maxSlotsPerTeacherPerDay) ||
       input.maxSlotsPerTeacherPerDay < 1 ||
-      input.maxSlotsPerTeacherPerDay > 5
+      input.maxSlotsPerTeacherPerDay > 15
     ) {
       return {
         ok: false,
-        error: "Max cart slots must be between 1 and 5 per day.",
+        error: "Max cart slots must be between 1 and 15 per day.",
       };
     }
     next.maxSlotsPerTeacherPerDay = input.maxSlotsPerTeacherPerDay;

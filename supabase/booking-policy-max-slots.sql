@@ -11,13 +11,13 @@
 alter table public.booking_policy
   add column if not exists max_slots_per_teacher_per_day integer not null default 5;
 
--- Keep values in a sensible range (1 period … all 5 periods).
+-- Keep values in a sensible range (1–15 slots per day).
 alter table public.booking_policy
   drop constraint if exists booking_policy_max_slots_range;
 
 alter table public.booking_policy
   add constraint booking_policy_max_slots_range
-  check (max_slots_per_teacher_per_day >= 1 and max_slots_per_teacher_per_day <= 5);
+  check (max_slots_per_teacher_per_day >= 1 and max_slots_per_teacher_per_day <= 15);
 
 -- Ensure the single policy row exists and has a valid default.
 insert into public.booking_policy (id, max_advance_days, max_slots_per_teacher_per_day)

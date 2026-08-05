@@ -118,7 +118,8 @@ export type BookingPolicy = {
   maxAdvanceDays: number;
   /**
    * Max cart periods a teacher may hold on a single school day.
-   * Capped by PERIODS length (P1–P5). Admins are not limited by this.
+   * Admin-configurable up to MAX_SLOTS_PER_TEACHER_PER_DAY.
+   * Admins themselves are not limited by this.
    */
   maxSlotsPerTeacherPerDay: number;
 };
@@ -126,8 +127,11 @@ export type BookingPolicy = {
 /** Default max advance booking window (days). */
 export const DEFAULT_MAX_ADVANCE_DAYS = 14;
 
-/** Default daily cart-slot cap for teachers (all five periods). */
+/** Default daily cart-slot cap for teachers. */
 export const DEFAULT_MAX_SLOTS_PER_TEACHER_PER_DAY = 5;
+
+/** Upper bound for admin-configured daily cart-slot cap. */
+export const MAX_SLOTS_PER_TEACHER_PER_DAY = 15;
 
 export type SwapRequest = {
   id: string;

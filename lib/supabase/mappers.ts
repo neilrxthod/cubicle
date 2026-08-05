@@ -205,7 +205,7 @@ export function mapBookingPolicy(row: DbBookingPolicy | null): BookingPolicy {
   const rawSlots = row?.max_slots_per_teacher_per_day;
   const slots =
     typeof rawSlots === "number" && Number.isFinite(rawSlots)
-      ? Math.min(5, Math.max(1, Math.round(rawSlots)))
+      ? Math.min(15, Math.max(1, Math.round(rawSlots)))
       : 5;
   return {
     maxAdvanceDays: row?.max_advance_days ?? 14,

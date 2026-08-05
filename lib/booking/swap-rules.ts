@@ -50,7 +50,7 @@ function normalizeDate(ymd: string): string {
 
 /** Daily cart-slot cap for teachers (admins unlimited). */
 function maxSlotsPerDay(policy: BookingPolicy): number {
-  return Math.min(5, Math.max(1, policy.maxSlotsPerTeacherPerDay ?? 5));
+  return Math.min(15, Math.max(1, policy.maxSlotsPerTeacherPerDay ?? 5));
 }
 
 /**

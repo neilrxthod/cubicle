@@ -495,7 +495,7 @@ export function DailyBoard({
     }
     if (session.role !== "admin") {
       const maxSlots = Math.min(
-        5,
+        15,
         Math.max(1, bookingPolicy.maxSlotsPerTeacherPerDay ?? 5),
       )
       const mineToday = bookingsForDate.filter(
