@@ -22,8 +22,18 @@ import { PERIODS } from "@/lib/types";
 
 export const SWAP_REASON_MAX = 280;
 
-/** Sent from the request form when the user chooses a pure handoff. */
-export const SWAP_OFFER_HANDOFF = "__handoff__";
+/**
+ * Sent from the request form when the user chooses a pure handoff.
+ * Prefer plain "handoff" (Radix Select is picky about odd tokens); still accept
+ * the legacy "__handoff__" value when reading.
+ */
+export const SWAP_OFFER_HANDOFF = "handoff";
+const HANDOFF_TOKENS = new Set(["handoff", "__handoff__"]);
+
+export function isHandoffOfferId(value: string | null | undefined): boolean {
+  const v = (value ?? "").trim();
+  return !v || HANDOFF_TOKENS.has(v);
+}
 
 export type SwapMode = "exchange" | "handoff";
 
@@ -130,11 +140,43 @@ export function resolveOfferedBooking(
 ): Booking | undefined {
   void target;
   const offeredId = request.offeredBookingId?.trim();
-  if (!offeredId || offeredId === SWAP_OFFER_HANDOFF) return undefined;
+  if (isHandoffOfferId(offeredId)) return undefined;
 
   return bookings.find(
     (b) => b.id === offeredId && b.teacherId === request.requesterId,
   );
+}
+
+/** True if user owns or co-shares a booking on this date + period. */
+export function userHoldsPeriod(
+  bookings: Booking[],
+  userId: string,
+  date: string,
+  period: string,
+  excludeBookingId?: string,
+): boolean {
+  const day = normalizeDate(date);
+  return bookings.some(
+    (b) =>
+      b.id !== excludeBookingId &&
+      normalizeDate(b.date) === day &&
+      b.period === period &&
+      (b.teacherId === userId || b.sharedWithId === userId),
+  );
+}
+
+/** How many slots the user is on for a calendar day (owner or share partner). */
+export function userDaySlotCount(
+  bookings: Booking[],
+  userId: string,
+  date: string,
+): number {
+  const day = normalizeDate(date);
+  return bookings.filter(
+    (b) =>
+      normalizeDate(b.date) === day &&
+      (b.teacherId === userId || b.sharedWithId === userId),
+  ).length;
 }
 
 /** Requester's other booking on the same date + period (legacy / default). */
@@ -200,10 +242,13 @@ export function swapModeFor(
   target: Booking,
   offeredBookingId?: string | null,
 ): SwapMode {
-  if (offeredBookingId && offeredBookingId !== SWAP_OFFER_HANDOFF) {
+  if (!isHandoffOfferId(offeredBookingId) && offeredBookingId) {
     return "exchange";
   }
-  if (offeredBookingId === SWAP_OFFER_HANDOFF) return "handoff";
+  if (isHandoffOfferId(offeredBookingId) && offeredBookingId) {
+    return "handoff";
+  }
+  // No explicit offer field (legacy): same-period cart ⇒ exchange, else handoff.
   return findCounterpartyBooking(
     bookings,
     requesterId,
@@ -303,24 +348,37 @@ export function evaluateSwapRequest(input: {
 
   const offerable = listOfferableBookings(bookings, session.id, booking);
   const rawOffer = (offeredBookingId ?? "").trim();
+  const wantsHandoff =
+    offerable.length === 0 || isHandoffOfferId(rawOffer);
 
-  // No carts that day → handoff only (still respect daily slot cap).
-  if (offerable.length === 0) {
-    const handoffCap = teacherDaySlotCap(bookingPolicy, 0);
-    if (handoffCap) return handoffCap;
-    return { ok: true, mode: "handoff" };
+  // Empty offer with carts still open → force an explicit choice.
+  if (offerable.length > 0 && rawOffer === "") {
+    return {
+      ok: false,
+      error: "Select which cart to offer, or choose Handoff.",
+    };
   }
 
-  // Explicit handoff while holding carts that day (allowed).
-  if (rawOffer === SWAP_OFFER_HANDOFF || rawOffer === "") {
-    // Prefer forcing a selection when they have carts — empty is invalid.
-    if (rawOffer === "") {
+  if (wantsHandoff) {
+    // Handoff adds a new slot — cannot already hold this period.
+    if (
+      userHoldsPeriod(
+        bookings,
+        session.id,
+        booking.date,
+        booking.period,
+        booking.id,
+      )
+    ) {
       return {
         ok: false,
-        error: "Select which cart you want to offer, or choose handoff only.",
+        error:
+          "You already have a cart this period. Offer an exchange instead of a handoff.",
       };
     }
-    const handoffCap = teacherDaySlotCap(bookingPolicy, offerable.length);
+    // Day cap (owner + shared slots).
+    const dayCount = userDaySlotCount(bookings, session.id, booking.date);
+    const handoffCap = teacherDaySlotCap(bookingPolicy, dayCount);
     if (handoffCap) return handoffCap;
     return { ok: true, mode: "handoff" };
   }
@@ -459,15 +517,16 @@ export function evaluateSwapAccept(input: {
     return { ok: true, mode: "exchange", counterparty };
   }
 
-  // Handoff: requester must not already hold this period (would double-book).
-  const already = findCounterpartyBooking(
-    bookings,
-    request.requesterId,
-    booking.date,
-    booking.period,
-    booking.id,
-  );
-  if (already) {
+  // Handoff: requester must not already hold this period (owned or shared).
+  if (
+    userHoldsPeriod(
+      bookings,
+      request.requesterId,
+      booking.date,
+      booking.period,
+      booking.id,
+    )
+  ) {
     return {
       ok: false,
       error:
@@ -477,13 +536,11 @@ export function evaluateSwapAccept(input: {
 
   // Handoff increases the requester's daily slot count.
   if (bookingPolicy) {
-    const day = normalizeDate(booking.date);
-    const dayCount = bookings.filter(
-      (b) =>
-        b.teacherId === request.requesterId &&
-        normalizeDate(b.date) === day &&
-        b.id !== booking.id,
-    ).length;
+    const dayCount = userDaySlotCount(
+      bookings,
+      request.requesterId,
+      booking.date,
+    );
     const cap = teacherDaySlotCap(bookingPolicy, dayCount);
     if (cap) return cap;
   }

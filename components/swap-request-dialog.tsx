@@ -25,6 +25,7 @@ import {
   SWAP_OFFER_HANDOFF,
   SWAP_REASON_MAX,
   defaultOfferedBookingId,
+  isHandoffOfferId,
   listOfferableBookings,
 } from "@/lib/booking/swap-rules"
 import { getSession } from "@/lib/auth/session"
@@ -56,29 +57,26 @@ export function SwapRequestDialog({
     [platform.carts],
   )
 
-  const defaultOffer =
-    offerable.length > 0
-      ? (defaultOfferedBookingId(offerable, booking.period) ??
-        offerable[0]!.id)
-      : SWAP_OFFER_HANDOFF
+  const canExchange = offerable.length > 0
+  const defaultOfferId = canExchange
+    ? (defaultOfferedBookingId(offerable, booking.period) ?? offerable[0]!.id)
+    : SWAP_OFFER_HANDOFF
 
-  const [offeredId, setOfferedId] = useState(defaultOffer)
+  /** Mode first — handoff is a first-class choice, not buried in the cart list. */
+  const [mode, setMode] = useState<"exchange" | "handoff">(
+    canExchange ? "exchange" : "handoff",
+  )
+  const [exchangeBookingId, setExchangeBookingId] = useState(defaultOfferId)
 
-  // Resolve selection without effects — handoff stays selected when chosen.
-  const resolvedOfferedId = useMemo(() => {
-    if (offerable.length === 0) return SWAP_OFFER_HANDOFF
-    if (offeredId === SWAP_OFFER_HANDOFF) return SWAP_OFFER_HANDOFF
-    if (offerable.some((b) => b.id === offeredId)) return offeredId
-    return (
-      defaultOfferedBookingId(offerable, booking.period) ?? offerable[0]!.id
-    )
-  }, [offerable, offeredId, booking.period])
+  const selectedOffer =
+    mode === "exchange"
+      ? offerable.find((b) => b.id === exchangeBookingId) ??
+        offerable.find((b) => b.id === defaultOfferId) ??
+        offerable[0]
+      : undefined
 
-  const isHandoff = resolvedOfferedId === SWAP_OFFER_HANDOFF
-  const selectedOffer = isHandoff
-    ? undefined
-    : offerable.find((b) => b.id === resolvedOfferedId)
-  const isExchange = Boolean(selectedOffer)
+  const isHandoff = mode === "handoff" || !canExchange
+  const isExchange = !isHandoff && Boolean(selectedOffer)
   const offeredCart = selectedOffer
     ? cartById.get(selectedOffer.cartId)
     : undefined
@@ -96,14 +94,17 @@ export function SwapRequestDialog({
       return
     }
     setError(null)
+
+    const offered =
+      isHandoff || !selectedOffer
+        ? SWAP_OFFER_HANDOFF
+        : selectedOffer.id
+
     const formData = new FormData()
     formData.set("bookingId", booking.id)
-    // Explicit handoff token — requestSwap maps this to null offered_booking_id.
-    formData.set(
-      "offeredBookingId",
-      isHandoff ? SWAP_OFFER_HANDOFF : resolvedOfferedId,
-    )
+    formData.set("offeredBookingId", offered)
     formData.set("reason", trimmed)
+
     startTransition(async () => {
       const res = await requestSwap(formData)
       if (res && "error" in res && res.error) {
@@ -133,90 +134,142 @@ export function SwapRequestDialog({
       >
         <DialogHeader className="space-y-0 border-b border-black/[0.06] px-4 py-3 pr-12 text-left sm:px-5">
           <DialogTitle className="text-[14.5px] font-medium tracking-[-0.02em] text-neutral-950">
-            {isExchange ? "Exchange" : "Handoff"}
+            {isHandoff ? "Handoff" : "Exchange"}
             <span className="ml-2 text-[12.5px] font-normal text-neutral-400">
               {whenLabel}
             </span>
           </DialogTitle>
           <DialogDescription className="sr-only">
-            {isExchange
-              ? `Exchange carts with ${booking.teacherName}`
-              : `Request handoff from ${booking.teacherName}`}
+            {isHandoff
+              ? `Request handoff from ${booking.teacherName}`
+              : `Exchange carts with ${booking.teacherName}`}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid sm:grid-cols-[1fr_auto_1fr]">
-          {/* Give */}
-          <div className="flex min-w-0 flex-col gap-1.5 px-4 py-3 sm:px-5 sm:py-3.5">
-            <p className="text-[10px] font-semibold tracking-[0.1em] text-neutral-400 uppercase">
-              You give
-            </p>
-            <Select
-              value={resolvedOfferedId}
-              onValueChange={(value) => {
-                setOfferedId(value)
+        <div className="space-y-3 px-4 py-3.5 sm:px-5">
+          {/* Mode toggle — handoff always visible */}
+          <div
+            className="inline-flex rounded-lg bg-neutral-100 p-0.5"
+            role="tablist"
+            aria-label="Request type"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!isHandoff}
+              disabled={!canExchange || pending}
+              onClick={() => {
+                setMode("exchange")
                 setError(null)
               }}
-              disabled={offerable.length === 0}
+              className={cn(
+                "h-8 rounded-md px-3 text-[12.5px] font-medium transition-colors",
+                !isHandoff
+                  ? "bg-white text-neutral-950 shadow-sm"
+                  : "text-neutral-500 hover:text-neutral-800",
+                (!canExchange || pending) && "opacity-40",
+              )}
             >
-              <SelectTrigger
-                size="default"
-                className={cn(
-                  "h-9 w-full rounded-lg border-neutral-200 bg-neutral-50/80 px-3",
-                  "text-[13px] font-medium text-neutral-900 shadow-none",
-                  "hover:border-neutral-300 focus-visible:border-neutral-400",
-                  "data-[size=default]:h-9",
-                )}
-              >
-                <SelectValue placeholder="Select cart" />
-              </SelectTrigger>
-              <SelectContent
-                position="popper"
-                className="z-[80] rounded-lg border-neutral-200 shadow-lg"
-              >
-                {offerable.map((b) => {
-                  const c = cartById.get(b.cartId)
-                  return (
-                    <SelectItem
-                      key={b.id}
-                      value={b.id}
-                      className="cursor-pointer rounded-md py-2 pl-3 pr-8 text-[13px] font-medium"
-                    >
-                      {[c?.name ?? "Cart", b.period].filter(Boolean).join(" · ")}
-                    </SelectItem>
-                  )
-                })}
-                <SelectItem
-                  value={SWAP_OFFER_HANDOFF}
-                  className="cursor-pointer rounded-md py-2 pl-3 pr-8 text-[13px]"
-                >
-                  Handoff (no cart)
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              Exchange
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={isHandoff}
+              disabled={pending}
+              onClick={() => {
+                setMode("handoff")
+                setError(null)
+              }}
+              className={cn(
+                "h-8 rounded-md px-3 text-[12.5px] font-medium transition-colors",
+                isHandoff
+                  ? "bg-white text-neutral-950 shadow-sm"
+                  : "text-neutral-500 hover:text-neutral-800",
+                pending && "opacity-40",
+              )}
+            >
+              Handoff
+            </button>
           </div>
 
-          <div
-            className="flex items-center justify-center border-black/[0.05] px-1 sm:border-x sm:px-2"
-            aria-hidden
-          >
-            <span className="flex size-7 items-center justify-center rounded-full border border-neutral-200 bg-white text-[13px] text-neutral-600">
-              {isExchange ? "⇄" : "→"}
-            </span>
-          </div>
-
-          {/* Get */}
-          <div className="flex min-w-0 flex-col gap-1.5 border-t border-black/[0.05] px-4 py-3 sm:border-t-0 sm:px-5 sm:py-3.5">
-            <p className="text-[10px] font-semibold tracking-[0.1em] text-emerald-700/70 uppercase">
-              You get
-            </p>
-            <div className="flex h-9 items-center rounded-lg border border-emerald-200/70 bg-emerald-50/40 px-3">
-              <p className="truncate text-[13px] font-medium text-neutral-950">
-                {targetCart?.name ?? "Cart"}
-                <span className="ml-1.5 font-normal text-neutral-500">
-                  {booking.period}
-                </span>
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
+            <div className="min-w-0 space-y-1.5">
+              <p className="text-[10px] font-semibold tracking-[0.1em] text-neutral-400 uppercase">
+                You give
               </p>
+              {isHandoff ? (
+                <div className="flex h-9 items-center rounded-lg border border-dashed border-neutral-200 bg-neutral-50 px-3 text-[13px] text-neutral-500">
+                  No cart (handoff)
+                </div>
+              ) : (
+                <Select
+                  value={selectedOffer?.id ?? defaultOfferId}
+                  onValueChange={(value) => {
+                    if (isHandoffOfferId(value)) {
+                      setMode("handoff")
+                      return
+                    }
+                    setExchangeBookingId(value)
+                    setMode("exchange")
+                    setError(null)
+                  }}
+                  disabled={pending || !canExchange}
+                >
+                  <SelectTrigger
+                    size="default"
+                    className={cn(
+                      "h-9 w-full rounded-lg border-neutral-200 bg-white px-3",
+                      "text-[13px] font-medium text-neutral-900 shadow-none",
+                      "data-[size=default]:h-9",
+                    )}
+                  >
+                    <SelectValue placeholder="Your cart" />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    className="z-[80] rounded-lg border-neutral-200 shadow-lg"
+                  >
+                    {offerable.map((b) => {
+                      const c = cartById.get(b.cartId)
+                      return (
+                        <SelectItem
+                          key={b.id}
+                          value={b.id}
+                          className="cursor-pointer rounded-md py-2 pl-3 pr-8 text-[13px] font-medium"
+                        >
+                          {[c?.name ?? "Cart", b.period]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <div
+              className="flex items-center justify-center px-1 sm:pb-1"
+              aria-hidden
+            >
+              <span className="flex size-7 items-center justify-center rounded-full border border-neutral-200 bg-white text-[13px] text-neutral-600">
+                {isHandoff ? "→" : "⇄"}
+              </span>
+            </div>
+
+            <div className="min-w-0 space-y-1.5">
+              <p className="text-[10px] font-semibold tracking-[0.1em] text-emerald-700/70 uppercase">
+                You get
+              </p>
+              <div className="flex h-9 items-center rounded-lg border border-emerald-200/70 bg-emerald-50/40 px-3">
+                <p className="truncate text-[13px] font-medium text-neutral-950">
+                  {targetCart?.name ?? "Cart"}
+                  <span className="ml-1.5 font-normal text-neutral-500">
+                    {booking.period}
+                  </span>
+                </p>
+              </div>
             </div>
           </div>
         </div>
