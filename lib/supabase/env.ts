@@ -7,8 +7,8 @@ export function isSupabaseConfigured(): boolean {
 }
 
 /**
- * True when the app is expected to talk only to Postgres (not browser seed).
- * Prefer importing from `@/lib/data/durability` for full production rules.
+ * @deprecated Use `isRemotePlatformEnabled` from `@/lib/data/durability`.
+ * Keys present ≠ platform data should hit that project (local is isolated).
  */
 export function hasRemoteBackend(): boolean {
   return isSupabaseConfigured();

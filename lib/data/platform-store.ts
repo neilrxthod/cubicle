@@ -1,7 +1,10 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { localWriteBlockReason } from "@/lib/data/durability";
+import {
+  isRemotePlatformEnabled,
+  localWriteBlockReason,
+} from "@/lib/data/durability";
 import type {
   Booking,
   BookingPolicy,
@@ -16,17 +19,39 @@ import type {
 /**
  * Browser cache only. Source of truth in production is Supabase Postgres.
  * Re-deploying the Next.js app never clears Supabase — only this local cache.
+ *
+ * Local sandbox uses a separate key namespace so a hydrated production mirror
+ * never mixes with developer experiments.
  */
 /**
  * Bump on official school go-live / when every browser must drop cached
  * carts, bookings, and locks. Epoch 13 = official high school empty go-live.
  */
 const PLATFORM_EPOCH = 13;
-const STORAGE_KEY = `cubicle_platform_v${PLATFORM_EPOCH}`;
-const EPOCH_KEY = "cubicle_platform_epoch";
 const CHANGE_EVENT = "cubicle_platform_change";
+
+function storageNamespace(): "remote" | "local" {
+  return isRemotePlatformEnabled() ? "remote" : "local";
+}
+
+function platformStorageKey(): string {
+  return storageNamespace() === "remote"
+    ? `cubicle_platform_v${PLATFORM_EPOCH}`
+    : `cubicle_platform_local_v${PLATFORM_EPOCH}`;
+}
+
+function platformEpochKey(): string {
+  return storageNamespace() === "remote"
+    ? "cubicle_platform_epoch"
+    : "cubicle_platform_local_epoch";
+}
+
 /** Same-origin multi-tab sync (pairs with Realtime for other browsers/devices). */
-const BROADCAST_CHANNEL = `cubicle_platform_bc_v${PLATFORM_EPOCH}`;
+function platformBroadcastChannel(): string {
+  return storageNamespace() === "remote"
+    ? `cubicle_platform_bc_v${PLATFORM_EPOCH}`
+    : `cubicle_platform_local_bc_v${PLATFORM_EPOCH}`;
+}
 
 /**
  * Official empty platform — no carts, bookings, issues, or restrictions.
@@ -56,27 +81,6 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
-function purgeAllPlatformLocalKeys() {
-  if (typeof window === "undefined") return;
-  try {
-    const doomed: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (!k) continue;
-      // Platform cache only — never Google session / auth cookies
-      if (
-        k.startsWith("cubicle_platform") ||
-        k.startsWith("cubicle_fresh_start")
-      ) {
-        doomed.push(k);
-      }
-    }
-    for (const k of doomed) localStorage.removeItem(k);
-  } catch {
-    // ignore quota / private mode
-  }
-}
-
 /**
  * One-time (per epoch) wipe of browser platform cache so locked ADMIN slots
  * and old demo carts cannot reappear after a hard refresh.
@@ -84,14 +88,18 @@ function purgeAllPlatformLocalKeys() {
 function ensureFreshEpoch() {
   if (typeof window === "undefined") return;
   try {
-    const current = localStorage.getItem(EPOCH_KEY);
+    const epochKey = platformEpochKey();
+    const storageKey = platformStorageKey();
+    const current = localStorage.getItem(epochKey);
     if (current === String(PLATFORM_EPOCH)) return;
-    purgeAllPlatformLocalKeys();
+    // Only wipe keys for this namespace — never destroy the other mode's cache.
+    localStorage.removeItem(storageKey);
+    localStorage.removeItem(epochKey);
     memory = emptyState();
     const raw = JSON.stringify(memory);
     cachedRaw = raw;
-    localStorage.setItem(STORAGE_KEY, raw);
-    localStorage.setItem(EPOCH_KEY, String(PLATFORM_EPOCH));
+    localStorage.setItem(storageKey, raw);
+    localStorage.setItem(epochKey, String(PLATFORM_EPOCH));
     window.dispatchEvent(new Event(CHANGE_EVENT));
   } catch {
     // ignore
@@ -101,7 +109,7 @@ function ensureFreshEpoch() {
 function read(): PlatformState {
   if (typeof window === "undefined") return seed();
   ensureFreshEpoch();
-  const raw = localStorage.getItem(STORAGE_KEY);
+  const raw = localStorage.getItem(platformStorageKey());
   if (raw === cachedRaw && memory) return memory;
   cachedRaw = raw;
   if (!raw) {
@@ -136,8 +144,13 @@ function notifyPlatformPeers() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(CHANGE_EVENT));
   try {
-    const bc = new BroadcastChannel(BROADCAST_CHANNEL);
-    bc.postMessage({ type: "platform", epoch: PLATFORM_EPOCH, t: Date.now() });
+    const bc = new BroadcastChannel(platformBroadcastChannel());
+    bc.postMessage({
+      type: "platform",
+      epoch: PLATFORM_EPOCH,
+      ns: storageNamespace(),
+      t: Date.now(),
+    });
     bc.close();
   } catch {
     // BroadcastChannel unavailable (older browsers / restricted contexts)
@@ -149,8 +162,8 @@ function write(next: PlatformState) {
   const raw = JSON.stringify(next);
   cachedRaw = raw;
   if (typeof window !== "undefined") {
-    localStorage.setItem(STORAGE_KEY, raw);
-    localStorage.setItem(EPOCH_KEY, String(PLATFORM_EPOCH));
+    localStorage.setItem(platformStorageKey(), raw);
+    localStorage.setItem(platformEpochKey(), String(PLATFORM_EPOCH));
     notifyPlatformPeers();
   }
 }
@@ -169,13 +182,15 @@ export function subscribePlatform(onChange: () => void) {
   if (typeof window === "undefined") return () => {};
 
   const onLocal = () => onChange();
+  const storageKey = platformStorageKey();
+  const epochKey = platformEpochKey();
 
   // Other tabs wrote localStorage — drop memory cache so we re-read.
   const onStorage = (event: StorageEvent) => {
     if (
       event.key === null ||
-      event.key === STORAGE_KEY ||
-      event.key === EPOCH_KEY
+      event.key === storageKey ||
+      event.key === epochKey
     ) {
       invalidateMemoryCache();
       onChange();
@@ -184,7 +199,7 @@ export function subscribePlatform(onChange: () => void) {
 
   let bc: BroadcastChannel | null = null;
   try {
-    bc = new BroadcastChannel(BROADCAST_CHANNEL);
+    bc = new BroadcastChannel(platformBroadcastChannel());
     bc.onmessage = () => {
       invalidateMemoryCache();
       onChange();
@@ -245,11 +260,14 @@ export function forceEmptyPlatformState() {
   cachedRaw = null;
   if (typeof window !== "undefined") {
     try {
-      purgeAllPlatformLocalKeys();
+      const storageKey = platformStorageKey();
+      const epochKey = platformEpochKey();
+      localStorage.removeItem(storageKey);
+      localStorage.removeItem(epochKey);
       const raw = JSON.stringify(memory);
       cachedRaw = raw;
-      localStorage.setItem(STORAGE_KEY, raw);
-      localStorage.setItem(EPOCH_KEY, String(PLATFORM_EPOCH));
+      localStorage.setItem(storageKey, raw);
+      localStorage.setItem(epochKey, String(PLATFORM_EPOCH));
     } catch {
       // ignore
     }
@@ -260,6 +278,7 @@ export function forceEmptyPlatformState() {
 /**
  * Drop the browser cache only (never touches Supabase).
  * Used after sign-out so the next session hydrates fresh from Postgres.
+ * Only clears the active namespace (remote cache vs local sandbox).
  */
 export function clearPlatformBrowserCache() {
   memory = null;
@@ -267,9 +286,11 @@ export function clearPlatformBrowserCache() {
   remoteHydrated = false;
   if (typeof window !== "undefined") {
     try {
-      purgeAllPlatformLocalKeys();
+      const storageKey = platformStorageKey();
+      const epochKey = platformEpochKey();
+      localStorage.removeItem(storageKey);
       // Keep epoch so we don't re-run destructive empty write loops unnecessarily
-      localStorage.setItem(EPOCH_KEY, String(PLATFORM_EPOCH));
+      localStorage.setItem(epochKey, String(PLATFORM_EPOCH));
     } catch {
       // ignore quota / private mode
     }

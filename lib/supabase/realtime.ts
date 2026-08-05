@@ -1,6 +1,6 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { isRemotePlatformEnabled } from "@/lib/data/durability";
 import { createClient } from "@/lib/supabase/client";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 const REALTIME_TABLES = [
   "bookings",
@@ -25,7 +25,8 @@ const RECONNECT_MAX_MS = 15_000;
  * Handles reconnect on channel errors / auth refresh. Returns unsubscribe.
  */
 export function subscribePlatformRealtime(onChange: () => void): () => void {
-  if (!isSupabaseConfigured() || typeof window === "undefined") {
+  // Do not open a live channel to production Postgres from an isolated local sandbox.
+  if (!isRemotePlatformEnabled() || typeof window === "undefined") {
     return () => {};
   }
 

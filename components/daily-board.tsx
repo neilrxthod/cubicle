@@ -438,6 +438,28 @@ export function DailyBoard({
         setManageDialog(existing)
         return
       }
+      // Swap target (not owner, not admin): same day/period only.
+      if (date < today) {
+        toast({
+          title: "Past date",
+          description: "Cannot request swaps for past dates.",
+          variant: "destructive",
+        })
+        return
+      }
+      const alreadyPending = platform.swapRequests.some(
+        (s) =>
+          s.status === "pending" &&
+          s.bookingId === existing.id &&
+          s.requesterId === session.id,
+      )
+      if (alreadyPending) {
+        toast({
+          title: "Already requested",
+          description: "You already have a pending request for this slot.",
+        })
+        return
+      }
       setSwapDialog(existing)
       return
     }
@@ -920,10 +942,20 @@ export function DailyBoard({
                       const classLabel = booking.className?.trim()
                       // Teachers request swap on someone else's slot; owners/admins manage.
                       const isSwapTarget = !isMine && session.role !== "admin"
+                      const hasPendingSwap =
+                        isSwapTarget &&
+                        platform.swapRequests.some(
+                          (s) =>
+                            s.status === "pending" &&
+                            s.bookingId === booking.id &&
+                            s.requesterId === session.id,
+                        )
                       const title = isMine
                         ? `${classLabel || "Your booking"} — click to manage or cancel`
                         : isSwapTarget
-                          ? `${classLabel || personName} · ${personName} — click to request swap`
+                          ? hasPendingSwap
+                            ? `${classLabel || personName} · ${personName} — swap request pending`
+                            : `${classLabel || personName} · ${personName} — hover to swap (same period)`
                           : `${classLabel || personName} · ${personName} — click to manage`
 
                       return (

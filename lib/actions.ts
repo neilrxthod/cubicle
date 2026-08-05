@@ -11,8 +11,11 @@ import {
   mutate,
   replaceState,
 } from "@/lib/data/platform-store";
-import { localWriteBlockReason } from "@/lib/data/durability";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
+import {
+  isRemotePlatformEnabled,
+  localWriteBlockReason,
+} from "@/lib/data/durability";
+
 import { secureRandomInt } from "@/lib/utils";
 import {
   dbAcceptSwap,
@@ -68,8 +71,9 @@ export type CreateBookingResult = {
   booking?: Booking;
 };
 
+/** Platform data (carts, bookings, …) → Supabase. Isolated on local by default. */
 function isRemoteEnabled() {
-  return isSupabaseConfigured();
+  return isRemotePlatformEnabled();
 }
 
 /** Block localStorage-only mutations when production requires Postgres. */
@@ -764,26 +768,51 @@ export async function requestSwap(formData: FormData): Promise<Result> {
   const reason = String(
     formData.get("reason") ?? formData.get("message") ?? "",
   ).trim();
-  const booking = getState().bookings.find((entry) => entry.id === bookingId);
-  if (!booking) return { ok: false, error: "Booking not found." };
-  if (booking.teacherId === session.id) {
-    return { ok: false, error: "You already own this booking." };
-  }
+
+  const state = getState();
+  const booking = state.bookings.find((entry) => entry.id === bookingId);
+  const cart = booking
+    ? state.carts.find((c) => c.id === booking.cartId)
+    : undefined;
+
+  const {
+    evaluateSwapRequest,
+  } = await import("@/lib/booking/swap-rules");
+  const evaluated = evaluateSwapRequest({
+    session,
+    booking,
+    cart,
+    bookings: state.bookings,
+    swaps: state.swapRequests,
+    bookingPolicy: state.bookingPolicy,
+    reason,
+  });
+  if (!evaluated.ok) return { ok: false, error: evaluated.error };
 
   if (isRemoteEnabled()) {
     if (!isUuid(session.id)) {
       return {
         ok: false,
-        error: "Your account is not linked yet. Sign out and sign in with Google again.",
+        error:
+          "Your account is not linked yet. Sign out and sign in with Google again.",
       };
     }
     const { error } = await dbRequestSwap({
       bookingId,
       requesterId: session.id,
       requesterName: session.name,
-      reason: reason || undefined,
+      reason,
     });
-    if (error) return { ok: false, error };
+    if (error) {
+      // Unique pending index → friendly message.
+      if (/duplicate|unique|swap_requests_pending/i.test(error)) {
+        return {
+          ok: false,
+          error: "You already have a pending request for this slot.",
+        };
+      }
+      return { ok: false, error };
+    }
     return refreshRemote();
   }
 
@@ -795,8 +824,8 @@ export async function requestSwap(formData: FormData): Promise<Result> {
       bookingId,
       requesterId: session.id,
       requesterName: session.name,
-      reason: reason || undefined,
-      message: reason || undefined,
+      reason,
+      message: reason,
       status: "pending",
       createdAt: new Date().toISOString(),
     });
@@ -811,23 +840,40 @@ export async function acceptSwap(requestId: string): Promise<Result> {
 
   const state = getState();
   const request = state.swapRequests.find((entry) => entry.id === requestId);
-  if (!request || request.status !== "pending") {
+  const booking = request
+    ? state.bookings.find((entry) => entry.id === request.bookingId)
+    : undefined;
+  const cart = booking
+    ? state.carts.find((c) => c.id === booking.cartId)
+    : undefined;
+
+  const {
+    evaluateSwapAccept,
+    findCounterpartyBooking,
+    relatedPendingSwapIds,
+  } = await import("@/lib/booking/swap-rules");
+
+  const evaluated = evaluateSwapAccept({
+    session,
+    request,
+    booking,
+    cart,
+    bookings: state.bookings,
+  });
+  if (!evaluated.ok) return { ok: false, error: evaluated.error };
+  if (!request || !booking) {
     return { ok: false, error: "Request not found." };
   }
-  const booking = state.bookings.find((entry) => entry.id === request.bookingId);
-  if (!booking) return { ok: false, error: "Booking missing." };
-  if (session.role !== "admin" && booking.teacherId !== session.id) {
-    return { ok: false, error: "Only the owner can accept." };
-  }
 
-  // Requester's cart for the same date/period — needed for a true two-way swap.
-  const counterparty = state.bookings.find(
-    (entry) =>
-      entry.teacherId === request.requesterId &&
-      entry.date === booking.date &&
-      entry.period === booking.period &&
-      entry.id !== booking.id,
-  );
+  const counterparty =
+    evaluated.counterparty ??
+    findCounterpartyBooking(
+      state.bookings,
+      request.requesterId,
+      booking.date,
+      booking.period,
+      booking.id,
+    );
 
   const editor = {
     id: session.id,
@@ -865,12 +911,12 @@ export async function acceptSwap(requestId: string): Promise<Result> {
     const swap = draft.swapRequests.find((entry) => entry.id === requestId);
     if (!target || !swap) return;
 
-    const source = draft.bookings.find(
-      (entry) =>
-        entry.teacherId === swap.requesterId &&
-        entry.date === target.date &&
-        entry.period === target.period &&
-        entry.id !== target.id,
+    const source = findCounterpartyBooking(
+      draft.bookings,
+      swap.requesterId,
+      target.date,
+      target.period,
+      target.id,
     );
 
     const editedAt = new Date().toISOString();
@@ -882,7 +928,7 @@ export async function acceptSwap(requestId: string): Promise<Result> {
     };
 
     if (source) {
-      // True cart swap: each teacher keeps class/subject/notes, cart cells exchange people.
+      // Exchange: each teacher keeps class/subject/notes; cart cells swap people.
       const targetSnap = {
         teacherId: target.teacherId,
         teacherName: target.teacherName,
@@ -905,13 +951,23 @@ export async function acceptSwap(requestId: string): Promise<Result> {
       source.notes = targetSnap.notes;
       Object.assign(source, stamp);
     } else {
-      // Requester has no cart this period — one-way handoff of this slot.
+      // Handoff: requester has no cart this period.
       target.teacherId = swap.requesterId;
       target.teacherName = swap.requesterName;
       Object.assign(target, stamp);
     }
 
     swap.status = "accepted";
+
+    const closeIds = new Set(
+      relatedPendingSwapIds(draft.swapRequests, requestId, [
+        target.id,
+        source?.id ?? "",
+      ]),
+    );
+    for (const entry of draft.swapRequests) {
+      if (closeIds.has(entry.id)) entry.status = "declined";
+    }
   });
 
   return { ok: true };
@@ -920,6 +976,21 @@ export async function acceptSwap(requestId: string): Promise<Result> {
 export async function declineSwap(requestId: string): Promise<Result> {
   const session = requireSession();
   if (!session) return { ok: false, error: "Sign in required." };
+
+  const state = getState();
+  const request = state.swapRequests.find((entry) => entry.id === requestId);
+  const booking = request
+    ? state.bookings.find((entry) => entry.id === request.bookingId)
+    : undefined;
+
+  const { swapActionAllowed } = await import("@/lib/booking/swap-rules");
+  const auth = swapActionAllowed(session, request, booking);
+  if (!auth.canDecline && !auth.canCancel) {
+    return {
+      ok: false,
+      error: auth.error ?? "Not allowed to decline this request.",
+    };
+  }
 
   if (isRemoteEnabled()) {
     const { error } = await dbDeclineSwap(requestId);
@@ -931,7 +1002,7 @@ export async function declineSwap(requestId: string): Promise<Result> {
   if (!__demo.ok) return __demo;
   mutate((draft) => {
     const swap = draft.swapRequests.find((entry) => entry.id === requestId);
-    if (swap) swap.status = "declined";
+    if (swap && swap.status === "pending") swap.status = "declined";
   });
 
   return { ok: true };

@@ -233,7 +233,7 @@ Open [http://localhost:3000](http://localhost:3000).
 NEXT_PUBLIC_ENABLE_DEMO_LOGIN=true
 ```
 
-Without Supabase env vars, localhost may use browser-local demo storage. Production hosts hard-stop if the database is not connected.
+Localhost keeps platform data in a browser sandbox by default (even if production Supabase keys are in `.env.local`), so developer carts/bookings never hit the school database. Opt into remote only with `NEXT_PUBLIC_CUBICLE_USE_REMOTE_IN_DEV=true` and a staging project. Production hosts hard-stop if the database is not connected.
 
 ### Onboarding in local vs production
 

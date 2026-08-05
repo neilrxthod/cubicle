@@ -26,6 +26,18 @@ NEXT_PUBLIC_CUBICLE_REQUIRE_REMOTE=true
 
 Without Supabase keys, production hosts (`mycubicle.app`, `mycubicle.com`, `*.vercel.app`) **hard-stop** with “Database not connected” instead of showing empty seed data.
 
+### Local development does not write production data
+
+`npm run dev` / localhost keeps carts, bookings, issues, and staff ops in a **local browser sandbox** by default — even when production Supabase keys are in `.env.local`. School staff will not see those experiments.
+
+To use a remote database from your laptop (prefer a **staging** Supabase project):
+
+```text
+NEXT_PUBLIC_CUBICLE_USE_REMOTE_IN_DEV=true
+```
+
+Do **not** enable that flag with production school keys unless you deliberately want live data on your machine.
+
 ### Never do this on a live school project
 
 - Point Vercel at a **new empty** Supabase project (looks like “all data gone”)

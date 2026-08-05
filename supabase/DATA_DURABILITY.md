@@ -28,11 +28,13 @@ Teachers use mycubicle.app / mycubicle.com  →  Vercel (code)  →  Supabase (d
 1. **Production requires Supabase**  
    On `mycubicle.app` / `mycubicle.com`, `*.vercel.app`, or `VERCEL_ENV=production`, the app **refuses** to run as a localStorage demo. Misconfigured env shows an error instead of empty fake data.
 
-2. **Writes go to Postgres when configured**  
-   Book / cancel / issues / staff / restrictions all use Supabase when env vars are set.
+2. **Writes go to Postgres in production**  
+   Book / cancel / issues / staff / restrictions use Supabase on hosted deploys when env vars are set.
 
-3. **Local demo is isolated**  
-   Demo mode (no Supabase keys, localhost only) uses browser storage. That path is **blocked** on production hosts so demo and real data never mix.
+3. **Local development is isolated by default**  
+   On `npm run dev` / localhost, platform data uses a **browser sandbox** even if production Supabase keys are present in `.env.local`. Adding carts or bookings on a laptop does **not** update the live school database.  
+   To intentionally use a remote project from local (prefer **staging**), set `NEXT_PUBLIC_CUBICLE_USE_REMOTE_IN_DEV=true`.  
+   Production hosts never use the local sandbox.
 
 4. **SQL is additive**  
    - `schema.sql` uses `create table if not exists`  

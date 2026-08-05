@@ -11,11 +11,11 @@ import {
 } from "@/lib/data/platform-store";
 import {
   isLocalDemoMode,
+  isRemotePlatformEnabled,
   isRemoteRequiredButMissing,
   REMOTE_REQUIRED_MESSAGE,
   requiresRemoteDatabase,
 } from "@/lib/data/durability";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { subscribePlatformRealtime } from "@/lib/supabase/realtime";
 import { RemoteRequiredScreen } from "@/components/app/remote-required-screen";
 
@@ -26,8 +26,8 @@ const VISIBLE_POLL_MS = 18_000;
  * Loads platform data from Supabase, then keeps it live via Realtime.
  *
  * Production: always remote Postgres. Code deploys never wipe that data.
- * Local demo: empty localStorage scaffold when Supabase env is absent and not
- * on a production host.
+ * Local dev: isolated browser sandbox by default (even if production keys are
+ * in `.env.local`) so developer carts/bookings never hit the school database.
  *
  * Multi-client sync (two browsers, two teachers, phone + laptop):
  * 1. Supabase Realtime postgres_changes → full store refresh
@@ -41,7 +41,7 @@ export function PlatformBootstrap({
   children: React.ReactNode;
 }) {
   const remoteMissing = isRemoteRequiredButMissing();
-  const remoteEnabled = isSupabaseConfigured();
+  const remoteEnabled = isRemotePlatformEnabled();
 
   const [ready, setReady] = useState(
     () =>

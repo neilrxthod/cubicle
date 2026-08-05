@@ -108,6 +108,11 @@ create table if not exists public.swap_requests (
   created_at timestamptz not null default now()
 );
 
+-- One open request per teacher per target booking (see also swap-accept.sql).
+create unique index if not exists swap_requests_pending_unique
+  on public.swap_requests (booking_id, requester_id)
+  where status = 'pending';
+
 -- ---------------------------------------------------------------------------
 -- Booking policy (single-row settings)
 -- ---------------------------------------------------------------------------

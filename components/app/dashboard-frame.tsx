@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
 import { Toaster } from "@/components/ui/toaster";
+import {
+  isLocalDemoMode,
+  LOCAL_SANDBOX_BANNER,
+} from "@/lib/data/durability";
 import { LEGAL_LINKS } from "@/lib/legal/constants";
 import type { SessionUser } from "@/lib/types";
 
@@ -16,9 +20,19 @@ export function DashboardFrame({
   user: SessionUser;
   children: React.ReactNode;
 }) {
+  const localSandbox = isLocalDemoMode();
+
   return (
     <div className="flex min-h-dvh w-full min-w-0 flex-col bg-[var(--canvas)] text-neutral-950">
       <AppHeader user={user} />
+      {localSandbox ? (
+        <div
+          role="status"
+          className="border-b border-amber-200/80 bg-amber-50 px-4 py-2 text-center text-[12px] leading-snug text-amber-950 sm:text-[12.5px]"
+        >
+          {LOCAL_SANDBOX_BANNER}
+        </div>
+      ) : null}
       <main className="platform-shell min-w-0 flex-1 py-[var(--shell-py)] pb-[max(var(--shell-py),env(safe-area-inset-bottom,0px))]">
         <div className="min-w-0 w-full">{children}</div>
       </main>

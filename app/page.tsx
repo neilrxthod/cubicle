@@ -211,6 +211,11 @@ function HomeBoard({ user }: { user: SessionUser }) {
     return booking?.teacherId === user.id;
   });
 
+  const outgoingSwaps = state.swapRequests.filter(
+    (request) =>
+      request.status === "pending" && request.requesterId === user.id,
+  );
+
   return (
     <DashboardFrame user={user}>
       <PageShell>
@@ -224,6 +229,13 @@ function HomeBoard({ user }: { user: SessionUser }) {
             requests={incomingSwaps}
             bookings={state.bookings}
             carts={state.carts}
+            variant="incoming"
+          />
+          <SwapRequestsList
+            requests={outgoingSwaps}
+            bookings={state.bookings}
+            carts={state.carts}
+            variant="outgoing"
           />
           <DailyBoard
             session={user}

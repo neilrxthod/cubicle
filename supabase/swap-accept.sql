@@ -1,13 +1,22 @@
--- Atomic cart swap accept (security definer).
--- Fixes one-sided swaps: when the requester also has a cart for the same
--- date + period, both slots exchange teachers (and class/subject/notes).
--- Also lets the booking owner accept/decline under RLS.
---
+-- Atomic cart swap accept / decline (security definer) + hard guards.
 -- Run in: Supabase Dashboard → SQL Editor → paste → Run
 -- Safe to re-run.
+--
+-- Model:
+--   • Same date + same period only (never cross-period).
+--   • Exchange when requester has a cart that period; else one-way handoff.
+--   • Accept only via accept_swap_request (cannot mark accepted with a raw UPDATE).
+--   • Decline / cancel via decline_swap_request with role checks.
 
 -- ---------------------------------------------------------------------------
--- RLS: booking owner (receiver) can accept/decline, not only the requester
+-- At most one pending request per (booking, requester)
+-- ---------------------------------------------------------------------------
+create unique index if not exists swap_requests_pending_unique
+  on public.swap_requests (booking_id, requester_id)
+  where status = 'pending';
+
+-- ---------------------------------------------------------------------------
+-- RLS: owner / requester / admin may update rows, but accept is RPC-only
 -- ---------------------------------------------------------------------------
 drop policy if exists "Requester or admin can update swaps" on public.swap_requests;
 drop policy if exists "Owner requester or admin can update swaps" on public.swap_requests;
@@ -40,8 +49,40 @@ create policy "Owner requester or admin can update swaps"
     )
   );
 
+-- Block marking status = accepted outside accept_swap_request.
+create or replace function public.swap_requests_status_guard()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if tg_op = 'UPDATE'
+     and new.status is distinct from old.status then
+    if old.status is distinct from 'pending' then
+      raise exception 'Request is already closed';
+    end if;
+
+    if new.status = 'accepted' then
+      if current_setting('cubicle.swap_accept', true) is distinct from '1' then
+        raise exception 'Accept only through accept_swap_request';
+      end if;
+    elsif new.status is distinct from 'declined' then
+      raise exception 'Invalid swap status';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists swap_requests_status_guard on public.swap_requests;
+create trigger swap_requests_status_guard
+  before update on public.swap_requests
+  for each row
+  execute function public.swap_requests_status_guard();
+
 -- ---------------------------------------------------------------------------
--- accept_swap_request: two-way cart exchange when both teachers have slots
+-- accept_swap_request
 -- ---------------------------------------------------------------------------
 create or replace function public.accept_swap_request(
   p_request_id uuid,
@@ -58,6 +99,7 @@ declare
   v_req public.swap_requests%rowtype;
   v_target public.bookings%rowtype;
   v_source public.bookings%rowtype;
+  v_source_id uuid;
   v_uid uuid := auth.uid();
   v_is_admin boolean;
   v_editor_id uuid;
@@ -65,11 +107,13 @@ declare
   v_editor_avatar text;
   v_edited_at timestamptz := now();
   v_has_last_edited boolean;
+  v_cart_status text;
 begin
   if v_uid is null then
     raise exception 'Sign in required';
   end if;
 
+  -- Serialize concurrent accepts on the same request.
   select * into v_req
   from public.swap_requests
   where id = p_request_id
@@ -101,6 +145,23 @@ begin
     raise exception 'Only the owner can accept';
   end if;
 
+  if v_req.requester_id is not distinct from v_target.teacher_id then
+    raise exception 'Requester already owns this slot';
+  end if;
+
+  -- Past dates: teachers cannot complete; admin may for cleanup.
+  if v_target.date < (timezone('utc', now()))::date and not v_is_admin then
+    raise exception 'Cannot accept swaps for past dates';
+  end if;
+
+  select c.status into v_cart_status
+  from public.carts c
+  where c.id = v_target.cart_id;
+
+  if v_cart_status = 'maintenance' and not v_is_admin then
+    raise exception 'Cart is in maintenance';
+  end if;
+
   v_editor_id := coalesce(p_editor_id, v_uid);
   v_editor_name := coalesce(
     nullif(btrim(coalesce(p_editor_name, '')), ''),
@@ -117,17 +178,23 @@ begin
       and column_name = 'last_edited_by_id'
   ) into v_has_last_edited;
 
-  -- Requester's booking on the same date + period (true cart swap).
-  select * into v_source
-  from public.bookings
-  where teacher_id = v_req.requester_id
-    and date = v_target.date
-    and period = v_target.period
-    and id is distinct from v_target.id
-  for update;
+  -- At most one counterparty booking (same day + period, requester-owned).
+  select b.id into v_source_id
+  from public.bookings b
+  where b.teacher_id = v_req.requester_id
+    and b.date = v_target.date
+    and b.period = v_target.period
+    and b.id is distinct from v_target.id
+  order by b.created_at asc
+  limit 1;
 
-  if found then
-    -- Target cart cell ← requester (with their class / subject / notes)
+  if v_source_id is not null then
+    select * into v_source
+    from public.bookings
+    where id = v_source_id
+    for update;
+
+    -- Exchange: each teacher keeps class/subject/notes; cart cells swap people.
     if v_has_last_edited then
       update public.bookings set
         teacher_id = v_source.teacher_id,
@@ -141,7 +208,6 @@ begin
         last_edited_at = v_edited_at
       where id = v_target.id;
 
-      -- Counterparty cart cell ← original owner (with their class / subject / notes)
       update public.bookings set
         teacher_id = v_target.teacher_id,
         teacher_name = v_target.teacher_name,
@@ -171,7 +237,7 @@ begin
       where id = v_source.id;
     end if;
   else
-    -- One-way: requester has no cart this period — hand over this slot only.
+    -- Handoff: requester has no cart this period — transfer this slot only.
     if v_has_last_edited then
       update public.bookings set
         teacher_id = v_req.requester_id,
@@ -189,18 +255,20 @@ begin
     end if;
   end if;
 
+  perform set_config('cubicle.swap_accept', '1', true);
+
   update public.swap_requests
   set status = 'accepted'
   where id = p_request_id;
 
-  -- Close other pending swaps that pointed at either exchanged booking.
+  -- Close every other pending request that targeted either exchanged booking.
   update public.swap_requests
   set status = 'declined'
   where status = 'pending'
     and id is distinct from p_request_id
     and (
       booking_id = v_target.id
-      or (v_source.id is not null and booking_id = v_source.id)
+      or (v_source_id is not null and booking_id = v_source_id)
     );
 end;
 $$;
@@ -210,4 +278,65 @@ grant execute on function public.accept_swap_request(uuid, uuid, text, text) to 
 grant execute on function public.accept_swap_request(uuid, uuid, text, text) to service_role;
 
 comment on function public.accept_swap_request(uuid, uuid, text, text) is
-  'Accept a pending cart swap: exchange both teachers'' slots for the same date/period, or one-way handoff if the requester has no counterparty booking.';
+  'Accept a pending cart swap: exchange both teachers'' same-period slots, or one-way handoff if the requester has no counterparty booking. Accept cannot be faked via raw UPDATE.';
+
+-- ---------------------------------------------------------------------------
+-- decline_swap_request — owner/admin reject or requester cancel
+-- ---------------------------------------------------------------------------
+create or replace function public.decline_swap_request(p_request_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_req public.swap_requests%rowtype;
+  v_owner uuid;
+  v_uid uuid := auth.uid();
+  v_is_admin boolean;
+begin
+  if v_uid is null then
+    raise exception 'Sign in required';
+  end if;
+
+  select * into v_req
+  from public.swap_requests
+  where id = p_request_id
+  for update;
+
+  if not found then
+    raise exception 'Request not found';
+  end if;
+
+  if v_req.status is distinct from 'pending' then
+    raise exception 'Request is not pending';
+  end if;
+
+  select b.teacher_id into v_owner
+  from public.bookings b
+  where b.id = v_req.booking_id;
+
+  select exists (
+    select 1 from public.profiles p
+    where p.id = v_uid and p.role = 'admin'
+  ) into v_is_admin;
+
+  -- Owner / admin reject, or requester cancels their own request.
+  if not v_is_admin
+     and v_uid is distinct from v_req.requester_id
+     and (v_owner is null or v_uid is distinct from v_owner) then
+    raise exception 'Not allowed to decline this request';
+  end if;
+
+  update public.swap_requests
+  set status = 'declined'
+  where id = p_request_id;
+end;
+$$;
+
+revoke all on function public.decline_swap_request(uuid) from public;
+grant execute on function public.decline_swap_request(uuid) to authenticated;
+grant execute on function public.decline_swap_request(uuid) to service_role;
+
+comment on function public.decline_swap_request(uuid) is
+  'Decline or cancel a pending swap: booking owner / admin reject, or requester withdraws.';

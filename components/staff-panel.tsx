@@ -32,7 +32,7 @@ import {
   setStaffVerified,
   updateTeacherCredentials,
 } from "@/lib/actions"
-import { isSupabaseConfigured } from "@/lib/supabase/env"
+import { isRemotePlatformEnabled } from "@/lib/data/durability"
 import { SCHOOL_EMAIL_DOMAIN } from "@/lib/auth/school-domain"
 import {
   EMPLOYMENT_TYPES,
@@ -109,7 +109,7 @@ export function StaffPanel({
   swapRequests: SwapRequest[]
 }) {
   const router = useRouter()
-  const googleMode = isSupabaseConfigured()
+  const googleMode = isRemotePlatformEnabled()
   const today = format(new Date(), "yyyy-MM-dd")
 
   const [query, setQuery] = useState("")

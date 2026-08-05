@@ -601,16 +601,48 @@ export async function dbAcceptSwap(
   const { error } = await supabase
     .from("swap_requests")
     .update({ status: "accepted" })
-    .eq("id", request.id);
-  return { error: error?.message };
+    .eq("id", request.id)
+    .eq("status", "pending");
+  if (error) return { error: error.message };
+
+  // Close other pendings that targeted either booking (best-effort fallback).
+  const relatedIds = [request.bookingId, options.counterpartyBookingId].filter(
+    Boolean,
+  ) as string[];
+  if (relatedIds.length > 0) {
+    await supabase
+      .from("swap_requests")
+      .update({ status: "declined" })
+      .eq("status", "pending")
+      .neq("id", request.id)
+      .in("booking_id", relatedIds);
+  }
+  return {};
 }
 
 export async function dbDeclineSwap(requestId: string): Promise<{ error?: string }> {
   const supabase = client();
+
+  // Prefer security-definer RPC (owner / admin / requester checks server-side).
+  const { error: rpcError } = await supabase.rpc("decline_swap_request", {
+    p_request_id: requestId,
+  });
+  if (!rpcError) return {};
+
+  const rpcMissing =
+    /could not find the function|function .* does not exist|PGRST202/i.test(
+      rpcError.message ?? "",
+    );
+  if (!rpcMissing) {
+    return { error: rpcError.message };
+  }
+
+  // Fallback when swap-accept.sql has not been applied yet.
   const { error } = await supabase
     .from("swap_requests")
     .update({ status: "declined" })
-    .eq("id", requestId);
+    .eq("id", requestId)
+    .eq("status", "pending");
   return { error: error?.message };
 }
 
