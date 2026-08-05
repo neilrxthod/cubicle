@@ -44,6 +44,7 @@ export function PlatformBootstrap({
   const [error, setError] = useState("");
 
   // Initial load from Postgres (async only — sync ready cases are in useState above)
+  // Browser cache epoch resets are handled inside platform-store (local only).
   useEffect(() => {
     if (remoteMissing || !remoteEnabled || isPlatformRemoteHydrated()) {
       return;

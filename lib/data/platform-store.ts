@@ -17,15 +17,17 @@ import type {
  * Browser cache only. Source of truth in production is Supabase Postgres.
  * Re-deploying the Next.js app never clears Supabase — only this local cache.
  */
-/** Bump when seed shape changes so clients drop stale browser caches. */
-const STORAGE_KEY = "cubicle_platform_v9";
+/** Bump when we need every browser to drop cached carts/restrictions/bookings. */
+const PLATFORM_EPOCH = 10;
+const STORAGE_KEY = `cubicle_platform_v${PLATFORM_EPOCH}`;
+const EPOCH_KEY = "cubicle_platform_epoch";
 const CHANGE_EVENT = "cubicle_platform_change";
 
 /**
  * Fresh empty platform — no carts, staff, bookings, or restrictions.
  * Local demo and SSR fall back to this until Supabase (or local edits) populate state.
  */
-function seed(): PlatformState {
+function emptyState(): PlatformState {
   return {
     carts: [],
     bookings: [],
@@ -37,6 +39,11 @@ function seed(): PlatformState {
   };
 }
 
+/** @deprecated name kept for useSyncExternalStore getServerSnapshot */
+function seed(): PlatformState {
+  return emptyState();
+}
+
 let memory: PlatformState | null = null;
 let cachedRaw: string | null | undefined;
 
@@ -44,20 +51,70 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
+function purgeAllPlatformLocalKeys() {
+  if (typeof window === "undefined") return;
+  try {
+    const doomed: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      // Only platform state blobs — never session / onboarding / auth keys
+      if (k.startsWith("cubicle_platform")) {
+        doomed.push(k);
+      }
+    }
+    for (const k of doomed) localStorage.removeItem(k);
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+/**
+ * One-time (per epoch) wipe of browser platform cache so locked ADMIN slots
+ * and old demo carts cannot reappear after a hard refresh.
+ */
+function ensureFreshEpoch() {
+  if (typeof window === "undefined") return;
+  try {
+    const current = localStorage.getItem(EPOCH_KEY);
+    if (current === String(PLATFORM_EPOCH)) return;
+    purgeAllPlatformLocalKeys();
+    memory = emptyState();
+    const raw = JSON.stringify(memory);
+    cachedRaw = raw;
+    localStorage.setItem(STORAGE_KEY, raw);
+    localStorage.setItem(EPOCH_KEY, String(PLATFORM_EPOCH));
+    window.dispatchEvent(new Event(CHANGE_EVENT));
+  } catch {
+    // ignore
+  }
+}
+
 function read(): PlatformState {
   if (typeof window === "undefined") return seed();
+  ensureFreshEpoch();
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw === cachedRaw && memory) return memory;
   cachedRaw = raw;
   if (!raw) {
-    memory = seed();
+    memory = emptyState();
     return memory;
   }
   try {
     memory = JSON.parse(raw) as PlatformState;
+    // Guard: never keep half-broken shapes
+    if (!memory || !Array.isArray(memory.carts)) {
+      memory = emptyState();
+    }
+    if (!Array.isArray(memory.slotRestrictions)) memory.slotRestrictions = [];
+    if (!Array.isArray(memory.bookings)) memory.bookings = [];
+    if (!Array.isArray(memory.issues)) memory.issues = [];
+    if (!Array.isArray(memory.users)) memory.users = [];
+    if (!Array.isArray(memory.swapRequests)) memory.swapRequests = [];
+    if (!memory.bookingPolicy) memory.bookingPolicy = { maxAdvanceDays: 14 };
     return memory;
   } catch {
-    memory = seed();
+    memory = emptyState();
     return memory;
   }
 }
@@ -68,6 +125,7 @@ function write(next: PlatformState) {
   cachedRaw = raw;
   if (typeof window !== "undefined") {
     localStorage.setItem(STORAGE_KEY, raw);
+    localStorage.setItem(EPOCH_KEY, String(PLATFORM_EPOCH));
     window.dispatchEvent(new Event(CHANGE_EVENT));
   }
 }
@@ -125,6 +183,24 @@ export function replaceState(next: PlatformState) {
   write(next);
 }
 
+/** Force in-memory + localStorage to a completely empty platform. */
+export function forceEmptyPlatformState() {
+  memory = emptyState();
+  cachedRaw = null;
+  if (typeof window !== "undefined") {
+    try {
+      purgeAllPlatformLocalKeys();
+      const raw = JSON.stringify(memory);
+      cachedRaw = raw;
+      localStorage.setItem(STORAGE_KEY, raw);
+      localStorage.setItem(EPOCH_KEY, String(PLATFORM_EPOCH));
+    } catch {
+      // ignore
+    }
+    window.dispatchEvent(new Event(CHANGE_EVENT));
+  }
+}
+
 /**
  * Drop the browser cache only (never touches Supabase).
  * Used after sign-out so the next session hydrates fresh from Postgres.
@@ -135,11 +211,9 @@ export function clearPlatformBrowserCache() {
   remoteHydrated = false;
   if (typeof window !== "undefined") {
     try {
-      localStorage.removeItem(STORAGE_KEY);
-      // Drop legacy seed caches so a hard refresh cannot restore demo data.
-      for (let i = 1; i < 9; i++) {
-        localStorage.removeItem(`cubicle_platform_v${i}`);
-      }
+      purgeAllPlatformLocalKeys();
+      // Keep epoch so we don't re-run destructive empty write loops unnecessarily
+      localStorage.setItem(EPOCH_KEY, String(PLATFORM_EPOCH));
     } catch {
       // ignore quota / private mode
     }

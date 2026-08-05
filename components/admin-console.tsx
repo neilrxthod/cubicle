@@ -11,6 +11,7 @@ import {
   deleteBookings,
   reassignBooking,
   updateCart,
+  wipeOperationalData,
 } from "@/lib/actions"
 import { toast } from "@/hooks/use-toast"
 import { Input } from "@/components/ui/input"
@@ -232,6 +233,7 @@ function CartsGrid({
     | null
   >(null)
   const [deletingCart, setDeletingCart] = useState<Cart | null>(null)
+  const [resetOpen, setResetOpen] = useState(false)
   const [exitingIds, setExitingIds] = useState<Set<string>>(new Set())
   const [, startTransition] = useTransition()
 
@@ -360,20 +362,35 @@ function CartsGrid({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setEditor({ mode: "create" })}
-          className={cn(
-            "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 self-start rounded-md bg-neutral-950 px-3",
-            "text-[12.5px] font-medium tracking-[-0.01em] text-white",
-            "transition-opacity hover:opacity-90",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/15",
-            "sm:self-auto",
-          )}
-        >
-          <Plus className="size-3.5" strokeWidth={1.75} />
-          Add cart
-        </button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
+          {carts.length > 0 || bookings.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setResetOpen(true)}
+              className={cn(
+                "inline-flex h-8 items-center justify-center rounded-md px-2.5",
+                "text-[12px] font-medium tracking-[-0.01em] text-neutral-400",
+                "transition-colors hover:bg-neutral-100 hover:text-neutral-700",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+              )}
+            >
+              Reset data
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setEditor({ mode: "create" })}
+            className={cn(
+              "inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-neutral-950 px-3",
+              "text-[12.5px] font-medium tracking-[-0.01em] text-white",
+              "transition-opacity hover:opacity-90",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/15",
+            )}
+          >
+            <Plus className="size-3.5" strokeWidth={1.75} />
+            Add cart
+          </button>
+        </div>
       </div>
 
       <AnimatePresence mode="popLayout" initial={false}>
@@ -571,6 +588,18 @@ function CartsGrid({
         }}
       />
 
+      <InventoryResetDialog
+        open={resetOpen}
+        cartCount={carts.length}
+        bookingCount={bookings.length}
+        onClose={() => setResetOpen(false)}
+        onReset={() => {
+          setResetOpen(false)
+          setExitingIds(new Set())
+          router.refresh()
+        }}
+      />
+
       {pauseConflictCart ? (
         <CartPauseConflictDialog
           cart={pauseConflictCart}
@@ -582,6 +611,104 @@ function CartsGrid({
         />
       ) : null}
     </section>
+  )
+}
+
+/** Explicit full ops wipe — never runs automatically. */
+function InventoryResetDialog({
+  open,
+  cartCount,
+  bookingCount,
+  onClose,
+  onReset,
+}: {
+  open: boolean
+  cartCount: number
+  bookingCount: number
+  onClose: () => void
+  onReset: () => void
+}) {
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (open) setError(null)
+  }, [open])
+
+  function confirm() {
+    setError(null)
+    startTransition(async () => {
+      const res = await wipeOperationalData()
+      if (!res.ok) {
+        setError(res.error)
+        toast({
+          title: "Could not reset data",
+          description: res.error,
+          variant: "destructive",
+        })
+        return
+      }
+      toast({
+        title: "Operational data cleared",
+        description: "Inventory and schedule are empty. Staff accounts kept.",
+      })
+      onReset()
+    })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && !pending && onClose()}>
+      <DialogContent className="gap-0 overflow-hidden rounded-2xl border-border/60 bg-white p-0 shadow-xl sm:max-w-sm">
+        <DialogHeader className="space-y-0 border-b border-[var(--hairline)] px-5 pb-4 pt-5 text-left">
+          <DialogTitle className="text-[15px] font-light tracking-[-0.02em] text-neutral-950">
+            Reset operational data?
+          </DialogTitle>
+          <DialogDescription className="mt-1 text-[12.5px] leading-relaxed text-neutral-400">
+            Permanently removes all carts, bookings, issues, and locks. Staff
+            accounts and the allowlist are kept.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 px-5 py-5">
+          <div className="rounded-xl border border-neutral-200/80 bg-neutral-50/80 px-3.5 py-3 text-[12.5px] text-neutral-600">
+            <p className="tabular-nums">
+              <span className="font-medium text-neutral-950">{cartCount}</span>{" "}
+              carts
+              <span className="mx-1.5 text-neutral-300">·</span>
+              <span className="font-medium text-neutral-950">{bookingCount}</span>{" "}
+              bookings
+            </p>
+            <p className="mt-1.5 text-[11.5px] text-neutral-400">
+              This cannot be undone. Use only for a clean school start.
+            </p>
+          </div>
+          {error ? (
+            <p className="text-[12.5px] text-red-600">{error}</p>
+          ) : null}
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={onClose}
+              className="h-9 px-1 text-[13px] font-medium text-neutral-400 transition-colors hover:text-neutral-900 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={confirm}
+              className="inline-flex h-9 min-w-[7rem] items-center justify-center rounded-lg bg-red-600 px-4 text-[13px] font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+            >
+              {pending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                "Reset all"
+              )}
+            </button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

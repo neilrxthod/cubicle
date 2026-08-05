@@ -5,6 +5,7 @@ import { getSession, setSession, clearSession } from "@/lib/auth/session";
 import { schoolEmailError } from "@/lib/auth/school-domain";
 import {
   clearPlatformBrowserCache,
+  forceEmptyPlatformState,
   getState,
   makeId,
   mutate,
@@ -30,6 +31,7 @@ import {
   dbRequestSwap,
   dbCreateCart,
   dbDeleteCart,
+  dbWipeOperationalData,
   dbSetCartStatus,
   dbSyncBookingTeacherName,
   dbUpdateAllowedEmail,
@@ -91,6 +93,29 @@ async function refreshRemote(): Promise<Result> {
 export async function hydratePlatformFromSupabase(): Promise<Result> {
   if (!isRemoteEnabled()) return { ok: true };
   return refreshRemote();
+}
+
+/**
+ * Explicit admin reset: wipe carts, bookings, issues, restrictions, swaps.
+ * Keeps staff profiles / allowlist. Never auto-called on page load.
+ */
+export async function wipeOperationalData(): Promise<Result> {
+  const session = requireSession();
+  if (!session || session.role !== "admin") {
+    return { ok: false, error: "Admin only." };
+  }
+
+  if (isRemoteEnabled()) {
+    const { error } = await dbWipeOperationalData();
+    if (error) return { ok: false, error };
+    // Refresh from Postgres — do not force-empty first (would drop client profiles mid-session).
+    return refreshRemote();
+  }
+
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
+  forceEmptyPlatformState();
+  return { ok: true };
 }
 
 function requireSession(): SessionUser | null {
@@ -526,16 +551,16 @@ function normalizeCartFields(input: {
   name: string;
   location?: string;
   laptopCount?: number | string | null;
-}): Result<{ name: string; location?: string; laptopCount?: number }> {
+}): Result<{ name: string; location: string; laptopCount?: number }> {
   const name = input.name.trim().replace(/\s+/g, " ");
   if (!name) return { ok: false, error: "Cart name is required." };
   if (name.length > 48) {
     return { ok: false, error: "Name must be 48 characters or fewer." };
   }
 
-  const locationRaw = (input.location ?? "").trim().replace(/\s+/g, " ");
-  if (!locationRaw) return { ok: false, error: "Location is required." };
-  if (locationRaw.length > 80) {
+  const location = (input.location ?? "").trim().replace(/\s+/g, " ");
+  if (!location) return { ok: false, error: "Location is required." };
+  if (location.length > 80) {
     return { ok: false, error: "Location must be 80 characters or fewer." };
   }
 
@@ -559,7 +584,7 @@ function normalizeCartFields(input: {
     ok: true,
     data: {
       name,
-      location: locationRaw,
+      location,
       laptopCount,
     },
   };
@@ -577,9 +602,14 @@ export async function createCart(input: {
   }
 
   const fields = normalizeCartFields(input);
-  if (!fields.ok || !fields.data) return { ok: false, error: fields.error };
-
+  if (!fields.ok) {
+    return { ok: false, error: fields.error ?? "Invalid cart details." };
+  }
+  if (!fields.data) {
+    return { ok: false, error: "Invalid cart details." };
+  }
   const { name, location, laptopCount } = fields.data;
+
   const duplicate = getState().carts.some(
     (c) => c.name.toLowerCase() === name.toLowerCase(),
   );
@@ -635,8 +665,12 @@ export async function updateCart(
   if (!cartId) return { ok: false, error: "Cart not found." };
 
   const fields = normalizeCartFields(input);
-  if (!fields.ok || !fields.data) return { ok: false, error: fields.error };
-
+  if (!fields.ok) {
+    return { ok: false, error: fields.error ?? "Invalid cart details." };
+  }
+  if (!fields.data) {
+    return { ok: false, error: "Invalid cart details." };
+  }
   const { name, location, laptopCount } = fields.data;
   const existing = getState().carts.find((c) => c.id === cartId);
   if (!existing) return { ok: false, error: "Cart not found." };

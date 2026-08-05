@@ -414,6 +414,19 @@ export async function dbDeleteCart(
   return {};
 }
 
+/**
+ * Wipe school operational tables (carts, bookings, issues, restrictions, swaps).
+ * Deleting carts cascades bookings / issues / restrictions; swaps cascade from bookings.
+ * Keeps profiles + allowlist. Requires admin RLS policies.
+ */
+export async function dbWipeOperationalData(): Promise<{ error?: string }> {
+  const supabase = client();
+  // PostgREST requires a filter — match every cart id.
+  const { error } = await supabase.from("carts").delete().neq("id", "");
+  if (error) return { error: error.message };
+  return {};
+}
+
 export async function dbRequestSwap(input: {
   bookingId: string;
   requesterId: string;
