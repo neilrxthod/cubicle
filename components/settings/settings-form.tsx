@@ -62,8 +62,6 @@ export function SettingsForm({
 
   const [name, setName] = useState(user.name);
   const [title, setTitle] = useState(user.title ?? "");
-  const [department, setDepartment] = useState(user.department ?? "");
-  const [phone, setPhone] = useState(user.phone ?? "");
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(user.avatarUrl);
   const [avatarDirty, setAvatarDirty] = useState(false);
   const [notifyEmail, setNotifyEmail] = useState(user.notifyEmail ?? true);
@@ -81,8 +79,6 @@ export function SettingsForm({
     if (avatarDirty) return true;
     if (name.trim() !== user.name) return true;
     if ((title || "") !== (user.title ?? "")) return true;
-    if ((department || "") !== (user.department ?? "")) return true;
-    if ((phone || "") !== (user.phone ?? "")) return true;
     if (notifyEmail !== (user.notifyEmail ?? true)) return true;
     if (notifyIssues !== (user.notifyIssues ?? true)) return true;
     return false;
@@ -90,8 +86,6 @@ export function SettingsForm({
     avatarDirty,
     name,
     title,
-    department,
-    phone,
     notifyEmail,
     notifyIssues,
     user,
@@ -125,20 +119,14 @@ export function SettingsForm({
   function handleSave(event?: React.FormEvent) {
     event?.preventDefault();
     if (!dirty) return;
-    if (!phone.trim()) {
-      setStatus({
-        type: "error",
-        message: "Phone number is required.",
-      });
-      return;
-    }
     setStatus(null);
     startTransition(async () => {
       const res = await updateProfile({
         name,
         title,
-        department,
-        phone,
+        department: user.department,
+        // Keep existing phone — field removed from Settings UI
+        ...(user.phone ? { phone: user.phone } : {}),
         bio: user.bio,
         avatarUrl: avatarDirty ? (avatarUrl ?? null) : undefined,
         notifyEmail,
@@ -268,7 +256,7 @@ export function SettingsForm({
                 autoComplete="name"
               />
             </SettingsField>
-            <SettingsField label="Title" htmlFor="title">
+            <SettingsField label="Title" htmlFor="title" className="sm:col-span-2">
               <input
                 id="title"
                 value={title}
@@ -277,31 +265,6 @@ export function SettingsForm({
                 placeholder="Science teacher"
                 autoComplete="organization-title"
               />
-            </SettingsField>
-            <SettingsField label="Department" htmlFor="department">
-              <input
-                id="department"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                className={settingsInputClass}
-                placeholder="Science"
-              />
-            </SettingsField>
-            <SettingsField label="Phone" htmlFor="phone" className="sm:col-span-2">
-              <input
-                id="phone"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className={settingsInputClass}
-                placeholder="Classroom or office line"
-                required
-                autoComplete="tel"
-                aria-required="true"
-              />
-              <p className="text-[11.5px] leading-snug text-neutral-400">
-                Required — each classroom teacher has a dedicated number.
-              </p>
             </SettingsField>
           </div>
         </SettingsRow>
@@ -569,9 +532,7 @@ export function SettingsForm({
           </p>
           <button
             type="submit"
-            disabled={
-              pending || uploading || !name.trim() || !phone.trim() || !dirty
-            }
+            disabled={pending || uploading || !name.trim() || !dirty}
             className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-neutral-900 px-3.5 text-[12.5px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-30"
           >
             {pending ? (
