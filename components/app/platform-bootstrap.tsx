@@ -19,12 +19,21 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { subscribePlatformRealtime } from "@/lib/supabase/realtime";
 import { RemoteRequiredScreen } from "@/components/app/remote-required-screen";
 
+/** Safety-net poll while the tab is visible (missed Realtime events / sleep). */
+const VISIBLE_POLL_MS = 18_000;
+
 /**
  * Loads platform data from Supabase, then keeps it live via Realtime.
  *
  * Production: always remote Postgres. Code deploys never wipe that data.
  * Local demo: empty localStorage scaffold when Supabase env is absent and not
  * on a production host.
+ *
+ * Multi-client sync (two browsers, two teachers, phone + laptop):
+ * 1. Supabase Realtime postgres_changes → full store refresh
+ * 2. Tab focus / visibility / online → immediate refresh
+ * 3. Visible-tab poll as a fallback if a websocket event is dropped
+ * 4. localStorage + BroadcastChannel for same-browser multi-tab
  */
 export function PlatformBootstrap({
   children,
@@ -58,7 +67,9 @@ export function PlatformBootstrap({
       if (!result.ok) {
         // Never fall back to seed when remote is required — empty/wrong data
         // would look like "everything disappeared" after a deploy.
-        setError(result.error ?? "Could not load school data from the database.");
+        setError(
+          result.error ?? "Could not load school data from the database.",
+        );
         setReady(true);
         return;
       }
@@ -71,14 +82,16 @@ export function PlatformBootstrap({
     };
   }, [remoteMissing, remoteEnabled]);
 
-  // Live updates: any change to bookings/carts/issues/profiles refreshes shared store
+  // Live multi-client sync: Realtime + visibility/online + light poll.
   useEffect(() => {
     if (!remoteEnabled || !ready || error || remoteMissing) return;
 
     let inFlight = false;
     let queued = false;
+    let disposed = false;
 
     const refresh = () => {
+      if (disposed) return;
       if (inFlight) {
         queued = true;
         return;
@@ -86,6 +99,7 @@ export function PlatformBootstrap({
       inFlight = true;
       void hydratePlatformFromSupabase()
         .then((result) => {
+          if (disposed) return;
           if (result.ok) {
             syncSessionFromPlatformState(getPlatformSnapshot());
           }
@@ -99,9 +113,35 @@ export function PlatformBootstrap({
         });
     };
 
-    const unsubscribe = subscribePlatformRealtime(refresh);
+    const unsubscribeRealtime = subscribePlatformRealtime(refresh);
 
-    return unsubscribe;
+    const onVisibleOrFocus = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+      refresh();
+    };
+
+    const onOnline = () => refresh();
+
+    document.addEventListener("visibilitychange", onVisibleOrFocus);
+    window.addEventListener("focus", onVisibleOrFocus);
+    window.addEventListener("online", onOnline);
+
+    // While this tab is visible, periodically re-pull so a dropped Realtime
+    // event never leaves boards stale for long (other devices still feel live).
+    const pollId = window.setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, VISIBLE_POLL_MS);
+
+    return () => {
+      disposed = true;
+      unsubscribeRealtime();
+      document.removeEventListener("visibilitychange", onVisibleOrFocus);
+      window.removeEventListener("focus", onVisibleOrFocus);
+      window.removeEventListener("online", onOnline);
+      window.clearInterval(pollId);
+    };
   }, [ready, error, remoteEnabled, remoteMissing]);
 
   // Keep header/session name in lockstep with platform store (Realtime + local).

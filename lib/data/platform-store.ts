@@ -25,6 +25,8 @@ const PLATFORM_EPOCH = 13;
 const STORAGE_KEY = `cubicle_platform_v${PLATFORM_EPOCH}`;
 const EPOCH_KEY = "cubicle_platform_epoch";
 const CHANGE_EVENT = "cubicle_platform_change";
+/** Same-origin multi-tab sync (pairs with Realtime for other browsers/devices). */
+const BROADCAST_CHANNEL = `cubicle_platform_bc_v${PLATFORM_EPOCH}`;
 
 /**
  * Official empty platform — no carts, bookings, issues, or restrictions.
@@ -125,6 +127,23 @@ function read(): PlatformState {
   }
 }
 
+function invalidateMemoryCache() {
+  memory = null;
+  cachedRaw = null;
+}
+
+function notifyPlatformPeers() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(CHANGE_EVENT));
+  try {
+    const bc = new BroadcastChannel(BROADCAST_CHANNEL);
+    bc.postMessage({ type: "platform", epoch: PLATFORM_EPOCH, t: Date.now() });
+    bc.close();
+  } catch {
+    // BroadcastChannel unavailable (older browsers / restricted contexts)
+  }
+}
+
 function write(next: PlatformState) {
   memory = next;
   const raw = JSON.stringify(next);
@@ -132,7 +151,7 @@ function write(next: PlatformState) {
   if (typeof window !== "undefined") {
     localStorage.setItem(STORAGE_KEY, raw);
     localStorage.setItem(EPOCH_KEY, String(PLATFORM_EPOCH));
-    window.dispatchEvent(new Event(CHANGE_EVENT));
+    notifyPlatformPeers();
   }
 }
 
@@ -148,11 +167,42 @@ function uid(prefix: string) {
 
 export function subscribePlatform(onChange: () => void) {
   if (typeof window === "undefined") return () => {};
-  window.addEventListener(CHANGE_EVENT, onChange);
-  window.addEventListener("storage", onChange);
+
+  const onLocal = () => onChange();
+
+  // Other tabs wrote localStorage — drop memory cache so we re-read.
+  const onStorage = (event: StorageEvent) => {
+    if (
+      event.key === null ||
+      event.key === STORAGE_KEY ||
+      event.key === EPOCH_KEY
+    ) {
+      invalidateMemoryCache();
+      onChange();
+    }
+  };
+
+  let bc: BroadcastChannel | null = null;
+  try {
+    bc = new BroadcastChannel(BROADCAST_CHANNEL);
+    bc.onmessage = () => {
+      invalidateMemoryCache();
+      onChange();
+    };
+  } catch {
+    bc = null;
+  }
+
+  window.addEventListener(CHANGE_EVENT, onLocal);
+  window.addEventListener("storage", onStorage);
   return () => {
-    window.removeEventListener(CHANGE_EVENT, onChange);
-    window.removeEventListener("storage", onChange);
+    window.removeEventListener(CHANGE_EVENT, onLocal);
+    window.removeEventListener("storage", onStorage);
+    try {
+      bc?.close();
+    } catch {
+      // ignore
+    }
   };
 }
 
@@ -203,7 +253,7 @@ export function forceEmptyPlatformState() {
     } catch {
       // ignore
     }
-    window.dispatchEvent(new Event(CHANGE_EVENT));
+    notifyPlatformPeers();
   }
 }
 
@@ -223,7 +273,7 @@ export function clearPlatformBrowserCache() {
     } catch {
       // ignore quota / private mode
     }
-    window.dispatchEvent(new Event(CHANGE_EVENT));
+    notifyPlatformPeers();
   }
 }
 
