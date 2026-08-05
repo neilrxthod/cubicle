@@ -263,9 +263,10 @@ export async function dbCreateBooking(input: {
   className?: string;
   subject?: string;
   notes?: string;
-  sharedWithId?: string;
-  sharedWithName?: string;
-  sharedWithAvatarUrl?: string;
+  /** Pending share invite (not accepted yet). */
+  sharePendingId?: string;
+  sharePendingName?: string;
+  sharePendingAvatarUrl?: string;
   lastEditedById?: string;
   lastEditedByName?: string;
   lastEditedByAvatarUrl?: string;
@@ -282,15 +283,18 @@ export async function dbCreateBooking(input: {
     subject: input.subject ?? null,
     notes: input.notes ?? null,
   };
-  const withShare = {
+  const withInvite = {
     ...base,
-    shared_with_id: input.sharedWithId ?? null,
-    shared_with_name: input.sharedWithName ?? null,
-    shared_with_avatar_url: input.sharedWithAvatarUrl ?? null,
+    // Never auto-accept share — only pending invite on create.
+    shared_with_id: null as string | null,
+    shared_with_name: null as string | null,
+    shared_with_avatar_url: null as string | null,
+    share_pending_id: input.sharePendingId ?? null,
+    share_pending_name: input.sharePendingName ?? null,
+    share_pending_avatar_url: input.sharePendingAvatarUrl ?? null,
   };
-  // Prefer share + editor columns; peel off migrations if not applied yet.
   const withEditor = {
-    ...withShare,
+    ...withInvite,
     last_edited_by_id: input.lastEditedById ?? null,
     last_edited_by_name: input.lastEditedByName ?? null,
     last_edited_by_avatar_url: input.lastEditedByAvatarUrl ?? null,
@@ -302,8 +306,12 @@ export async function dbCreateBooking(input: {
     .select("id")
     .single();
   let shareSkipped = false;
+  const wantsInvite = Boolean(input.sharePendingId);
 
-  if (error && /shared_with/i.test(error.message ?? "")) {
+  if (
+    error &&
+    /share_pending|shared_with/i.test(error.message ?? "")
+  ) {
     const withoutShare = {
       ...base,
       last_edited_by_id: input.lastEditedById ?? null,
@@ -318,17 +326,17 @@ export async function dbCreateBooking(input: {
       .single();
     data = retryShare.data;
     error = retryShare.error;
-    if (!error && input.sharedWithId) shareSkipped = true;
+    if (!error && wantsInvite) shareSkipped = true;
   }
   if (error && /last_edited/i.test(error.message ?? "")) {
     const retry = await supabase
       .from("bookings")
-      .insert(withShare)
+      .insert(withInvite)
       .select("id")
       .single();
     data = retry.data;
     error = retry.error;
-    if (error && /shared_with/i.test(error.message ?? "")) {
+    if (error && /share_pending|shared_with/i.test(error.message ?? "")) {
       const bare = await supabase
         .from("bookings")
         .insert(base)
@@ -336,7 +344,7 @@ export async function dbCreateBooking(input: {
         .single();
       data = bare.data;
       error = bare.error;
-      if (!error && input.sharedWithId) shareSkipped = true;
+      if (!error && wantsInvite) shareSkipped = true;
     }
   }
 
@@ -351,13 +359,42 @@ export async function dbCreateBooking(input: {
     return {
       id: data?.id ? String(data.id) : undefined,
       error:
-        "Cart booked. To enable share/borrow, run supabase/booking-share.sql in Supabase SQL Editor.",
+        "Cart booked. To enable share invites, run supabase/booking-share.sql in Supabase SQL Editor.",
     };
   }
 
   return {
     id: data?.id ? String(data.id) : undefined,
   };
+}
+
+/** Accept / decline / clear a pending share invite on a booking. */
+export async function dbResolveShareInvite(
+  bookingId: string,
+  next: {
+    sharedWithId?: string | null;
+    sharedWithName?: string | null;
+    sharedWithAvatarUrl?: string | null;
+    clearPending: boolean;
+  },
+): Promise<{ error?: string }> {
+  const supabase = client();
+  const payload: Record<string, unknown> = {};
+  if (next.clearPending) {
+    payload.share_pending_id = null;
+    payload.share_pending_name = null;
+    payload.share_pending_avatar_url = null;
+  }
+  if (next.sharedWithId !== undefined) {
+    payload.shared_with_id = next.sharedWithId;
+    payload.shared_with_name = next.sharedWithName ?? null;
+    payload.shared_with_avatar_url = next.sharedWithAvatarUrl ?? null;
+  }
+  const { error } = await supabase
+    .from("bookings")
+    .update(payload)
+    .eq("id", bookingId);
+  return { error: error?.message };
 }
 
 export async function dbDeleteBooking(bookingId: string): Promise<{ error?: string }> {

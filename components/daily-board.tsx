@@ -13,7 +13,11 @@ import type {
   SessionUser,
   SlotRestriction,
 } from "@/lib/types"
-import { bookingInvolvesUser, getBookingPurpose } from "@/lib/types"
+import {
+  bookingHasShareInviteFor,
+  bookingInvolvesUser,
+  getBookingPurpose,
+} from "@/lib/types"
 
 type LockKind = "general" | "ap_exam" | "holiday"
 
@@ -53,7 +57,12 @@ const ManageBookingDialog = dynamic(
   { ssr: false }
 )
 
-import { batchRestrictSlots, cancelBooking } from "@/lib/actions"
+import {
+  acceptShareInvite,
+  batchRestrictSlots,
+  cancelBooking,
+  declineShareInvite,
+} from "@/lib/actions"
 import { Calendar } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -67,6 +76,9 @@ import {
   Lock,
   Loader2,
   Trash2,
+  UserPlus,
+  Check,
+  X,
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -239,6 +251,9 @@ export function DailyBoard({
   const [deletingBookingId, setDeletingBookingId] = useState<string | null>(
     null,
   )
+  const [shareInviteBusyId, setShareInviteBusyId] = useState<string | null>(
+    null,
+  )
 
   const isAdmin = session.role === "admin"
 
@@ -259,6 +274,38 @@ export function DailyBoard({
       router.refresh()
     } finally {
       setDeletingBookingId(null)
+    }
+  }
+
+  async function respondShareInvite(
+    booking: Booking,
+    action: "accept" | "decline",
+  ) {
+    if (shareInviteBusyId) return
+    setShareInviteBusyId(booking.id)
+    try {
+      const res =
+        action === "accept"
+          ? await acceptShareInvite(booking.id)
+          : await declineShareInvite(booking.id)
+      if (res && "error" in res && res.error) {
+        toast({
+          title:
+            action === "accept"
+              ? "Could not accept share"
+              : "Could not decline share",
+          description: res.error,
+          variant: "destructive",
+        })
+        return
+      }
+      toast({
+        title:
+          action === "accept" ? "Share accepted" : "Share invite declined",
+      })
+      router.refresh()
+    } finally {
+      setShareInviteBusyId(null)
     }
   }
 
@@ -1057,11 +1104,20 @@ export function DailyBoard({
                             : undefined) ??
                           booking.sharedWithAvatarUrl)
                         : undefined
+                      const inviteForMe = bookingHasShareInviteFor(
+                        booking,
+                        session.id,
+                      )
+                      const invitePendingName = booking.sharePendingId
+                        ? nameByTeacherId.get(booking.sharePendingId) ||
+                          booking.sharePendingName ||
+                          "Colleague"
+                        : undefined
                       const classLabel = booking.className?.trim()
                       const purpose = getBookingPurpose(booking)
                       const purposeTag = purpose?.tag
                       // Anyone (teacher or admin) may request a swap on someone else's slot.
-                      const isSwapTarget = !isInvolved
+                      const isSwapTarget = !isInvolved && !inviteForMe
                       const hasPendingSwap =
                         isSwapTarget &&
                         platform.swapRequests.some(
@@ -1072,19 +1128,26 @@ export function DailyBoard({
                         )
                       const shareBit = shareName
                         ? ` · shared with ${shareName}`
-                        : ""
+                        : invitePendingName
+                          ? inviteForMe
+                            ? " · share invite for you"
+                            : ` · invite pending (${invitePendingName})`
+                          : ""
                       const purposeBit =
                         purpose && purpose.id !== "class"
                           ? ` · ${purpose.label}`
                           : ""
-                      const title = isInvolved
-                        ? `${classLabel || "Your booking"}${purposeBit}${shareBit} — click to manage`
-                        : hasPendingSwap
-                          ? `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — swap pending`
-                          : isAdmin
-                            ? `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — swap or delete`
-                            : `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — hover to swap`
+                      const title = inviteForMe
+                        ? `${personName} invited you to share this cart`
+                        : isInvolved
+                          ? `${classLabel || "Your booking"}${purposeBit}${shareBit} — click to manage`
+                          : hasPendingSwap
+                            ? `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — swap pending`
+                            : isAdmin
+                              ? `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — swap or delete`
+                              : `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — hover to swap`
                       const deleting = deletingBookingId === booking.id
+                      const inviteBusy = shareInviteBusyId === booking.id
 
                       return (
                         <div
@@ -1092,7 +1155,7 @@ export function DailyBoard({
                           className={cn(
                             cellBase,
                             "group/slot relative items-center justify-center p-1.5",
-                            isInvolved
+                            isInvolved || inviteForMe
                               ? "bg-[#211d1d] hover:bg-[#2a2525]"
                               : "bg-[#211d1d]/10 hover:bg-[#211d1d]/15",
                           )}
@@ -1102,7 +1165,7 @@ export function DailyBoard({
                               className={cn(
                                 "pointer-events-none absolute top-1 right-1 z-[2]",
                                 "rounded px-1 py-px text-[8.5px] font-semibold uppercase tracking-[0.04em]",
-                                isInvolved
+                                isInvolved || inviteForMe
                                   ? purpose.tagClassOnDark
                                   : purpose.tagClass,
                               )}
@@ -1110,12 +1173,93 @@ export function DailyBoard({
                               {purposeTag}
                             </span>
                           ) : null}
+
+                          {/* Pending share invite — friend request icon for invitee */}
+                          {inviteForMe ? (
+                            <div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-1 p-1">
+                              <span
+                                className={cn(
+                                  "flex size-9 items-center justify-center rounded-full sm:size-10",
+                                  "bg-sky-500 text-white shadow-sm ring-2 ring-white/30",
+                                )}
+                                title={title}
+                              >
+                                <UserPlus
+                                  className="size-4 sm:size-4.5"
+                                  strokeWidth={2}
+                                />
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  title="Accept share"
+                                  aria-label="Accept share invite"
+                                  disabled={inviteBusy}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    void respondShareInvite(booking, "accept")
+                                  }}
+                                  className={cn(
+                                    "flex size-7 items-center justify-center rounded-full",
+                                    "bg-white text-emerald-700 shadow-sm ring-1 ring-black/10",
+                                    "hover:bg-emerald-50 disabled:opacity-50",
+                                  )}
+                                >
+                                  {inviteBusy ? (
+                                    <Loader2
+                                      className="size-3.5 animate-spin"
+                                      strokeWidth={2}
+                                    />
+                                  ) : (
+                                    <Check
+                                      className="size-3.5"
+                                      strokeWidth={2.25}
+                                    />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Decline share"
+                                  aria-label="Decline share invite"
+                                  disabled={inviteBusy}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    void respondShareInvite(booking, "decline")
+                                  }}
+                                  className={cn(
+                                    "flex size-7 items-center justify-center rounded-full",
+                                    "bg-white text-red-600 shadow-sm ring-1 ring-black/10",
+                                    "hover:bg-red-50 disabled:opacity-50",
+                                  )}
+                                >
+                                  <X className="size-3.5" strokeWidth={2.25} />
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {/* Owner: pending invite indicator */}
+                          {!inviteForMe &&
+                          booking.sharePendingId &&
+                          booking.teacherId === session.id ? (
+                            <span
+                              title={`Invite pending: ${invitePendingName}`}
+                              className={cn(
+                                "pointer-events-none absolute bottom-1 left-1 z-[2]",
+                                "flex size-5 items-center justify-center rounded-full",
+                                "bg-sky-500/90 text-white ring-1 ring-white/25",
+                              )}
+                            >
+                              <UserPlus className="size-3" strokeWidth={2} />
+                            </span>
+                          ) : null}
+
                           <button
                             type="button"
                             onClick={() => onCellClick(cart, period)}
                             title={title}
                             aria-label={title}
-                            disabled={deleting}
+                            disabled={deleting || inviteForMe}
                             className={cn(
                               "absolute inset-0 flex items-center justify-center p-1.5",
                               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset",
@@ -1123,6 +1267,7 @@ export function DailyBoard({
                                 ? "focus-visible:ring-white/20"
                                 : "focus-visible:ring-[#211d1d]/20",
                               "disabled:pointer-events-none",
+                              inviteForMe && "opacity-40",
                             )}
                           >
                             <span
@@ -1137,7 +1282,7 @@ export function DailyBoard({
                                 primarySrc={avatarSrc}
                                 shareName={shareName}
                                 shareSrc={shareSrc}
-                                onDark={isInvolved}
+                                onDark={isInvolved || inviteForMe}
                               />
                             </span>
                           </button>

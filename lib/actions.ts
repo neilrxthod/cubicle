@@ -208,16 +208,14 @@ export async function createBooking(
   );
   if (conflict) return { ok: false, error: "That slot is already booked." };
 
-  // Optional share / borrow partner (co-teacher on this slot).
-  let sharedWithId: string | undefined;
-  let sharedWithName: string | undefined;
-  let sharedWithAvatarUrl: string | undefined;
+  // Optional share invite — partner must accept before share is active.
+  let sharePendingId: string | undefined;
+  let sharePendingName: string | undefined;
+  let sharePendingAvatarUrl: string | undefined;
   if (sharedWithRaw) {
     if (sharedWithRaw === session.id) {
       return { ok: false, error: "Pick a colleague to share with, not yourself." };
     }
-    // Any signed-in staff profile (teacher or admin) may be a share partner.
-    // Do not require allowlisted=true — teachers often cannot read the allowlist.
     const partner = state.users.find(
       (u) =>
         u.id === sharedWithRaw &&
@@ -231,17 +229,19 @@ export async function createBooking(
         error: "That colleague is not available to share with.",
       };
     }
-    sharedWithId = partner.id;
-    sharedWithName = partner.name;
-    sharedWithAvatarUrl = partner.avatarUrl;
+    sharePendingId = partner.id;
+    sharePendingName = partner.name;
+    sharePendingAvatarUrl = partner.avatarUrl;
   }
+
+  const { bookingOccupiesUser } = await import("@/lib/types");
 
   function teacherBusyThisPeriod(userId: string): boolean {
     return state.bookings.some(
       (booking) =>
         booking.date === date &&
         booking.period === period &&
-        (booking.teacherId === userId || booking.sharedWithId === userId),
+        bookingOccupiesUser(booking, userId),
     );
   }
 
@@ -250,7 +250,7 @@ export async function createBooking(
     return state.bookings.filter(
       (booking) =>
         booking.date.slice(0, 10) === dayKey &&
-        (booking.teacherId === userId || booking.sharedWithId === userId),
+        bookingOccupiesUser(booking, userId),
     ).length;
   }
 
@@ -279,11 +279,11 @@ export async function createBooking(
     }
   }
 
-  if (sharedWithId) {
-    if (teacherBusyThisPeriod(sharedWithId)) {
+  if (sharePendingId) {
+    if (teacherBusyThisPeriod(sharePendingId)) {
       return {
         ok: false,
-        error: `${sharedWithName ?? "That colleague"} already has a cart this period.`,
+        error: `${sharePendingName ?? "That colleague"} already has a cart this period.`,
       };
     }
     if (session.role !== "admin") {
@@ -291,10 +291,10 @@ export async function createBooking(
         15,
         Math.max(1, state.bookingPolicy.maxSlotsPerTeacherPerDay ?? 5),
       );
-      if (teacherDaySlotCount(sharedWithId) >= maxSlots) {
+      if (teacherDaySlotCount(sharePendingId) >= maxSlots) {
         return {
           ok: false,
-          error: `${sharedWithName ?? "That colleague"} is at their daily cart limit.`,
+          error: `${sharePendingName ?? "That colleague"} is at their daily cart limit.`,
         };
       }
     }
@@ -317,7 +317,7 @@ export async function createBooking(
         error: "Your account is not linked yet. Sign out and sign in with Google again.",
       };
     }
-    if (sharedWithId && !isUuid(sharedWithId)) {
+    if (sharePendingId && !isUuid(sharePendingId)) {
       return { ok: false, error: "Invalid share partner." };
     }
     const { id: remoteId, error } = await dbCreateBooking({
@@ -329,9 +329,9 @@ export async function createBooking(
       className: className || undefined,
       subject: subject || undefined,
       notes: notes || undefined,
-      sharedWithId,
-      sharedWithName,
-      sharedWithAvatarUrl,
+      sharePendingId,
+      sharePendingName,
+      sharePendingAvatarUrl,
       lastEditedById: session.id,
       lastEditedByName: session.name,
       lastEditedByAvatarUrl: session.avatarUrl,
@@ -404,9 +404,9 @@ export async function createBooking(
       className: className || undefined,
       subject: subject || undefined,
       notes: notes || undefined,
-      sharedWithId,
-      sharedWithName,
-      sharedWithAvatarUrl,
+      sharePendingId,
+      sharePendingName,
+      sharePendingAvatarUrl,
       createdAt: now,
       lastEditedById: session.id,
       lastEditedByName: session.name,
@@ -425,6 +425,96 @@ export async function createBooking(
       ? { bookingId: localBooking.id, booking: localBooking }
       : { bookingId: localBookingId },
   };
+}
+
+/** Invitee accepts a share request — dual PFP becomes active. */
+export async function acceptShareInvite(bookingId: string): Promise<Result> {
+  const session = requireSession();
+  if (!session) return { ok: false, error: "Sign in required." };
+
+  const state = getState();
+  const booking = state.bookings.find((b) => b.id === bookingId);
+  if (!booking) return { ok: false, error: "Booking not found." };
+  if (booking.sharePendingId !== session.id) {
+    return { ok: false, error: "This share request is not for you." };
+  }
+
+  const { bookingOccupiesUser } = await import("@/lib/types");
+  const conflict = state.bookings.some(
+    (b) =>
+      b.id !== booking.id &&
+      b.date === booking.date &&
+      b.period === booking.period &&
+      bookingOccupiesUser(b, session.id),
+  );
+  if (conflict) {
+    return {
+      ok: false,
+      error: "You already have a cart this period. Decline or free a slot first.",
+    };
+  }
+
+  if (isRemoteEnabled()) {
+    const { dbResolveShareInvite } = await import("@/lib/supabase/platform-api");
+    const { error } = await dbResolveShareInvite(bookingId, {
+      sharedWithId: session.id,
+      sharedWithName: session.name,
+      sharedWithAvatarUrl: session.avatarUrl ?? null,
+      clearPending: true,
+    });
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
+  const demoOk = assertLocalDemoAllowed();
+  if (!demoOk.ok) return demoOk;
+  mutate((draft) => {
+    const b = draft.bookings.find((x) => x.id === bookingId);
+    if (!b || b.sharePendingId !== session.id) return;
+    b.sharedWithId = session.id;
+    b.sharedWithName = session.name;
+    b.sharedWithAvatarUrl = session.avatarUrl;
+    b.sharePendingId = undefined;
+    b.sharePendingName = undefined;
+    b.sharePendingAvatarUrl = undefined;
+  });
+  return { ok: true };
+}
+
+/** Invitee declines a share request. */
+export async function declineShareInvite(bookingId: string): Promise<Result> {
+  const session = requireSession();
+  if (!session) return { ok: false, error: "Sign in required." };
+
+  const booking = getState().bookings.find((b) => b.id === bookingId);
+  if (!booking) return { ok: false, error: "Booking not found." };
+  if (
+    booking.sharePendingId !== session.id &&
+    booking.teacherId !== session.id &&
+    session.role !== "admin"
+  ) {
+    return { ok: false, error: "Not allowed to clear this invite." };
+  }
+
+  if (isRemoteEnabled()) {
+    const { dbResolveShareInvite } = await import("@/lib/supabase/platform-api");
+    const { error } = await dbResolveShareInvite(bookingId, {
+      clearPending: true,
+    });
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
+  const demoOk = assertLocalDemoAllowed();
+  if (!demoOk.ok) return demoOk;
+  mutate((draft) => {
+    const b = draft.bookings.find((x) => x.id === bookingId);
+    if (!b) return;
+    b.sharePendingId = undefined;
+    b.sharePendingName = undefined;
+    b.sharePendingAvatarUrl = undefined;
+  });
+  return { ok: true };
 }
 
 export async function cancelBooking(bookingId: string): Promise<Result> {

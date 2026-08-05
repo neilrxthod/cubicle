@@ -60,10 +60,13 @@ create table if not exists public.bookings (
   class_name text,
   subject text,
   notes text,
-  -- Optional co-teacher sharing/borrowing this cart (see booking-share.sql).
+  -- Share: accepted partner + pending invite (see booking-share.sql).
   shared_with_id uuid references public.profiles (id) on delete set null,
   shared_with_name text,
   shared_with_avatar_url text,
+  share_pending_id uuid references public.profiles (id) on delete set null,
+  share_pending_name text,
+  share_pending_avatar_url text,
   created_at timestamptz not null default now(),
   unique (cart_id, date, period)
 );
@@ -71,15 +74,22 @@ create table if not exists public.bookings (
 create index if not exists bookings_date_idx on public.bookings (date);
 create index if not exists bookings_teacher_idx on public.bookings (teacher_id);
 
--- Existing projects before share columns (must run before shared_with index).
+-- Existing projects before share columns (must run before indexes).
 alter table public.bookings
   add column if not exists shared_with_id uuid references public.profiles (id) on delete set null,
   add column if not exists shared_with_name text,
-  add column if not exists shared_with_avatar_url text;
+  add column if not exists shared_with_avatar_url text,
+  add column if not exists share_pending_id uuid references public.profiles (id) on delete set null,
+  add column if not exists share_pending_name text,
+  add column if not exists share_pending_avatar_url text;
 
 create index if not exists bookings_shared_with_idx
   on public.bookings (shared_with_id)
   where shared_with_id is not null;
+
+create index if not exists bookings_share_pending_idx
+  on public.bookings (share_pending_id)
+  where share_pending_id is not null;
 
 -- ---------------------------------------------------------------------------
 -- Issues

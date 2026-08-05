@@ -59,6 +59,8 @@ export function ManageBookingDialog({
   ].filter(Boolean)
 
   const shareLabel = booking.sharedWithName?.trim() || booking.sharedWithId
+  const pendingLabel =
+    booking.sharePendingName?.trim() || booking.sharePendingId
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -116,6 +118,11 @@ export function ManageBookingDialog({
               Shared with{" "}
               <span className="font-medium text-neutral-700">{shareLabel}</span>
               {isSharePartner && !isOwner ? " (you)" : null}
+            </p>
+          ) : pendingLabel ? (
+            <p className="mt-1 truncate text-[12px] text-sky-700">
+              Share invite pending:{" "}
+              <span className="font-medium">{pendingLabel}</span>
             </p>
           ) : null}
 

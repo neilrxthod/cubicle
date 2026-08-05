@@ -84,12 +84,19 @@ export type Booking = {
   notes?: string;
   createdAt: string;
   /**
-   * Optional co-teacher sharing/borrowing this cart for the period.
-   * Board shows both profile photos when set.
+   * Accepted co-teacher on this cart. Board shows both profile photos.
+   * Only set after the invitee accepts the share request.
    */
   sharedWithId?: string;
   sharedWithName?: string;
   sharedWithAvatarUrl?: string;
+  /**
+   * Pending share invite (friend request). Not active until accepted.
+   * Invitee sees a request icon on the board slot.
+   */
+  sharePendingId?: string;
+  sharePendingName?: string;
+  sharePendingAvatarUrl?: string;
   /**
    * Who last created or changed this slot (teacher booker or admin editor).
    * Shown to all roles so multi-admin edits are visible on the board.
@@ -100,13 +107,37 @@ export type Booking = {
   lastEditedAt?: string;
 };
 
-/** True when user owns or co-shares the booking. */
+/** True when user owns or co-shares the booking (accepted share only). */
 export function bookingInvolvesUser(
   booking: Pick<Booking, "teacherId" | "sharedWithId">,
   userId: string | undefined | null,
 ): boolean {
   if (!userId) return false;
   return booking.teacherId === userId || booking.sharedWithId === userId;
+}
+
+/** True when user has a pending share invite on this booking. */
+export function bookingHasShareInviteFor(
+  booking: Pick<Booking, "sharePendingId">,
+  userId: string | undefined | null,
+): boolean {
+  return Boolean(userId && booking.sharePendingId === userId);
+}
+
+/**
+ * Occupancy for period/day caps: owner, accepted share, or pending invite
+ * (pending reserves the period so accept cannot double-book).
+ */
+export function bookingOccupiesUser(
+  booking: Pick<Booking, "teacherId" | "sharedWithId" | "sharePendingId">,
+  userId: string | undefined | null,
+): boolean {
+  if (!userId) return false;
+  return (
+    booking.teacherId === userId ||
+    booking.sharedWithId === userId ||
+    booking.sharePendingId === userId
+  );
 }
 
 /**

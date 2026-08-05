@@ -147,7 +147,7 @@ export function resolveOfferedBooking(
   );
 }
 
-/** True if user owns or co-shares a booking on this date + period. */
+/** True if user owns, co-shares, or has a pending share invite on this period. */
 export function userHoldsPeriod(
   bookings: Booking[],
   userId: string,
@@ -161,11 +161,13 @@ export function userHoldsPeriod(
       b.id !== excludeBookingId &&
       normalizeDate(b.date) === day &&
       b.period === period &&
-      (b.teacherId === userId || b.sharedWithId === userId),
+      (b.teacherId === userId ||
+        b.sharedWithId === userId ||
+        b.sharePendingId === userId),
   );
 }
 
-/** How many slots the user is on for a calendar day (owner or share partner). */
+/** How many slots the user is on for a calendar day (owner, share, or pending). */
 export function userDaySlotCount(
   bookings: Booking[],
   userId: string,
@@ -175,7 +177,9 @@ export function userDaySlotCount(
   return bookings.filter(
     (b) =>
       normalizeDate(b.date) === day &&
-      (b.teacherId === userId || b.sharedWithId === userId),
+      (b.teacherId === userId ||
+        b.sharedWithId === userId ||
+        b.sharePendingId === userId),
   ).length;
 }
 

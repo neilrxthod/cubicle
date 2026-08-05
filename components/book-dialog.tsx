@@ -178,7 +178,10 @@ export function BookDialog({
           {/* Share row */}
           <div className="space-y-2.5">
             <p className="text-[11px] font-medium tracking-[0.04em] text-neutral-400">
-              Share with
+              Invite to share
+            </p>
+            <p className="text-[11px] leading-snug text-neutral-400">
+              They must accept before the cart is shared.
             </p>
             {colleagues.length > 0 ? (
               <div
@@ -345,14 +348,14 @@ export function BookDialog({
                         purposeId !== "class"
                           ? `${purpose.label} booked`
                           : selectedPartner
-                            ? "Cart booked & shared"
+                            ? "Cart booked · invite sent"
                             : "Cart booked",
                       description: [
                         cart.name,
                         period,
                         purposeId !== "class" ? purpose.label : null,
                         selectedPartner
-                          ? `with ${selectedPartner.name}`
+                          ? `invite → ${selectedPartner.name}`
                           : null,
                       ]
                         .filter(Boolean)
