@@ -4,7 +4,15 @@ import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { format, parseISO, addDays } from "date-fns"
-import type { Booking, BookingPolicy, Cart, Period, SessionUser, SlotRestriction } from "@/lib/types"
+import type {
+  Booking,
+  BookingPolicy,
+  Cart,
+  Period,
+  RestrictionCategory,
+  SessionUser,
+  SlotRestriction,
+} from "@/lib/types"
 
 const BookDialog = dynamic(() => import("./book-dialog").then((mod) => mod.BookDialog), {
   ssr: false,
@@ -21,9 +29,29 @@ const ManageBookingDialog = dynamic(
   { ssr: false }
 )
 
+import { batchRestrictSlots } from "@/lib/actions"
 import { Calendar } from "@/components/ui/calendar"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Wrench, AlertTriangle, Lock } from "lucide-react"
+import {
+  Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+  Wrench,
+  AlertTriangle,
+  Lock,
+  Loader2,
+  Pencil,
+  Shield,
+  Unlock,
+} from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { usePlatformStore } from "@/lib/data/platform-store"
@@ -125,6 +153,13 @@ export function DailyBoard({
   const [issueDialog, setIssueDialog] = useState<Cart | null>(null)
   const [swapDialog, setSwapDialog] = useState<Booking | null>(null)
   const [manageDialog, setManageDialog] = useState<Booking | null>(null)
+  const [datePickerOpen, setDatePickerOpen] = useState(false)
+  const [dayLockDate, setDayLockDate] = useState<string | null>(null)
+
+  const restrictedDateMatchers = useMemo(() => {
+    const keys = new Set(slotRestrictions.map((r) => r.date))
+    return Array.from(keys).map((d) => parseISO(d))
+  }, [slotRestrictions])
 
   const bookingsForDate = bookings.filter((b) => b.date === date)
   const bookingMap = new Map<string, Booking>()
@@ -259,7 +294,7 @@ export function DailyBoard({
             <ChevronLeft className="size-4" strokeWidth={1.5} />
           </button>
 
-          <Popover>
+          <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
             <PopoverTrigger asChild>
               <button
                 type="button"
@@ -298,7 +333,29 @@ export function DailyBoard({
                   }
                   return false
                 }}
+                modifiers={{
+                  locked: restrictedDateMatchers,
+                }}
+                modifiersClassNames={{
+                  locked:
+                    "relative after:pointer-events-none after:absolute after:bottom-1 after:left-1 after:size-1 after:rounded-full after:bg-neutral-950 aria-selected:after:bg-white",
+                }}
+                onEditDay={
+                  session.role === "admin"
+                    ? (day) => {
+                        const key = format(day, "yyyy-MM-dd")
+                        setDate(key)
+                        setDatePickerOpen(false)
+                        setDayLockDate(key)
+                      }
+                    : undefined
+                }
               />
+              {session.role === "admin" ? (
+                <p className="border-t border-neutral-100 px-3.5 py-2 text-[11px] leading-snug text-neutral-400">
+                  Select a date, then tap the pencil to edit booking locks.
+                </p>
+              ) : null}
             </PopoverContent>
           </Popover>
 
@@ -387,7 +444,9 @@ export function DailyBoard({
                 No carts are set up yet.
               </p>
               <p className="mt-1 text-[12px] text-neutral-300">
-                Ask an admin to add laptop carts.
+                {session.role === "admin"
+                  ? "Add laptop carts under Admin → Inventory."
+                  : "Ask an admin to add laptop carts."}
               </p>
             </div>
           ) : null}
@@ -618,6 +677,257 @@ export function DailyBoard({
           onClose={() => setManageDialog(null)}
         />
       )}
+      {session.role === "admin" && dayLockDate ? (
+        <AdminDayLockDialog
+          date={dayLockDate}
+          carts={carts}
+          bookings={bookings}
+          slotRestrictions={slotRestrictions}
+          open={Boolean(dayLockDate)}
+          onOpenChange={(open) => {
+            if (!open) setDayLockDate(null)
+          }}
+          onApplied={() => router.refresh()}
+        />
+      ) : null}
     </section>
+  )
+}
+
+/* ─── Admin: lock / unlock all open cart slots for one day ─── */
+
+function AdminDayLockDialog({
+  date,
+  carts,
+  bookings,
+  slotRestrictions,
+  open,
+  onOpenChange,
+  onApplied,
+}: {
+  date: string
+  carts: Cart[]
+  bookings: Booking[]
+  slotRestrictions: SlotRestriction[]
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onApplied: () => void
+}) {
+  const [category, setCategory] = useState<RestrictionCategory>("general")
+  const [reason, setReason] = useState("")
+  const [busy, setBusy] = useState<"lock" | "unlock" | null>(null)
+
+  const activeCarts = useMemo(
+    () => carts.filter((c) => c.status !== "maintenance"),
+    [carts],
+  )
+  const totalSlots = activeCarts.length * PERIODS.length
+  const dayBookings = useMemo(
+    () =>
+      bookings.filter(
+        (b) =>
+          b.date === date &&
+          activeCarts.some((c) => c.id === b.cartId),
+      ),
+    [bookings, date, activeCarts],
+  )
+  const dayLocks = useMemo(
+    () =>
+      slotRestrictions.filter(
+        (r) =>
+          r.date === date &&
+          activeCarts.some((c) => c.id === r.cartId),
+      ),
+    [slotRestrictions, date, activeCarts],
+  )
+  const openSlots = Math.max(0, totalSlots - dayBookings.length - dayLocks.length)
+
+  async function apply(action: "restrict" | "available") {
+    if (activeCarts.length === 0) {
+      toast({
+        title: "No carts",
+        description: "Add carts under Admin → Inventory first.",
+        variant: "destructive",
+      })
+      return
+    }
+    setBusy(action === "restrict" ? "lock" : "unlock")
+    try {
+      const res = await batchRestrictSlots(
+        activeCarts.map((c) => c.id),
+        date,
+        date,
+        PERIODS,
+        action,
+        action === "restrict"
+          ? {
+              category,
+              reason: reason.trim() || undefined,
+            }
+          : undefined,
+      )
+      if (!res.ok) {
+        toast({
+          title: action === "restrict" ? "Could not lock day" : "Could not unlock day",
+          description: res.error,
+          variant: "destructive",
+        })
+        return
+      }
+      toast({
+        title: action === "restrict" ? "Day locked" : "Day unlocked",
+        description:
+          action === "restrict"
+            ? `${res.data?.restrictedCount ?? 0} slots locked${
+                res.data?.skippedBookedCount
+                  ? ` · ${res.data.skippedBookedCount} booked skipped`
+                  : ""
+              }`
+            : `${res.data?.restrictedCount ?? 0} locks cleared`,
+      })
+      onApplied()
+      onOpenChange(false)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="gap-0 overflow-hidden rounded-xl border border-neutral-200 bg-white p-0 shadow-[0_8px_30px_rgba(0,0,0,0.08)] sm:max-w-sm">
+        <DialogHeader className="space-y-1 border-b border-neutral-100 px-5 py-4 text-left">
+          <div className="flex items-center gap-2.5">
+            <span className="flex size-7 items-center justify-center rounded-md border border-neutral-200 bg-neutral-50 text-neutral-950">
+              <Pencil className="size-3.5" strokeWidth={1.75} />
+            </span>
+            <div className="min-w-0">
+              <DialogTitle className="text-[14px] font-semibold tracking-[-0.02em] text-neutral-950">
+                Edit day locks
+              </DialogTitle>
+              <DialogDescription className="mt-0.5 text-[12px] tabular-nums text-neutral-500">
+                {format(parseISO(date), "EEEE, MMM d, yyyy")}
+              </DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="space-y-4 px-5 py-4">
+          <div className="grid grid-cols-3 divide-x divide-neutral-100 rounded-md border border-neutral-200 bg-white text-center">
+            <div className="px-2 py-2.5">
+              <p className="text-[15px] font-semibold tabular-nums tracking-[-0.02em] text-neutral-950">
+                {openSlots}
+              </p>
+              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
+                Open
+              </p>
+            </div>
+            <div className="px-2 py-2.5">
+              <p className="text-[15px] font-semibold tabular-nums tracking-[-0.02em] text-neutral-950">
+                {dayBookings.length}
+              </p>
+              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
+                Booked
+              </p>
+            </div>
+            <div className="px-2 py-2.5">
+              <p className="text-[15px] font-semibold tabular-nums tracking-[-0.02em] text-neutral-950">
+                {dayLocks.length}
+              </p>
+              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
+                Locked
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
+              Lock type
+            </p>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => setCategory("general")}
+                className={cn(
+                  "flex h-9 items-center justify-center gap-1.5 rounded-md border text-[12.5px] font-medium transition-colors",
+                  category === "general"
+                    ? "border-neutral-950 bg-neutral-950 text-white"
+                    : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50",
+                )}
+              >
+                <Lock className="size-3.5" strokeWidth={1.5} />
+                General
+              </button>
+              <button
+                type="button"
+                onClick={() => setCategory("ap_exam")}
+                className={cn(
+                  "flex h-9 items-center justify-center gap-1.5 rounded-md border text-[12.5px] font-medium transition-colors",
+                  category === "ap_exam"
+                    ? "border-neutral-950 bg-neutral-950 text-white"
+                    : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50",
+                )}
+              >
+                <Shield className="size-3.5" strokeWidth={1.5} />
+                AP exam
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
+              Note
+            </p>
+            <Input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Optional (shown to teachers)"
+              className="h-9 rounded-md border-neutral-200 bg-white text-[13px] shadow-none focus-visible:ring-neutral-950/10"
+            />
+          </div>
+
+          <p className="text-[11.5px] leading-relaxed text-neutral-400">
+            Locks open slots for all active carts and periods. Existing bookings
+            are never overwritten.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 border-t border-neutral-100 bg-neutral-50/60 px-5 py-3.5 sm:flex-row-reverse">
+          <button
+            type="button"
+            disabled={busy !== null || openSlots === 0}
+            onClick={() => void apply("restrict")}
+            className={cn(
+              "inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md",
+              "bg-neutral-950 text-[13px] font-medium text-white",
+              "hover:bg-neutral-800 disabled:opacity-40",
+            )}
+          >
+            {busy === "lock" ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Lock className="size-3.5" strokeWidth={1.5} />
+            )}
+            Lock open slots
+          </button>
+          <button
+            type="button"
+            disabled={busy !== null || dayLocks.length === 0}
+            onClick={() => void apply("available")}
+            className={cn(
+              "inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md",
+              "border border-neutral-200 bg-white text-[13px] font-medium text-neutral-700",
+              "hover:bg-neutral-50 disabled:opacity-40",
+            )}
+          >
+            {busy === "unlock" ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Unlock className="size-3.5" strokeWidth={1.5} />
+            )}
+            Unlock day
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

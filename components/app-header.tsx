@@ -44,7 +44,13 @@ function Avatar({
         src={user.avatarUrl}
         alt=""
         referrerPolicy="no-referrer"
-        className={cn(dim, "shrink-0 rounded-full object-cover")}
+        decoding="async"
+        className={cn(
+          dim,
+          "shrink-0 rounded-full object-cover",
+          // Keep downscale sharp on high-DPI screens
+          "[image-rendering:auto]",
+        )}
       />
     );
   }

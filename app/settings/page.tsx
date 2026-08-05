@@ -17,10 +17,7 @@ function SettingsView({ user }: { user: SessionUser }) {
   return (
     <DashboardFrame user={user}>
       <div className="mx-auto w-full max-w-md sm:max-w-[30rem]">
-        <SettingsForm
-          key={user.id + (user.avatarUrl ?? "") + user.name}
-          user={user}
-        />
+        <SettingsForm key={user.id} user={user} />
       </div>
     </DashboardFrame>
   );

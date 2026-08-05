@@ -71,6 +71,8 @@
   --shell-py: clamp(1rem, 2.2vh, 2.25rem);
   --board-label-col: minmax(6.5rem, 12rem);
   --board-period-col: minmax(0, 1fr);
+  /* P5 is slightly wider so the period header fills the track edge cleanly */
+  --board-period-col-last: minmax(0, 1.35fr);
   --board-track-min: 34rem;
 
   /*
@@ -343,7 +345,8 @@ body[data-scroll-locked] [data-radix-portal] {
     overflow-x: auto;
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
-    scrollbar-gutter: stable;
+    /* Avoid a reserved gutter strip past P5 in the dark header */
+    scrollbar-gutter: auto;
   }
 
   /* Period boards fill available width; scroll only when viewport is tight */
@@ -353,7 +356,12 @@ body[data-scroll-locked] [data-radix-portal] {
   }
 
   .board-cols {
-    grid-template-columns: var(--board-label-col) repeat(5, var(--board-period-col));
+    width: 100%;
+    /* Cart | P1–P4 equal | P5 slightly wider to close the header edge gap */
+    grid-template-columns:
+      var(--board-label-col)
+      repeat(4, var(--board-period-col))
+      var(--board-period-col-last);
   }
 
   /* Keep cart labels readable while panning the grid */

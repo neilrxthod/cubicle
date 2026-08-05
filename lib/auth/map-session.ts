@@ -27,14 +27,16 @@ export function toPlatformSession(user: AuthSessionUser): SessionUser {
           : match.id.startsWith("pending:")
             ? user.id ?? match.id
             : match.id,
-      // Prefer live platform/profile name (kept in sync with Google + Realtime).
-      name: match.name || user.name,
+      // Prefer session first so a just-saved Settings name hits the header
+      // immediately; platform store (Realtime / refresh) is the fallback.
+      name: (user.name?.trim() || match.name || user.name).trim(),
       firstName: user.firstName,
       lastName: user.lastName,
       email: match.email,
       role: match.role,
-      // Session often has Google photo before/alongside DB profile.
-      avatarUrl: pickAvatar(match.avatarUrl, user.avatarUrl),
+      // Prefer session first so a just-saved photo hits the header immediately;
+      // platform store (Realtime / refresh) fills in when session is empty.
+      avatarUrl: pickAvatar(user.avatarUrl, match.avatarUrl),
       title: match.title ?? user.title,
       department: match.department ?? user.department,
       phone: match.phone ?? user.phone,

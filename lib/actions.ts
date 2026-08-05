@@ -34,6 +34,7 @@ import {
   dbWipeOperationalData,
   dbSetCartStatus,
   dbSyncBookingTeacherName,
+  dbSyncLastEditorAvatar,
   dbUpdateAllowedEmail,
   dbUpdateBookingPolicy,
   dbUpdateCart,
@@ -48,6 +49,7 @@ import {
   isVerifiedStaff,
   parseEmploymentType,
 } from "@/lib/staff/employment";
+import { splitDisplayName } from "@/lib/profile/display-name";
 import type {
   Booking,
   CartStatus,
@@ -1651,7 +1653,8 @@ export async function updateProfile(
   if ((input.bio?.length ?? 0) > 280) {
     return { ok: false, error: "Bio must be 280 characters or less." };
   }
-  if (input.avatarUrl && input.avatarUrl.length > 900_000) {
+  // High-res WebP/JPEG data URLs (~1024²) land under ~1.5MB string length.
+  if (input.avatarUrl && input.avatarUrl.length > 1_800_000) {
     return { ok: false, error: "Photo is too large. Try a smaller image." };
   }
 
@@ -1659,24 +1662,51 @@ export async function updateProfile(
     const { error, data } = await dbUpdateProfile(session.id, input);
     if (error || !data) return { ok: false, error: error ?? "Update failed." };
 
-    await dbSyncBookingTeacherName(session.id, data.name);
+    // Fan-out display name everywhere (bookings, issues, swaps, editor labels, allowlist).
+    await dbSyncBookingTeacherName(session.id, data.name, {
+      email: data.email ?? session.email,
+    });
+
+    // Keep denormalized editor faces on the board in sync with the new photo.
+    if (input.avatarUrl !== undefined) {
+      await dbSyncLastEditorAvatar(
+        session.id,
+        data.avatarUrl ?? null,
+      );
+    }
+
+    const nameBits = splitDisplayName(data.name);
+    const sessionPatch = {
+      name: data.name,
+      firstName: nameBits.firstName,
+      lastName: nameBits.lastName,
+      avatarUrl: data.avatarUrl,
+      title: data.title,
+      department: data.department,
+      phone: data.phone,
+      bio: data.bio,
+      notifyEmail: data.notifyEmail,
+      notifyIssues: data.notifyIssues,
+    };
 
     const current = getSession();
     if (current) {
       setSession({
         ...current,
-        name: data.name,
-        avatarUrl: data.avatarUrl,
-        title: data.title,
-        department: data.department,
-        phone: data.phone,
-        bio: data.bio,
-        notifyEmail: data.notifyEmail,
-        notifyIssues: data.notifyIssues,
+        ...sessionPatch,
       });
     }
 
     await refreshRemote();
+    // Re-assert session after hydrate so the header never keeps a stale face
+    // or name if platform store lagged for a tick.
+    const after = getSession();
+    if (after && data) {
+      setSession({
+        ...after,
+        ...sessionPatch,
+      });
+    }
     return { ok: true, data };
   }
 
@@ -1707,10 +1737,22 @@ export async function updateProfile(
       if (booking.teacherId === user.id) {
         booking.teacherName = user.name;
       }
+      if (booking.lastEditedById === user.id) {
+        booking.lastEditedByName = user.name;
+        if (input.avatarUrl !== undefined) {
+          booking.lastEditedByAvatarUrl =
+            input.avatarUrl === null ? undefined : input.avatarUrl;
+        }
+      }
     }
     for (const issue of draft.issues) {
       if (issue.reportedById === user.id) {
         issue.reporterName = user.name;
+      }
+    }
+    for (const swap of draft.swapRequests) {
+      if (swap.requesterId === user.id) {
+        swap.requesterName = user.name;
       }
     }
   });
@@ -1718,9 +1760,12 @@ export async function updateProfile(
   const saved = getState().users.find((entry) => entry.id === session.id);
   if (!saved) return { ok: false, error: "User not found." };
 
+  const nameBits = splitDisplayName(saved.name);
   const updated: SessionUser = {
     id: saved.id,
     name: saved.name,
+    firstName: nameBits.firstName,
+    lastName: nameBits.lastName,
     email: saved.email,
     role: saved.role,
     avatarUrl: saved.avatarUrl,
@@ -1737,6 +1782,8 @@ export async function updateProfile(
     setSession({
       ...current,
       name: updated.name,
+      firstName: updated.firstName,
+      lastName: updated.lastName,
       avatarUrl: updated.avatarUrl,
       title: updated.title,
       department: updated.department,

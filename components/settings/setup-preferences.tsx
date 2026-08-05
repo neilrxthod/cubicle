@@ -114,8 +114,7 @@ function AdminBookingWindow({ user }: { user: SessionUser }) {
     <SettingsSection id="setup" title="Booking window">
       <SettingsRow className="space-y-4">
         <p className="text-[12.5px] leading-snug text-neutral-400">
-          How far ahead teachers can book carts. Set once at setup; change here
-          anytime.
+          How far ahead teachers can book carts.
         </p>
 
         <div className="flex items-center justify-center gap-4 py-1">

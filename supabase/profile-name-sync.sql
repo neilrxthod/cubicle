@@ -20,6 +20,12 @@ begin
       where teacher_id = new.id
         and teacher_name is distinct from new.name;
 
+    -- Editor attribution on the board
+    update public.bookings
+      set last_edited_by_name = new.name
+      where last_edited_by_id = new.id
+        and last_edited_by_name is distinct from new.name;
+
     update public.issues
       set reporter_name = new.name
       where reported_by_id = new.id
@@ -29,6 +35,12 @@ begin
       set requester_name = new.name
       where requester_id = new.id
         and requester_name is distinct from new.name;
+
+    -- Staff allowlist display name (when present)
+    update public.allowed_emails
+      set name = new.name
+      where lower(email) = lower(new.email)
+        and name is distinct from new.name;
   end if;
 
   return new;

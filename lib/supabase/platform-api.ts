@@ -679,22 +679,29 @@ export async function dbDeleteAllowedEmail(email: string): Promise<{ error?: str
 }
 
 /**
- * Fan-out display name to denormalized columns so the board, issues, and
- * swaps update immediately (and via Realtime) when Google/profile name changes.
+ * Fan-out display name to every denormalized column so boards, issues, swaps,
+ * editor labels, and allowlist rows stay consistent after a profile rename.
  */
 export async function dbSyncBookingTeacherName(
   teacherId: string,
   name: string,
+  options?: { email?: string | null },
 ): Promise<void> {
   const supabase = client();
   const trimmed = name.trim();
   if (!trimmed) return;
+
+  const email = options?.email?.trim().toLowerCase();
 
   await Promise.all([
     supabase
       .from("bookings")
       .update({ teacher_name: trimmed })
       .eq("teacher_id", teacherId),
+    supabase
+      .from("bookings")
+      .update({ last_edited_by_name: trimmed })
+      .eq("last_edited_by_id", teacherId),
     supabase
       .from("issues")
       .update({ reporter_name: trimmed })
@@ -703,7 +710,28 @@ export async function dbSyncBookingTeacherName(
       .from("swap_requests")
       .update({ requester_name: trimmed })
       .eq("requester_id", teacherId),
+    email
+      ? supabase
+          .from("allowed_emails")
+          .update({ name: trimmed })
+          .eq("email", email)
+      : Promise.resolve({ error: null }),
   ]);
+}
+
+/**
+ * Fan-out profile photo to denormalized booking editor columns so faces on
+ * the board stay in sync when a user changes or removes their avatar.
+ */
+export async function dbSyncLastEditorAvatar(
+  userId: string,
+  avatarUrl: string | null,
+): Promise<void> {
+  const supabase = client();
+  await supabase
+    .from("bookings")
+    .update({ last_edited_by_avatar_url: avatarUrl })
+    .eq("last_edited_by_id", userId);
 }
 
 /**
@@ -742,6 +770,8 @@ export async function dbSyncOAuthIdentity(
     payload.name = nextName;
   }
 
+  // Only seed avatar when caller provides one (OAuth path should not force
+  // Google over a user-uploaded photo — see syncOAuthProfileFromGoogle).
   if (input.avatarUrl) {
     payload.avatar_url = input.avatarUrl;
   }

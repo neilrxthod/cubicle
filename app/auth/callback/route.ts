@@ -3,7 +3,10 @@ import {
   checkSchoolAccess,
   deleteUnauthorizedUser,
 } from "@/lib/auth/allowlist";
-import { extractOAuthIdentity } from "@/lib/auth/google-identity";
+import {
+  extractOAuthIdentity,
+  isPlaceholderDisplayName,
+} from "@/lib/auth/google-identity";
 import { getDashboardPath } from "@/lib/auth/session";
 import type { UserRole } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
@@ -15,7 +18,8 @@ import { createClient } from "@/lib/supabase/server";
  * 2. Email must be on allowed_emails
  * Unauthorized users are signed out and deleted from Auth.
  *
- * Display name: prefer Google given_name + family_name (First + Last).
+ * Display name: seed from Google First+Last on first login; keep any
+ * name the user later set in Settings.
  */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -73,14 +77,11 @@ export async function GET(request: Request) {
   const role = allowed.role as UserRole;
   const employmentType = allowed.employmentType ?? "permanent";
 
-  // Google Workspace first + last (given_name / family_name) is source of truth.
   const identity = extractOAuthIdentity(user);
-  const name =
+  const googleOrAllowed =
     (identity.fromGoogle && identity.fullName) ||
     allowed.name?.trim() ||
     identity.fullName;
-
-  const avatarUrl = identity.avatarUrl;
 
   const { data: existing } = await supabase
     .from("profiles")
@@ -88,9 +89,19 @@ export async function GET(request: Request) {
     .eq("id", user.id)
     .maybeSingle();
 
-  const nextAvatar =
-    avatarUrl ||
-    (typeof existing?.avatar_url === "string" ? existing.avatar_url : null);
+  // Preserve Settings renames / custom photos across re-login.
+  const existingName =
+    typeof existing?.name === "string" ? existing.name.trim() : "";
+  const keepExistingName =
+    Boolean(existingName) &&
+    !isPlaceholderDisplayName(existingName, user.email);
+  const name = keepExistingName ? existingName : googleOrAllowed;
+
+  const existingAvatar =
+    typeof existing?.avatar_url === "string" && existing.avatar_url.trim()
+      ? existing.avatar_url.trim()
+      : null;
+  const nextAvatar = existingAvatar || identity.avatarUrl || null;
 
   const profilePayload: Record<string, unknown> = {
     id: user.id,
@@ -126,6 +137,10 @@ export async function GET(request: Request) {
         .update({ teacher_name: name })
         .eq("teacher_id", user.id),
       supabase
+        .from("bookings")
+        .update({ last_edited_by_name: name })
+        .eq("last_edited_by_id", user.id),
+      supabase
         .from("issues")
         .update({ reporter_name: name })
         .eq("reported_by_id", user.id),
@@ -133,6 +148,10 @@ export async function GET(request: Request) {
         .from("swap_requests")
         .update({ requester_name: name })
         .eq("requester_id", user.id),
+      supabase
+        .from("allowed_emails")
+        .update({ name })
+        .eq("email", user.email.toLowerCase()),
     ]);
   }
 

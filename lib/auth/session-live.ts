@@ -2,6 +2,7 @@ import {
   getSession,
   setSession,
 } from "@/lib/auth/session";
+import { splitDisplayName } from "@/lib/profile/display-name";
 import type { PlatformState } from "@/lib/types";
 
 /**
@@ -16,9 +17,11 @@ export function syncSessionFromPlatformState(state: PlatformState) {
   const profile = state.users.find((u) => u.id === session.id);
   if (!profile) return;
 
-  const nameChanged = profile.name && profile.name !== session.name;
-  const avatarChanged =
-    (profile.avatarUrl ?? undefined) !== (session.avatarUrl ?? undefined);
+  const nextName = profile.name?.trim() || session.name;
+  const nameChanged = Boolean(profile.name) && profile.name !== session.name;
+  const nextAvatar = profile.avatarUrl ?? undefined;
+  const sessionAvatar = session.avatarUrl ?? undefined;
+  const avatarChanged = nextAvatar !== sessionAvatar;
   const titleChanged = (profile.title ?? undefined) !== (session.title ?? undefined);
   const deptChanged =
     (profile.department ?? undefined) !== (session.department ?? undefined);
@@ -27,10 +30,16 @@ export function syncSessionFromPlatformState(state: PlatformState) {
     return;
   }
 
+  const nameBits = nameChanged ? splitDisplayName(nextName) : null;
+
   setSession({
     ...session,
-    name: profile.name || session.name,
-    avatarUrl: profile.avatarUrl ?? session.avatarUrl,
+    name: nextName,
+    ...(nameBits
+      ? { firstName: nameBits.firstName, lastName: nameBits.lastName }
+      : null),
+    // Always take the profiles row as source of truth (including clear → undefined).
+    avatarUrl: nextAvatar,
     title: profile.title ?? session.title,
     department: profile.department ?? session.department,
     phone: profile.phone ?? session.phone,

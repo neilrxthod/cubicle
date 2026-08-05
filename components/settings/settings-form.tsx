@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Loader2, LogOut } from "lucide-react";
+import { Camera, Check, Loader2, LogOut, Pencil } from "lucide-react";
 import {
   deleteAccountAction,
   updateProfile,
@@ -16,6 +16,11 @@ import { isVerifiedStaff } from "@/lib/staff/employment";
 import type { SessionUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -26,14 +31,13 @@ import { Switch } from "@/components/ui/switch";
 import { VerifiedBadge } from "@/components/verified-badge";
 import {
   SettingsDivider,
-  SettingsField,
   SettingsMetaRow,
-  SettingsRow,
   SettingsSection,
   SettingsToggleRow,
-  settingsInputClass,
 } from "@/components/settings/settings-section";
 import { SetupPreferences } from "@/components/settings/setup-preferences";
+
+const NAME_MAX = 80;
 
 function initials(name: string) {
   const parts = name.split(/\s+/).filter(Boolean);
@@ -52,6 +56,11 @@ export function SettingsForm({
   integrations?: React.ReactNode;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const deleteConfirmRef = useRef<HTMLInputElement>(null);
+  const nameDraftRef = useRef(user.name);
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [pending, startTransition] = useTransition();
   const [deleting, startDeleteTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
@@ -61,9 +70,8 @@ export function SettingsForm({
   } | null>(null);
 
   const [name, setName] = useState(user.name);
-  const [title, setTitle] = useState(user.title ?? "");
+  const [editingName, setEditingName] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(user.avatarUrl);
-  const [avatarDirty, setAvatarDirty] = useState(false);
   const [notifyEmail, setNotifyEmail] = useState(user.notifyEmail ?? true);
   const [notifyIssues, setNotifyIssues] = useState(user.notifyIssues ?? true);
   const [allowIssueDelete, setAllowIssueDelete] = useState(false);
@@ -71,36 +79,158 @@ export function SettingsForm({
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  nameDraftRef.current = name;
+
+  // Focus + select when entering name edit (no layout thrash)
+  useEffect(() => {
+    if (!editingName) return;
+    const el = nameInputRef.current;
+    if (!el) return;
+    // rAF: wait for input to mount before focus/select
+    const id = requestAnimationFrame(() => {
+      el.focus();
+      el.select();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [editingName]);
+
   useEffect(() => {
     setAllowIssueDelete(getUiPreferences().allowIssueDelete === true);
   }, []);
 
+  // Sync from server only when the form is clean (never clobber a draft)
+  useEffect(() => {
+    if (editingName) return;
+    const localDirty =
+      name.trim() !== (user.name ?? "").trim() ||
+      notifyEmail !== (user.notifyEmail ?? true) ||
+      notifyIssues !== (user.notifyIssues ?? true);
+    if (localDirty) return;
+    setName(user.name);
+    setAvatarUrl(user.avatarUrl);
+    setNotifyEmail(user.notifyEmail ?? true);
+    setNotifyIssues(user.notifyIssues ?? true);
+  }, [
+    user.name,
+    user.avatarUrl,
+    user.notifyEmail,
+    user.notifyIssues,
+    editingName,
+    name,
+    notifyEmail,
+    notifyIssues,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+    };
+  }, []);
+
+  function flashStatus(next: { type: "ok" | "error"; message: string }) {
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+    setStatus(next);
+    if (next.type === "ok") {
+      statusTimerRef.current = setTimeout(() => {
+        setStatus(null);
+        statusTimerRef.current = null;
+      }, 2200);
+    }
+  }
+
+  function clearStatus() {
+    if (statusTimerRef.current) {
+      clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = null;
+    }
+    setStatus(null);
+  }
+
+  // Only notification toggles use the floating save bar now —
+  // name + photo auto-save silently on change.
   const dirty = useMemo(() => {
-    if (avatarDirty) return true;
-    if (name.trim() !== user.name) return true;
-    if ((title || "") !== (user.title ?? "")) return true;
     if (notifyEmail !== (user.notifyEmail ?? true)) return true;
     if (notifyIssues !== (user.notifyIssues ?? true)) return true;
     return false;
-  }, [
-    avatarDirty,
-    name,
-    title,
-    notifyEmail,
-    notifyIssues,
-    user,
-  ]);
+  }, [notifyEmail, notifyIssues, user]);
+
+  const busy = pending || uploading || deleting;
+  const displayName = name.trim() || user.name;
+  const verified = isVerifiedStaff(user);
+  const isAdmin = user.role === "admin";
+  const roleLabel = isAdmin ? "Admin" : "Teacher";
+  const canConfirmDelete =
+    deleteConfirm.trim().toLowerCase() === user.email.toLowerCase();
+  const showSaveBar = dirty || status !== null;
+
+  /** Shared profile fields for auto-saves that shouldn't clobber local notify drafts. */
+  function baseProfilePayload() {
+    return {
+      title: user.title,
+      department: user.department,
+      ...(user.phone ? { phone: user.phone } : {}),
+      bio: user.bio,
+      notifyEmail: user.notifyEmail ?? true,
+      notifyIssues: user.notifyIssues ?? true,
+    };
+  }
+
+  /**
+   * Persist photo immediately — silent success (no floating save bar).
+   * Uses last-saved profile fields so unrelated drafts stay local.
+   */
+  async function persistAvatar(nextAvatar: string | null) {
+    const res = await updateProfile({
+      name: user.name,
+      ...baseProfilePayload(),
+      avatarUrl: nextAvatar,
+    });
+    if (!res.ok) {
+      // Roll back preview to whatever is still on the profile
+      setAvatarUrl(user.avatarUrl);
+      flashStatus({
+        type: "error",
+        message: res.error || "Could not save photo.",
+      });
+      return false;
+    }
+    setAvatarUrl(res.data?.avatarUrl);
+    return true;
+  }
+
+  /** Persist display name immediately — silent success (no floating save bar). */
+  async function persistName(nextName: string) {
+    const res = await updateProfile({
+      name: nextName,
+      ...baseProfilePayload(),
+    });
+    if (!res.ok) {
+      setName(user.name);
+      flashStatus({
+        type: "error",
+        message: res.error || "Could not save name.",
+      });
+      return false;
+    }
+    setName(res.data?.name ?? nextName);
+    return true;
+  }
 
   async function onPickPhoto(file: File | null) {
-    if (!file) return;
+    if (!file || busy) return;
     setUploading(true);
-    setStatus(null);
+    // Don't clear a notify draft status unrelated to photo —
+    // only clear so we don't leave a prior "Saved" bar up while uploading.
+    if (!dirty) clearStatus();
+    const previous = avatarUrl;
     try {
       const dataUrl = await fileToAvatarDataUrl(file);
       setAvatarUrl(dataUrl);
-      setAvatarDirty(true);
+      const ok = await persistAvatar(dataUrl);
+      if (!ok) setAvatarUrl(previous);
     } catch (err) {
-      setStatus({
+      setAvatarUrl(previous);
+      flashStatus({
         type: "error",
         message:
           err instanceof Error ? err.message : "Could not use that image.",
@@ -112,32 +242,93 @@ export function SettingsForm({
   }
 
   function removePhoto() {
+    if (busy || !avatarUrl) return;
+    const previous = avatarUrl;
+    if (!dirty) clearStatus();
     setAvatarUrl(undefined);
-    setAvatarDirty(true);
+    setUploading(true);
+    void (async () => {
+      try {
+        const ok = await persistAvatar(null);
+        if (!ok) setAvatarUrl(previous);
+      } finally {
+        setUploading(false);
+      }
+    })();
+  }
+
+  function startEditName() {
+    if (busy) return;
+    setEditingName(true);
+  }
+
+  function commitNameDraft() {
+    const next = nameDraftRef.current.trim().slice(0, NAME_MAX);
+    setEditingName(false);
+
+    if (!next) {
+      setName(user.name);
+      return;
+    }
+
+    // No-op if unchanged
+    if (next === (user.name ?? "").trim()) {
+      setName(next);
+      return;
+    }
+
+    setName(next);
+    if (!dirty) clearStatus();
+    startTransition(async () => {
+      const ok = await persistName(next);
+      if (!ok) setName(user.name);
+    });
+  }
+
+  function cancelNameEdit() {
+    setName(user.name);
+    setEditingName(false);
+  }
+
+  function handleNameChange(value: string) {
+    setName(value.slice(0, NAME_MAX));
+  }
+
+  function handleNotifyEmail(checked: boolean) {
+    clearStatus();
+    setNotifyEmail(checked);
+  }
+
+  function handleNotifyIssues(checked: boolean) {
+    clearStatus();
+    setNotifyIssues(checked);
   }
 
   function handleSave(event?: React.FormEvent) {
     event?.preventDefault();
-    if (!dirty) return;
-    setStatus(null);
+    // Name auto-saves on blur / Enter — only notification toggles use this bar.
+    if (editingName) commitNameDraft();
+    if (!dirty || busy) return;
+
+    clearStatus();
     startTransition(async () => {
       const res = await updateProfile({
-        name,
-        title,
+        name: user.name,
+        title: user.title,
         department: user.department,
-        // Keep existing phone — field removed from Settings UI
         ...(user.phone ? { phone: user.phone } : {}),
         bio: user.bio,
-        avatarUrl: avatarDirty ? (avatarUrl ?? null) : undefined,
         notifyEmail,
         notifyIssues,
       });
       if (!res.ok) {
-        setStatus({ type: "error", message: res.error || "Could not save." });
+        flashStatus({
+          type: "error",
+          message: res.error || "Could not save.",
+        });
         return;
       }
-      setAvatarDirty(false);
-      setStatus({ type: "ok", message: "Profile saved" });
+      flashStatus({ type: "ok", message: "Saved" });
     });
   }
 
@@ -152,64 +343,199 @@ export function SettingsForm({
       if (!res.ok) {
         setDeleteError(res.error || "Could not delete account.");
       }
-      // On success the action redirects to /login
     });
   }
 
-  const isAdmin = user.role === "admin";
-  const roleLabel = isAdmin ? "Admin" : "Teacher";
-  const displayName = name.trim() || user.name;
-  const verified = isVerifiedStaff(user);
-  const canConfirmDelete =
-    deleteConfirm.trim().toLowerCase() === user.email.toLowerCase();
-
   return (
-    <form onSubmit={handleSave} className="space-y-6 pb-24">
-      {/* Identity — hero, no card chrome */}
-      <div className="flex items-center gap-4 px-0.5">
-        <button
-          type="button"
-          disabled={uploading || pending}
-          onClick={() => fileRef.current?.click()}
-          className="group relative shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20 focus-visible:ring-offset-2"
-          aria-label="Change photo"
-        >
-          {avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={avatarUrl}
-              alt=""
-              referrerPolicy="no-referrer"
-              className="size-14 rounded-full object-cover ring-1 ring-black/[0.06]"
-            />
-          ) : (
-            <span className="flex size-14 items-center justify-center rounded-full bg-neutral-900 text-[15px] font-medium tracking-tight text-white">
-              {initials(displayName)}
-            </span>
-          )}
-          <span className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-black/0 text-[10px] font-medium uppercase tracking-wide text-white opacity-0 transition-all group-hover:bg-black/40 group-hover:opacity-100">
-            {uploading ? <Loader2 className="size-3.5 animate-spin" /> : "Edit"}
-          </span>
-          {verified ? (
-            <span className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-white ring-2 ring-white">
-              <VerifiedBadge size="xs" />
-            </span>
-          ) : null}
-        </button>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <h2 className="truncate text-[15px] font-light tracking-[-0.02em] text-neutral-950">
-              {displayName}
-            </h2>
-            {verified ? <VerifiedBadge size="sm" /> : null}
+    <form onSubmit={handleSave} className="flex flex-col gap-6 pb-24">
+      {/* Profile identity */}
+      <SettingsSection id="profile">
+        <div className="flex items-center gap-4 px-4 py-5 sm:gap-5 sm:px-5">
+          <div className="relative shrink-0">
+            <Avatar className="size-16 ring-1 ring-black/[0.06] sm:size-[4.5rem]">
+              {avatarUrl ? (
+                <AvatarImage
+                  src={avatarUrl}
+                  alt=""
+                  className="object-cover [image-rendering:auto]"
+                  referrerPolicy="no-referrer"
+                />
+              ) : null}
+              <AvatarFallback className="bg-neutral-900 text-[15px] font-medium tracking-tight text-white sm:text-[16px]">
+                {initials(displayName)}
+              </AvatarFallback>
+            </Avatar>
+            {uploading ? (
+              <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/30">
+                <Loader2
+                  className="size-4 animate-spin text-white"
+                  strokeWidth={2}
+                />
+              </span>
+            ) : null}
           </div>
-          <p className="mt-0.5 truncate text-[12.5px] text-neutral-400">
-            {user.email}
-          </p>
-          <p className="mt-1 text-[11.5px] font-medium text-neutral-400">
-            {roleLabel}
-          </p>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex min-h-[1.5rem] min-w-0 items-center">
+              {editingName ? (
+                <span className="inline-flex min-w-0 max-w-full items-center gap-1">
+                  <span className="inline-grid max-w-full align-middle">
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "invisible col-start-1 row-start-1 whitespace-pre",
+                        "border-b border-transparent pb-px",
+                        "text-[16px] font-medium tracking-[-0.02em]",
+                      )}
+                    >
+                      {name || " "}
+                    </span>
+                    <input
+                      ref={nameInputRef}
+                      id="name"
+                      value={name}
+                      onChange={(e) => handleNameChange(e.target.value)}
+                      onBlur={() => {
+                        // Defer so Enter keydown can finish first without double-commit races
+                        requestAnimationFrame(() => {
+                          if (document.activeElement !== nameInputRef.current) {
+                            commitNameDraft();
+                          }
+                        });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          commitNameDraft();
+                        }
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          cancelNameEdit();
+                        }
+                      }}
+                      disabled={busy}
+                      autoComplete="name"
+                      aria-label="Display name"
+                      maxLength={NAME_MAX}
+                      size={1}
+                      className={cn(
+                        "col-start-1 row-start-1 w-full min-w-[1.5ch] bg-transparent p-0",
+                        "border-0 border-b border-neutral-900 pb-px",
+                        "text-[16px] font-medium tracking-[-0.02em] text-neutral-950",
+                        "outline-none ring-0 shadow-none",
+                        "caret-neutral-900",
+                        "placeholder:text-neutral-300",
+                        "disabled:opacity-50",
+                      )}
+                      placeholder="Name"
+                    />
+                  </span>
+                  {verified ? (
+                    <VerifiedBadge size="sm" className="shrink-0" />
+                  ) : null}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={startEditName}
+                  disabled={busy}
+                  className={cn(
+                    "group/name relative inline-flex min-w-0 max-w-full items-center gap-1",
+                    "text-left outline-none disabled:opacity-50",
+                  )}
+                  aria-label="Edit name"
+                >
+                  <h2
+                    className={cn(
+                      "min-w-0 truncate text-[16px] font-medium tracking-[-0.02em] text-neutral-950",
+                      "border-b border-transparent pb-px",
+                      "transition-[border-color] duration-150",
+                      "group-hover/name:border-neutral-300",
+                      "group-focus-visible/name:border-neutral-400",
+                    )}
+                  >
+                    {displayName}
+                  </h2>
+                  {verified ? (
+                    <VerifiedBadge size="sm" className="shrink-0" />
+                  ) : null}
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute top-1/2 left-full ml-1 -translate-y-1/2",
+                      "inline-flex size-5 items-center justify-center rounded-md",
+                      "text-neutral-400",
+                      "opacity-60 transition-[opacity,background-color,color] duration-150",
+                      "[@media(hover:hover)_and_(pointer:fine)]:opacity-0",
+                      "[@media(hover:hover)_and_(pointer:fine)]:group-hover/name:opacity-100",
+                      "group-focus-visible/name:opacity-100",
+                      "group-hover/name:bg-neutral-100 group-hover/name:text-neutral-700",
+                      "group-focus-visible/name:bg-neutral-100 group-focus-visible/name:text-neutral-700",
+                    )}
+                    aria-hidden
+                  >
+                    <Pencil className="size-3" strokeWidth={1.75} />
+                  </span>
+                </button>
+              )}
+            </div>
+
+            <p className="mt-0.5 truncate text-[13px] tracking-[-0.01em] text-neutral-500">
+              {user.email}
+            </p>
+
+            <span
+              className={cn(
+                "mt-2.5 inline-flex h-5 items-center rounded-full px-2",
+                "text-[10.5px] font-medium tracking-[0.04em]",
+                isAdmin
+                  ? "bg-neutral-950 text-white"
+                  : "bg-neutral-100 text-neutral-600",
+              )}
+            >
+              {roleLabel}
+            </span>
+          </div>
+        </div>
+
+        <SettingsDivider />
+
+        <div className="flex items-center gap-1 px-2 py-1.5 sm:px-3">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => fileRef.current?.click()}
+            className={cn(
+              "inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5",
+              "text-[12.5px] font-medium tracking-[-0.01em] text-neutral-600",
+              "transition-colors duration-150",
+              "hover:bg-neutral-50 hover:text-neutral-950",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+              "disabled:pointer-events-none disabled:opacity-50",
+            )}
+          >
+            <Camera className="size-3.5 text-neutral-400" strokeWidth={1.75} />
+            {avatarUrl ? "Change photo" : "Upload photo"}
+          </button>
+
+          {avatarUrl ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={removePhoto}
+              className={cn(
+                "inline-flex h-8 items-center rounded-lg px-2.5",
+                "text-[12.5px] font-medium tracking-[-0.01em] text-neutral-500",
+                "transition-colors duration-150",
+                "hover:bg-red-50 hover:text-red-700",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/15",
+                "disabled:pointer-events-none disabled:opacity-50",
+              )}
+            >
+              Remove
+            </button>
+          ) : null}
         </div>
 
         <input
@@ -219,60 +545,10 @@ export function SettingsForm({
           className="hidden"
           onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
         />
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <button
-            type="button"
-            disabled={uploading || pending}
-            onClick={() => fileRef.current?.click()}
-            className="text-[12px] font-medium text-neutral-600 transition-colors hover:text-neutral-950 disabled:opacity-50"
-          >
-            Photo
-          </button>
-          {avatarUrl ? (
-            <button
-              type="button"
-              disabled={uploading || pending}
-              onClick={removePhoto}
-              className="text-[12px] font-medium text-neutral-400 transition-colors hover:text-red-600 disabled:opacity-50"
-            >
-              Remove
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      {/* Profile fields */}
-      <SettingsSection id="profile" title="Profile">
-        <SettingsRow>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <SettingsField label="Name" htmlFor="name" className="sm:col-span-2">
-              <input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className={settingsInputClass}
-                placeholder="Full name"
-                required
-                autoComplete="name"
-              />
-            </SettingsField>
-            <SettingsField label="Title" htmlFor="title" className="sm:col-span-2">
-              <input
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className={settingsInputClass}
-                placeholder="Science teacher"
-                autoComplete="organization-title"
-              />
-            </SettingsField>
-          </div>
-        </SettingsRow>
       </SettingsSection>
 
       {integrations}
 
-      {/* First-run onboarding data — edit anytime without reopening the wizard */}
       <SetupPreferences user={user} />
 
       <SettingsSection id="notifications" title="Email">
@@ -282,7 +558,8 @@ export function SettingsForm({
           control={
             <Switch
               checked={notifyEmail}
-              onCheckedChange={setNotifyEmail}
+              onCheckedChange={handleNotifyEmail}
+              disabled={busy}
               aria-label="Account email"
             />
           }
@@ -294,7 +571,8 @@ export function SettingsForm({
           control={
             <Switch
               checked={notifyIssues}
-              onCheckedChange={setNotifyIssues}
+              onCheckedChange={handleNotifyIssues}
+              disabled={busy}
               aria-label="Issue email"
             />
           }
@@ -332,7 +610,12 @@ export function SettingsForm({
         <button
           type="button"
           onClick={() => void signOutAction()}
-          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-[13.5px] transition-colors hover:bg-neutral-50/80 sm:px-5"
+          disabled={busy}
+          className={cn(
+            "flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-[13.5px]",
+            "transition-colors hover:bg-neutral-50/80 sm:px-5",
+            "disabled:pointer-events-none disabled:opacity-50",
+          )}
         >
           <span className="inline-flex items-center gap-2 font-medium tracking-[-0.01em] text-neutral-900">
             <LogOut className="size-3.5 text-neutral-400" strokeWidth={1.75} />
@@ -360,6 +643,7 @@ export function SettingsForm({
           </div>
           <button
             type="button"
+            disabled={busy}
             onClick={() => {
               setDeleteConfirm("");
               setDeleteError(null);
@@ -371,6 +655,7 @@ export function SettingsForm({
               "transition-colors duration-150",
               "hover:border-red-400 hover:bg-red-50/80",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/20",
+              "disabled:pointer-events-none disabled:opacity-50",
               "sm:self-center",
             )}
           >
@@ -378,12 +663,6 @@ export function SettingsForm({
           </button>
         </div>
       </SettingsSection>
-
-      <p className="px-1 text-center text-[11.5px] leading-relaxed text-neutral-400">
-        {isAdmin
-          ? "Staff verification is managed in Admin → Staff."
-          : "Role and verification are managed by school IT."}
-      </p>
 
       <Dialog
         open={deleteOpen}
@@ -393,6 +672,11 @@ export function SettingsForm({
           if (!open) {
             setDeleteConfirm("");
             setDeleteError(null);
+          } else {
+            // Focus confirm field after the dialog paints
+            requestAnimationFrame(() => {
+              deleteConfirmRef.current?.focus();
+            });
           }
         }}
       >
@@ -420,7 +704,7 @@ export function SettingsForm({
               </p>
             </div>
 
-            <ul className="space-y-2 text-[12.5px] leading-snug text-neutral-500">
+            <ul className="flex flex-col gap-2 text-[12.5px] leading-snug text-neutral-500">
               <li className="flex gap-2.5">
                 <span
                   aria-hidden
@@ -444,41 +728,103 @@ export function SettingsForm({
               </li>
             </ul>
 
-            <div className="space-y-1.5">
+            <div className="flex flex-col gap-2">
               <label
                 htmlFor="delete-confirm-email"
-                className="block text-[11.5px] font-medium tracking-[-0.01em] text-neutral-400"
+                className="block text-[12px] font-medium tracking-[-0.01em] text-neutral-700"
               >
-                Type your email to confirm
+                Type{" "}
+                <span className="font-medium text-neutral-950">
+                  {user.email}
+                </span>{" "}
+                to confirm
               </label>
-              <input
-                id="delete-confirm-email"
-                type="email"
-                value={deleteConfirm}
-                onChange={(e) => {
-                  setDeleteConfirm(e.target.value);
-                  setDeleteError(null);
-                }}
-                placeholder={user.email}
-                autoComplete="off"
-                spellCheck={false}
-                disabled={deleting}
-                className={settingsInputClass}
-              />
+              <div className="relative">
+                <input
+                  ref={deleteConfirmRef}
+                  id="delete-confirm-email"
+                  type="email"
+                  inputMode="email"
+                  value={deleteConfirm}
+                  onChange={(e) => {
+                    setDeleteConfirm(e.target.value);
+                    setDeleteError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (canConfirmDelete && !deleting) {
+                        handleDeleteAccount();
+                      }
+                    }
+                  }}
+                  placeholder="your@school.email"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  disabled={deleting}
+                  aria-invalid={Boolean(deleteError) || undefined}
+                  aria-describedby={
+                    deleteError
+                      ? "delete-confirm-error"
+                      : canConfirmDelete
+                        ? "delete-confirm-match"
+                        : undefined
+                  }
+                  className={cn(
+                    "h-10 w-full rounded-lg border bg-white px-3 pr-9",
+                    "text-[13.5px] tracking-[-0.011em] text-neutral-900",
+                    "placeholder:text-neutral-400",
+                    "outline-none transition-[border-color,background-color] duration-150",
+                    "disabled:cursor-not-allowed disabled:opacity-50",
+                    // Thin solid line only — no soft focus glow / double ring
+                    deleteError
+                      ? "border-red-400 focus:border-red-500"
+                      : canConfirmDelete
+                        ? "border-neutral-900 focus:border-neutral-900"
+                        : "border-neutral-200 hover:border-neutral-300 focus:border-neutral-400",
+                  )}
+                />
+                {canConfirmDelete ? (
+                  <span
+                    id="delete-confirm-match"
+                    className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-neutral-900"
+                    aria-live="polite"
+                  >
+                    <Check className="size-3.5" strokeWidth={2.25} />
+                    <span className="sr-only">Email matches</span>
+                  </span>
+                ) : null}
+              </div>
+              {deleteError ? (
+                <p
+                  id="delete-confirm-error"
+                  role="alert"
+                  className="text-[12px] leading-snug text-red-600"
+                >
+                  {deleteError}
+                </p>
+              ) : (
+                <p className="text-[11.5px] leading-snug text-neutral-400">
+                  Delete stays locked until the email matches exactly.
+                </p>
+              )}
             </div>
 
-            {deleteError ? (
-              <p role="alert" className="text-[12.5px] text-red-600">
-                {deleteError}
-              </p>
-            ) : null}
-
-            <div className="flex items-center justify-end gap-3 border-t border-black/[0.05] pt-4">
+            <div className="flex items-center justify-end gap-2 border-t border-black/[0.05] pt-4">
               <button
                 type="button"
                 disabled={deleting}
                 onClick={() => setDeleteOpen(false)}
-                className="h-9 px-2 text-[13px] font-medium text-neutral-500 transition-colors duration-150 hover:text-neutral-900 disabled:opacity-50"
+                className={cn(
+                  "inline-flex h-9 items-center justify-center rounded-md px-3",
+                  "text-[13px] font-medium text-neutral-500",
+                  "transition-colors duration-150 hover:bg-neutral-50 hover:text-neutral-900",
+                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-300",
+                  "disabled:opacity-50",
+                )}
               >
                 Cancel
               </button>
@@ -491,7 +837,7 @@ export function SettingsForm({
                   "bg-red-600 text-[12.5px] font-medium tracking-[-0.01em] text-white",
                   "transition-[opacity,background-color] duration-150 ease-out",
                   "hover:bg-red-700",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/30",
+                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500",
                   "disabled:pointer-events-none disabled:opacity-35",
                 )}
               >
@@ -506,34 +852,43 @@ export function SettingsForm({
         </DialogContent>
       </Dialog>
 
-      {/* Floating save — pill, only when needed */}
+      {/* Floating save — only interactive when visible */}
       <div
         className={cn(
-          "pointer-events-none fixed inset-x-0 bottom-5 z-30 flex justify-center px-4 transition-all duration-200",
-          dirty || status
+          "pointer-events-none fixed inset-x-0 bottom-5 z-30 flex justify-center px-4",
+          "transition-[opacity,transform] duration-200 ease-out",
+          "pb-[env(safe-area-inset-bottom,0px)]",
+          showSaveBar
             ? "translate-y-0 opacity-100"
             : "translate-y-3 opacity-0",
         )}
-        aria-hidden={!dirty && !status}
+        aria-hidden={!showSaveBar}
       >
-        <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-black/[0.08] bg-white/95 py-1.5 pl-4 pr-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
+        <div
+          className={cn(
+            "flex items-center gap-3 rounded-full border border-black/[0.08]",
+            "bg-white/95 py-1.5 pl-4 pr-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl",
+            showSaveBar ? "pointer-events-auto" : "pointer-events-none",
+          )}
+        >
           <p
             role="status"
+            aria-live="polite"
             className={cn(
               "max-w-[10rem] truncate text-[12.5px] sm:max-w-[14rem]",
-              status?.type === "error"
-                ? "text-red-600"
-                : status?.type === "ok"
-                  ? "text-neutral-500"
-                  : "text-neutral-500",
+              status?.type === "error" ? "text-red-600" : "text-neutral-500",
             )}
           >
-            {status?.message ?? (dirty ? "Unsaved" : "")}
+            {status?.message ?? (dirty ? "Unsaved changes" : "")}
           </p>
           <button
             type="submit"
-            disabled={pending || uploading || !name.trim() || !dirty}
-            className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-neutral-900 px-3.5 text-[12.5px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-30"
+            disabled={busy || !name.trim() || !dirty}
+            className={cn(
+              "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full",
+              "bg-neutral-900 px-3.5 text-[12.5px] font-medium text-white",
+              "transition-opacity hover:opacity-90 disabled:opacity-30",
+            )}
           >
             {pending ? (
               <Loader2 className="size-3 animate-spin" strokeWidth={2} />

@@ -53,50 +53,59 @@ export async function syncOAuthProfileFromGoogle(
   const existingName =
     typeof profile.name === "string" ? profile.name.trim() : "";
 
-  // Prefer Google first+last whenever the provider sends a real name.
-  // Also replace email-local / placeholder profile names.
-  const nextName =
-    googleName ||
-    (!isPlaceholderDisplayName(existingName, profile.email)
-      ? existingName
-      : identity.fullName);
+  // Keep user-chosen Settings names. Only fill from Google when the profile
+  // still has a placeholder / email-local name (or is empty).
+  const existingIsPlaceholder =
+    !existingName || isPlaceholderDisplayName(existingName, profile.email);
+  const nextName = existingIsPlaceholder
+    ? googleName || existingName || identity.fullName
+    : existingName;
 
-  const avatarFromGoogle = identity.avatarUrl;
-  const nextAvatar =
-    avatarFromGoogle ||
-    (typeof profile.avatar_url === "string" ? profile.avatar_url : undefined);
+  // Never overwrite a user-chosen profile photo with Google on token refresh.
+  // Only seed Google's picture when the profile has no avatar yet.
+  const existingAvatar =
+    typeof profile.avatar_url === "string" && profile.avatar_url.trim()
+      ? profile.avatar_url.trim()
+      : undefined;
+  const avatarFromGoogle = identity.avatarUrl?.trim() || undefined;
+  const nextAvatar = existingAvatar || avatarFromGoogle;
 
-  const nameChanged = nextName && nextName !== existingName;
-  const avatarChanged =
-    Boolean(avatarFromGoogle) && profile.avatar_url !== avatarFromGoogle;
+  const nameSeeded =
+    Boolean(existingIsPlaceholder && nextName && nextName !== existingName);
+  const avatarSeeded = Boolean(!existingAvatar && avatarFromGoogle);
 
-  if (nameChanged || avatarChanged) {
+  if (nameSeeded || avatarSeeded) {
     const payload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
-    if (nameChanged) payload.name = nextName;
-    if (avatarChanged) payload.avatar_url = avatarFromGoogle;
+    if (nameSeeded) payload.name = nextName;
+    if (avatarSeeded) payload.avatar_url = avatarFromGoogle;
 
     await supabase.from("profiles").update(payload).eq("id", user.id);
 
-    if (nameChanged && nextName) {
+    if (nameSeeded && nextName) {
       // Denormalized columns → Realtime broadcasts to every open dashboard.
-      await Promise.all([
-        supabase
-          .from("bookings")
-          .update({ teacher_name: nextName })
-          .eq("teacher_id", user.id),
-        supabase
-          .from("issues")
-          .update({ reporter_name: nextName })
-          .eq("reported_by_id", user.id),
-        supabase
-          .from("swap_requests")
-          .update({ requester_name: nextName })
-          .eq("requester_id", user.id),
-      ]);
+      const { dbSyncBookingTeacherName } = await import(
+        "@/lib/supabase/platform-api"
+      );
+      await dbSyncBookingTeacherName(user.id, nextName, {
+        email: profile.email,
+      });
     }
   }
+
+  // Header chip uses firstName — keep it aligned with the profile display name
+  // when the user customized it (not a fresh Google seed).
+  const nameParts = nextName.trim().split(/\s+/).filter(Boolean);
+  const firstName = existingIsPlaceholder
+    ? identity.firstName || nameParts[0]
+    : nameParts[0] || identity.firstName;
+  const lastName = existingIsPlaceholder
+    ? identity.lastName ||
+      (nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined)
+    : nameParts.length > 1
+      ? nameParts.slice(1).join(" ")
+      : undefined;
 
   return {
     id: profile.id,
@@ -110,7 +119,7 @@ export async function syncOAuthProfileFromGoogle(
     bio: profile.bio ?? undefined,
     notifyEmail: profile.notify_email ?? true,
     notifyIssues: profile.notify_issues ?? true,
-    firstName: identity.firstName,
-    lastName: identity.lastName,
+    firstName,
+    lastName,
   };
 }
