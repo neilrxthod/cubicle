@@ -1,14 +1,28 @@
 import type { User } from "@supabase/supabase-js";
 
 /**
+ * True only for googleusercontent.com and its subdomains (e.g. lh3.…).
+ * Avoids substring checks that match spoofed hosts like evilgoogleusercontent.com.
+ */
+function isGoogleUserContentHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return (
+    host === "googleusercontent.com" || host.endsWith(".googleusercontent.com")
+  );
+}
+
+/**
  * Google serves tiny default avatars (often s96). Bump size so faces look
  * sharp on retina boards / header chips without re-uploading.
  */
 function upgradeGoogleAvatarUrl(url: string): string {
   try {
     const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return url;
+    }
     // lh3.googleusercontent.com/...=s96-c  or  .../s96-c/...
-    if (!parsed.hostname.includes("googleusercontent.com")) {
+    if (!isGoogleUserContentHost(parsed.hostname)) {
       return url;
     }
     let path = parsed.pathname;
