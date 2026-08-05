@@ -17,15 +17,18 @@ import type {
  * Browser cache only. Source of truth in production is Supabase Postgres.
  * Re-deploying the Next.js app never clears Supabase — only this local cache.
  */
-/** Bump when we need every browser to drop cached carts/restrictions/bookings. */
-const PLATFORM_EPOCH = 10;
+/**
+ * Bump on official school go-live / when every browser must drop cached
+ * carts, bookings, and locks. Epoch 13 = official high school empty go-live.
+ */
+const PLATFORM_EPOCH = 13;
 const STORAGE_KEY = `cubicle_platform_v${PLATFORM_EPOCH}`;
 const EPOCH_KEY = "cubicle_platform_epoch";
 const CHANGE_EVENT = "cubicle_platform_change";
 
 /**
- * Fresh empty platform — no carts, staff, bookings, or restrictions.
- * Local demo and SSR fall back to this until Supabase (or local edits) populate state.
+ * Official empty platform — no carts, bookings, issues, or restrictions.
+ * Admins add inventory from Admin → Inventory. Staff come from Google allowlist.
  */
 function emptyState(): PlatformState {
   return {
@@ -58,8 +61,11 @@ function purgeAllPlatformLocalKeys() {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k) continue;
-      // Only platform state blobs — never session / onboarding / auth keys
-      if (k.startsWith("cubicle_platform")) {
+      // Platform cache only — never Google session / auth cookies
+      if (
+        k.startsWith("cubicle_platform") ||
+        k.startsWith("cubicle_fresh_start")
+      ) {
         doomed.push(k);
       }
     }

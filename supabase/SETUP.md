@@ -141,14 +141,24 @@ Only if this Supabase project is **never** used on Vercel:
 
 ---
 
-## 5. Smoke test
+## 5. Official school go-live (empty start)
+
+1. In Supabase **SQL Editor**, run [`clear-operational-data.sql`](./clear-operational-data.sql) once.  
+   That removes all carts, bookings, issues, locks, and swaps.  
+   **Keeps** allowlisted staff emails and profiles.  
+2. Hard-refresh Cubicle (or redeploy) so browser cache drops.  
+3. **Admin → Inventory → Add cart** for each real laptop cart.  
+4. Teachers book from **Schedule**.
+
+## 6. Smoke test
 
 1. **Production:** open https://www.mycubicle.app/login → Google → must stay on mycubicle.app (never localhost)  
 2. **Local:** `npm run dev` → http://localhost:3000/login with allowlisted account  
 3. Confirm the schedule loads empty (no sample carts) until you add inventory  
 4. Create a booking → refresh → still there  
 5. Sign out → sign in with a **non-allowlisted** Google account → blocked  
-6. (Admin) open Maintenance → manage carts / staff allowlist  
+6. (Admin) Inventory → add carts / Staff allowlist; use **Reset data** only if you need another empty wipe  
+
 
 ---
 
