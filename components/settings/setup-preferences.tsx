@@ -137,6 +137,9 @@ function AdminBookingWindow({ user }: { user: SessionUser }) {
       setDays(nextDays);
       setSlots(nextSlots);
       setStatus({ type: "ok", message: "Saved" });
+      window.setTimeout(() => {
+        setStatus((s) => (s?.type === "ok" ? null : s));
+      }, 2000);
     });
   }
 
@@ -277,12 +280,13 @@ function AdminBookingWindow({ user }: { user: SessionUser }) {
           role="status"
           aria-live="polite"
           className={cn(
-            "min-h-[1.25rem] min-w-0 flex-1 truncate text-[12px] leading-5",
+            "min-h-[1.25rem] min-w-0 flex-1 text-[12px] leading-5",
             status?.type === "error"
               ? "text-red-600"
               : status?.type === "ok"
                 ? "text-neutral-500"
                 : "text-neutral-400",
+            status?.type === "error" ? "line-clamp-3" : "truncate",
           )}
         >
           {status?.message ?? (dirty ? "Unsaved changes" : "Up to date")}

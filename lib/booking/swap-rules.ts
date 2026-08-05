@@ -116,27 +116,24 @@ export function defaultOfferedBookingId(
   return (samePeriod ?? offerable[0])?.id;
 }
 
-/** Resolve the booking offered on a request (explicit id or legacy same-period). */
+/**
+ * Resolve the booking offered on a request.
+ * Exchange requests store an explicit `offeredBookingId`.
+ * Handoff stores none — do **not** invent a same-period cart (that broke handoff
+ * by treating null as an automatic exchange).
+ */
 export function resolveOfferedBooking(
   bookings: Booking[],
   request: Pick<SwapRequest, "requesterId" | "offeredBookingId" | "bookingId">,
+  // Kept for call-site compatibility (list/accept pass the target booking).
   target: Booking,
 ): Booking | undefined {
-  if (request.offeredBookingId) {
-    const explicit = bookings.find(
-      (b) =>
-        b.id === request.offeredBookingId &&
-        b.teacherId === request.requesterId,
-    );
-    if (explicit) return explicit;
-  }
-  // Legacy requests without offered_booking_id: same day + period.
-  return findCounterpartyBooking(
-    bookings,
-    request.requesterId,
-    target.date,
-    target.period,
-    target.id,
+  void target;
+  const offeredId = request.offeredBookingId?.trim();
+  if (!offeredId || offeredId === SWAP_OFFER_HANDOFF) return undefined;
+
+  return bookings.find(
+    (b) => b.id === offeredId && b.teacherId === request.requesterId,
   );
 }
 

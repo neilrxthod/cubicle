@@ -488,10 +488,7 @@ export function SettingsForm({
             <span
               className={cn(
                 "mt-2.5 inline-flex h-5 items-center rounded-full px-2",
-                "text-[10.5px] font-medium tracking-[0.04em]",
-                isAdmin
-                  ? "bg-neutral-950 text-white"
-                  : "bg-neutral-100 text-neutral-600",
+                "bg-neutral-950 text-[10.5px] font-medium tracking-[0.04em] text-white",
               )}
             >
               {roleLabel}
