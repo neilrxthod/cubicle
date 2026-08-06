@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useRef, useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { format, parseISO, addDays } from "date-fns"
@@ -650,9 +651,19 @@ export function DailyBoard({
     : undefined
 
   /** Single day-lock control: Lock when a type is picked, Unlock when day already locked. */
-  const canLockDay = Boolean(lockKind)
+  const hasLockableCarts = lockableCarts.length > 0
+  const canLockDay = Boolean(lockKind) && hasLockableCarts
   const canUnlockDay = dayLockStats.locked > 0 && !lockKind
   const dayLockActionReady = canLockDay || canUnlockDay
+  /** Quiet status under the control — only when guidance is needed. */
+  const dayLockHint =
+    !hasLockableCarts
+      ? null
+      : canUnlockDay
+        ? "Clears locks for this day. Bookings are unchanged."
+        : !lockKind
+          ? "Step 1 of 2 — choose a type"
+          : "Step 2 of 2 — confirm lock"
 
   const navBtn = cn(
     "flex size-8 items-center justify-center rounded-full",
@@ -779,142 +790,169 @@ export function DailyBoard({
                 {isAdmin ? (
                   <div
                     className={cn(
-                      "flex min-w-0 flex-col gap-2 border-t border-black/[0.05] bg-neutral-50/70 px-3 py-2.5",
-                      "sm:w-[11.5rem] sm:shrink-0 sm:border-t-0 sm:px-3 sm:py-3",
+                      "flex min-w-0 flex-col gap-2.5 border-t border-black/[0.05] bg-neutral-50/60 px-3 py-3",
+                      "sm:w-[12rem] sm:shrink-0 sm:border-t-0 sm:px-3.5 sm:py-3.5",
                     )}
                     onPointerDown={(e) => e.stopPropagation()}
                   >
-                    {dayLockStats.dominant ? (
-                      <p className="text-[11px] tracking-[-0.01em] text-neutral-500">
-                        This day:{" "}
-                        <span className="font-medium text-neutral-900">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-medium tracking-[-0.01em] text-neutral-900">
+                        {canUnlockDay ? "Day locked" : "Day lock"}
+                      </p>
+                      {dayLockStats.dominant ? (
+                        <p className="mt-0.5 text-[10.5px] tracking-[-0.01em] text-neutral-500">
                           {dayLockStats.dominant === "ap_exam"
                             ? "AP exam"
                             : dayLockStats.dominant === "holiday"
                               ? "Holiday"
                               : "General"}
-                        </span>
-                        {dayLockStats.locked > 0
-                          ? ` · ${dayLockStats.locked} locked`
-                          : null}
-                      </p>
-                    ) : (
-                      <p className="text-[11px] tracking-[-0.01em] text-neutral-400">
-                        Lock this day
-                      </p>
-                    )}
-
-                    <div
-                      role="radiogroup"
-                      aria-label="Lock type"
-                      className="grid min-w-0 grid-cols-3 gap-1 sm:grid-cols-1"
-                    >
-                      {LOCK_KINDS.map((opt) => {
-                        const active = lockKind === opt.id
-                        return (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            role="radio"
-                            aria-checked={active}
-                            title={opt.hint}
-                            disabled={lockBusy !== null}
-                            onClick={() =>
-                              setLockKind((prev) =>
-                                prev === opt.id ? null : opt.id,
-                              )
-                            }
-                            className={cn(
-                              "flex h-7 min-w-0 items-center justify-center truncate rounded-md border px-1.5",
-                              "text-[11px] tracking-[-0.01em] transition-colors sm:h-8 sm:justify-start sm:text-[12px]",
-                              active
-                                ? "border-neutral-900 bg-neutral-900 text-white"
-                                : "border-black/[0.08] bg-white text-neutral-600 hover:border-black/[0.14]",
-                              "disabled:opacity-40",
-                              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
-                            )}
-                          >
-                            {opt.label}
-                          </button>
-                        )
-                      })}
+                          {dayLockStats.locked > 0
+                            ? ` · ${dayLockStats.locked} slots`
+                            : null}
+                        </p>
+                      ) : null}
                     </div>
 
-                    <Input
-                      type="text"
-                      value={lockReason}
-                      onChange={(e) => setLockReason(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault()
-                          if (
-                            lockKind &&
-                            lockableCarts.length > 0 &&
-                            !lockBusy
-                          ) {
-                            void applyDayLock("restrict")
-                          }
-                        }
-                      }}
-                      placeholder={
-                        lockKind === "holiday"
-                          ? "Note (Holiday)"
-                          : "Note (optional)"
-                      }
-                      maxLength={120}
-                      autoComplete="off"
-                      disabled={lockBusy !== null || !lockKind}
-                      className="h-7 rounded-md border-black/[0.08] bg-white text-[12px] shadow-none sm:h-8 sm:text-[13px]"
-                    />
+                    {/* No inventory: one calm message + single next step. */}
+                    {!hasLockableCarts ? (
+                      <div role="status" className="flex min-w-0 flex-col gap-2.5">
+                        <p className="text-[11px] leading-relaxed tracking-[-0.01em] text-neutral-500">
+                          Add laptop carts in Inventory before locking days.
+                        </p>
+                        <Link
+                          href="/admin"
+                          onClick={() => setDatePickerOpen(false)}
+                          className={cn(
+                            "inline-flex h-8 w-full items-center justify-center rounded-md",
+                            "border border-black/[0.08] bg-white",
+                            "text-[12px] font-medium tracking-[-0.01em] text-neutral-900",
+                            "transition-colors hover:bg-neutral-50",
+                            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
+                          )}
+                        >
+                          Open Inventory
+                        </Link>
+                      </div>
+                    ) : (
+                      <>
+                        {!canUnlockDay ? (
+                          <>
+                            <div
+                              role="radiogroup"
+                              aria-label="Lock type"
+                              className="grid min-w-0 grid-cols-3 gap-1 sm:grid-cols-1"
+                            >
+                              {LOCK_KINDS.map((opt) => {
+                                const active = lockKind === opt.id
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={active}
+                                    title={opt.hint}
+                                    disabled={lockBusy !== null}
+                                    onClick={() =>
+                                      setLockKind((prev) =>
+                                        prev === opt.id ? null : opt.id,
+                                      )
+                                    }
+                                    className={cn(
+                                      "flex h-7 min-w-0 items-center justify-center truncate rounded-md border px-1.5",
+                                      "text-[11px] tracking-[-0.01em] transition-colors sm:h-8 sm:justify-start sm:px-2 sm:text-[12px]",
+                                      active
+                                        ? "border-neutral-900 bg-neutral-900 text-white"
+                                        : "border-black/[0.08] bg-white text-neutral-600 hover:border-black/[0.14]",
+                                      "disabled:pointer-events-none disabled:opacity-40",
+                                      "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
+                                    )}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                )
+                              })}
+                            </div>
 
-                    <button
-                      type="button"
-                      disabled={lockBusy !== null || !dayLockActionReady}
-                      onClick={() => {
-                        if (canUnlockDay) {
-                          void applyDayLock("available")
-                          return
-                        }
-                        if (!lockKind) {
-                          toast({
-                            title: "Choose a type",
-                            description: "General, AP exam, or Holiday.",
-                          })
-                          return
-                        }
-                        if (lockableCarts.length === 0) {
-                          toast({
-                            title: "No carts",
-                            description: "Add carts in Admin → Inventory.",
-                            variant: "destructive",
-                          })
-                          return
-                        }
-                        void applyDayLock("restrict")
-                      }}
-                      className={cn(
-                        "mt-auto inline-flex h-7 w-full items-center justify-center gap-1.5 rounded-md",
-                        "text-[11px] tracking-[-0.01em] transition-colors sm:h-8 sm:text-[12px]",
-                        canUnlockDay
-                          ? "border border-black/[0.08] bg-white text-neutral-700 hover:bg-neutral-50 hover:text-neutral-950"
-                          : dayLockActionReady
-                            ? "bg-neutral-900 text-white hover:bg-neutral-800"
-                            : "bg-neutral-100 text-neutral-400",
-                        "disabled:pointer-events-none disabled:opacity-40",
-                        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
-                      )}
-                    >
-                      {lockBusy !== null ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : canUnlockDay ? (
-                        "Unlock"
-                      ) : (
-                        <>
-                          <Lock className="size-3" strokeWidth={2} />
-                          Lock
-                        </>
-                      )}
-                    </button>
+                            <Input
+                              type="text"
+                              value={lockReason}
+                              onChange={(e) => setLockReason(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  if (lockKind && !lockBusy) {
+                                    void applyDayLock("restrict")
+                                  }
+                                }
+                              }}
+                              placeholder={
+                                lockKind === "holiday"
+                                  ? "Note (Holiday)"
+                                  : "Note (optional)"
+                              }
+                              maxLength={120}
+                              autoComplete="off"
+                              disabled={lockBusy !== null || !lockKind}
+                              className="h-7 rounded-md border-black/[0.08] bg-white text-[12px] shadow-none sm:h-8 sm:text-[13px]"
+                            />
+                          </>
+                        ) : null}
+
+                        {dayLockHint ? (
+                          <p
+                            id="day-lock-hint"
+                            className="text-[10.5px] leading-snug tracking-[-0.01em] text-neutral-400"
+                          >
+                            {dayLockHint}
+                          </p>
+                        ) : null}
+
+                        <button
+                          type="button"
+                          aria-describedby={
+                            dayLockHint ? "day-lock-hint" : undefined
+                          }
+                          disabled={lockBusy !== null}
+                          onClick={() => {
+                            if (canUnlockDay) {
+                              void applyDayLock("available")
+                              return
+                            }
+                            if (!lockKind) {
+                              toast({
+                                title: "Choose a type",
+                                description:
+                                  "Select General, AP exam, or Holiday.",
+                              })
+                              return
+                            }
+                            void applyDayLock("restrict")
+                          }}
+                          className={cn(
+                            "mt-auto inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md",
+                            "text-[12px] tracking-[-0.01em] transition-colors",
+                            canUnlockDay
+                              ? "border border-black/[0.08] bg-white text-neutral-700 hover:bg-neutral-50 hover:text-neutral-950"
+                              : dayLockActionReady
+                                ? "bg-neutral-900 text-white hover:bg-neutral-800"
+                                : "border border-black/[0.06] bg-white text-neutral-400",
+                            "disabled:pointer-events-none disabled:opacity-40",
+                            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
+                          )}
+                        >
+                          {lockBusy !== null ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : canUnlockDay ? (
+                            "Unlock day"
+                          ) : (
+                            <>
+                              <Lock className="size-3" strokeWidth={2} />
+                              Lock day
+                            </>
+                          )}
+                        </button>
+                      </>
+                    )}
                   </div>
                 ) : null}
               </div>
@@ -995,15 +1033,28 @@ export function DailyBoard({
           </div>
 
           {carts.length === 0 ? (
-            <div className="px-4 py-16 text-center sm:px-5">
-              <p className="text-[13px] font-light tracking-[-0.01em] text-neutral-400">
-                No carts are set up yet.
+            <div className="flex flex-col items-center px-6 py-16 text-center sm:py-20">
+              <p className="text-[13px] font-medium tracking-[-0.02em] text-neutral-900">
+                No carts configured
               </p>
-              <p className="mt-1 text-[12px] text-neutral-300">
+              <p className="mt-1.5 max-w-[18rem] text-[12px] leading-relaxed tracking-[-0.01em] text-neutral-500">
                 {session.role === "admin"
-                  ? "Add laptop carts under Admin → Inventory."
-                  : "Ask an admin to add laptop carts."}
+                  ? "Add laptop carts in Inventory to open the schedule for booking and day locks."
+                  : "The schedule opens once an administrator adds laptop carts."}
               </p>
+              {session.role === "admin" ? (
+                <Link
+                  href="/admin"
+                  className={cn(
+                    "mt-5 inline-flex h-8 items-center justify-center rounded-md bg-neutral-900 px-3.5",
+                    "text-[12px] font-medium tracking-[-0.01em] text-white",
+                    "transition-colors hover:bg-neutral-800",
+                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
+                  )}
+                >
+                  Open Inventory
+                </Link>
+              ) : null}
             </div>
           ) : null}
 
