@@ -28,9 +28,10 @@ export function DashboardFrame({
       {localSandbox ? (
         <div
           role="status"
-          className="border-b border-amber-200/80 bg-amber-50 px-4 py-2 text-center text-[12px] leading-snug text-amber-950 sm:text-[12.5px]"
+          className="border-b border-black/[0.06] bg-neutral-50 px-4 py-2 text-center text-[12px] leading-snug text-neutral-600 sm:text-[12.5px]"
         >
-          {LOCAL_SANDBOX_BANNER}
+          {LOCAL_SANDBOX_BANNER} Use the Teacher / Admin control in the header to
+          switch perspectives.
         </div>
       ) : null}
       <main className="platform-shell min-w-0 flex-1 py-[var(--shell-py)] pb-[max(var(--shell-py),env(safe-area-inset-bottom,0px))]">

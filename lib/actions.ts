@@ -2,6 +2,7 @@
 
 import { eachDayOfInterval, format } from "date-fns";
 import { getSession, setSession, clearSession } from "@/lib/auth/session";
+import { ensureLocalDemoSandbox } from "@/lib/auth/local-demo";
 import { schoolEmailError } from "@/lib/auth/school-domain";
 import {
   clearPlatformBrowserCache,
@@ -12,6 +13,7 @@ import {
   replaceState,
 } from "@/lib/data/platform-store";
 import {
+  isLocalDemoMode,
   isRemotePlatformEnabled,
   localWriteBlockReason,
 } from "@/lib/data/durability";
@@ -123,6 +125,10 @@ export async function wipeOperationalData(): Promise<Result> {
   const __demo = assertLocalDemoAllowed();
   if (!__demo.ok) return __demo;
   forceEmptyPlatformState();
+  // Local sandbox: restore demo personas + starter carts after an inventory wipe.
+  if (isLocalDemoMode()) {
+    ensureLocalDemoSandbox();
+  }
   return { ok: true };
 }
 

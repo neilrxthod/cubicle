@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Settings } from "lucide-react";
@@ -13,6 +13,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { signOutAction } from "@/lib/actions";
+import {
+  isLocalPerspectiveSwitcherEnabled,
+  switchLocalPerspective,
+} from "@/lib/auth/local-demo";
 import { isVerifiedStaff } from "@/lib/staff/employment";
 import type { SessionUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -120,6 +124,8 @@ export function AppHeader({ user }: { user: SessionUser }) {
   const pathname = usePathname();
   const router = useRouter();
   const isAdmin = user.role === "admin";
+  const perspectiveEnabled = isLocalPerspectiveSwitcherEnabled();
+  const [switching, setSwitching] = useState(false);
 
   const navItems = useMemo(
     () =>
@@ -134,6 +140,21 @@ export function AppHeader({ user }: { user: SessionUser }) {
 
   function handleSignOut() {
     void signOutAction();
+  }
+
+  function handlePerspective(role: "admin" | "teacher") {
+    if (!perspectiveEnabled || switching) return;
+    if (user.role === role) {
+      // Already this persona — still jump home for that role.
+      router.push(role === "admin" ? "/admin" : "/");
+      return;
+    }
+    setSwitching(true);
+    const result = switchLocalPerspective(role);
+    setSwitching(false);
+    if (!result.ok) return;
+    router.push(role === "admin" ? "/admin" : "/");
+    router.refresh();
   }
 
   return (
@@ -170,7 +191,44 @@ export function AppHeader({ user }: { user: SessionUser }) {
           </div>
         </nav>
 
-        <div className="relative z-10 flex h-full shrink-0 items-center">
+        <div className="relative z-10 flex h-full shrink-0 items-center gap-2 sm:gap-2.5">
+          {perspectiveEnabled ? (
+            <div
+              role="group"
+              aria-label="Local perspective"
+              className="flex h-8 items-center rounded-md border border-black/[0.08] bg-neutral-50 p-0.5"
+            >
+              {(
+                [
+                  { role: "teacher" as const, label: "Teacher" },
+                  { role: "admin" as const, label: "Admin" },
+                ] as const
+              ).map((opt) => {
+                const active = user.role === opt.role;
+                return (
+                  <button
+                    key={opt.role}
+                    type="button"
+                    disabled={switching}
+                    aria-pressed={active}
+                    title={`View as ${opt.label} (local only)`}
+                    onClick={() => handlePerspective(opt.role)}
+                    className={cn(
+                      "inline-flex h-7 items-center rounded-[5px] px-2 sm:px-2.5",
+                      "text-[11px] font-medium tracking-[-0.01em] transition-colors",
+                      active
+                        ? "bg-white text-neutral-950 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                        : "text-neutral-500 hover:text-neutral-800",
+                      "disabled:pointer-events-none disabled:opacity-50",
+                      "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button

@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AUTH_ROUTES } from "@/lib/auth/constants";
 import { authContainerVariants, authItemVariants } from "@/lib/auth/motion";
-import { authenticate, DEMO_ACCOUNTS } from "@/lib/auth/credentials";
+import { authenticate, getDemoAccounts } from "@/lib/auth/credentials";
 import type { DemoAccount } from "@/lib/auth/types";
 import { setSession } from "@/lib/auth/session";
 import { prepareOnboardingAfterAuth } from "@/lib/onboarding/storage";
@@ -137,7 +137,7 @@ export function SignupForm() {
     router.push("/onboarding");
   }
 
-  const accountOptions = DEMO_ACCOUNTS.map((account) => ({
+  const accountOptions = getDemoAccounts().map((account) => ({
     name: account.name,
     email: account.email,
     roleLabel: account.label,

@@ -16,11 +16,16 @@ import {
   REMOTE_REQUIRED_MESSAGE,
   requiresRemoteDatabase,
 } from "@/lib/data/durability";
+import { ensureLocalDemoSandbox } from "@/lib/auth/local-demo";
 import { subscribePlatformRealtime } from "@/lib/supabase/realtime";
 import { RemoteRequiredScreen } from "@/components/app/remote-required-screen";
 
-/** Safety-net poll while the tab is visible (missed Realtime events / sleep). */
-const VISIBLE_POLL_MS = 18_000;
+/**
+ * Safety-net poll while the tab is visible (missed Realtime events / sleep).
+ * Kept tight (~1s) so multi-user boards feel live even if a websocket event drops.
+ * Overlapping pulls are coalesced via inFlight/queued below.
+ */
+const VISIBLE_POLL_MS = 1_000;
 
 /**
  * Loads platform data from Supabase, then keeps it live via Realtime.
@@ -30,9 +35,9 @@ const VISIBLE_POLL_MS = 18_000;
  * in `.env.local`) so developer carts/bookings never hit the school database.
  *
  * Multi-client sync (two browsers, two teachers, phone + laptop):
- * 1. Supabase Realtime postgres_changes → full store refresh
+ * 1. Supabase Realtime postgres_changes → full store refresh (~80ms debounce)
  * 2. Tab focus / visibility / online → immediate refresh
- * 3. Visible-tab poll as a fallback if a websocket event is dropped
+ * 3. Visible-tab poll every ~1s as a fallback if a websocket event is dropped
  * 4. localStorage + BroadcastChannel for same-browser multi-tab
  */
 export function PlatformBootstrap({
@@ -143,6 +148,12 @@ export function PlatformBootstrap({
       window.clearInterval(pollId);
     };
   }, [ready, error, remoteEnabled, remoteMissing]);
+
+  // Local sandbox: seed Demo Admin / Teacher + starter carts when empty.
+  useEffect(() => {
+    if (!ready || !isLocalDemoMode()) return;
+    ensureLocalDemoSandbox();
+  }, [ready]);
 
   // Keep header/session name in lockstep with platform store (Realtime + local).
   useEffect(() => {

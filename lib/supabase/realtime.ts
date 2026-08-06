@@ -13,9 +13,10 @@ const REALTIME_TABLES = [
   "allowed_emails",
 ] as const;
 
-const DEBOUNCE_MS = 180;
-const RECONNECT_BASE_MS = 800;
-const RECONNECT_MAX_MS = 15_000;
+/** Batch multi-row writes into one refresh — keep low so peers feel near-instant. */
+const DEBOUNCE_MS = 80;
+const RECONNECT_BASE_MS = 400;
+const RECONNECT_MAX_MS = 5_000;
 
 /**
  * Subscribe to live Postgres changes for school platform tables.

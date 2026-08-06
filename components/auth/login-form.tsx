@@ -3,8 +3,13 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { authenticate, DEMO_ACCOUNTS } from "@/lib/auth/credentials";
+import { authenticate, getDemoAccounts } from "@/lib/auth/credentials";
 import type { DemoAccount } from "@/lib/auth/types";
+import {
+  completeLocalDemoOnboarding,
+  ensureLocalDemoSandbox,
+  isLocalDemoPersona,
+} from "@/lib/auth/local-demo";
 import { getSession, setSession } from "@/lib/auth/session";
 import {
   needsOnboarding,
@@ -16,9 +21,11 @@ import {
   GOOGLE_HOSTED_DOMAIN,
   SCHOOL_EMAIL_DOMAIN,
 } from "@/lib/auth/school-domain";
+import { isLocalDemoMode } from "@/lib/data/durability";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import type { SessionUser } from "@/lib/types";
 import { AuthLayout } from "./auth-layout";
 import { LegalConsent } from "./legal-consent";
 import {
@@ -52,6 +59,8 @@ function messageForError(code: string | null): string {
 }
 
 function isDemoLoginEnabled() {
+  // Local sandbox always exposes Demo Admin / Demo Teacher.
+  if (isLocalDemoMode() && getDemoAccounts().length > 0) return true;
   return process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === "true";
 }
 
@@ -153,8 +162,28 @@ export default function LoginForm() {
       setLoadingRole(null);
       return;
     }
-    setSession(user);
-    // Local dev: always re-prompt the Morphin-style teaching card after auth.
+    if (isLocalDemoMode()) {
+      ensureLocalDemoSandbox();
+    }
+    const sessionUser: SessionUser = {
+      id: user.id ?? account.email,
+      email: user.email,
+      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+      title: user.title,
+      department: user.department,
+      employmentType: user.employmentType,
+    };
+    setSession(sessionUser);
+    // Demo personas: skip the first-run wizard so Admin ↔ Teacher switches stay fast.
+    if (isLocalDemoPersona(sessionUser)) {
+      completeLocalDemoOnboarding(sessionUser);
+      router.push(onboardingHomeForRole(sessionUser.role));
+      return;
+    }
+    // Other local accounts: re-prompt teaching setup after auth.
     prepareOnboardingAfterAuth(user.id, user.email);
     router.push("/onboarding");
   }
@@ -173,7 +202,8 @@ export default function LoginForm() {
     setError("Google sign-in is not configured.");
   }
 
-  const accountOptions = DEMO_ACCOUNTS.map((account) => ({
+  const demoAccounts = getDemoAccounts();
+  const accountOptions = demoAccounts.map((account) => ({
     name: account.name,
     email: account.email,
     roleLabel: account.label,
@@ -227,28 +257,92 @@ export default function LoginForm() {
               transition={{ duration: 0.15 }}
               className="space-y-5"
             >
-              <button
-                type="button"
-                onClick={handleGoogleClick}
-                disabled={googleLoading}
-                className={cn(
-                  "flex h-11 w-full items-center justify-center gap-2.5 rounded-full",
-                  "bg-neutral-950 text-[14px] font-medium tracking-[-0.01em] text-white",
-                  "transition-[opacity,transform] duration-150",
-                  "hover:opacity-90 active:scale-[0.99]",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950/20 focus-visible:ring-offset-2",
-                  "disabled:pointer-events-none disabled:opacity-50",
-                )}
-              >
-                {googleLoading ? (
-                  <span className="size-4 animate-spin rounded-full border-2 border-white/25 border-t-white" />
-                ) : (
-                  <span className="flex size-[18px] items-center justify-center rounded-full bg-white">
-                    <GoogleIcon width={12} height={12} />
-                  </span>
-                )}
-                {googleLoading ? "Connecting…" : "Continue with Google"}
-              </button>
+              {supabaseReady ? (
+                <button
+                  type="button"
+                  onClick={handleGoogleClick}
+                  disabled={googleLoading}
+                  className={cn(
+                    "flex h-11 w-full items-center justify-center gap-2.5 rounded-full",
+                    "bg-neutral-950 text-[14px] font-medium tracking-[-0.01em] text-white",
+                    "transition-[opacity,transform] duration-150",
+                    "hover:opacity-90 active:scale-[0.99]",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950/20 focus-visible:ring-offset-2",
+                    "disabled:pointer-events-none disabled:opacity-50",
+                  )}
+                >
+                  {googleLoading ? (
+                    <span className="size-4 animate-spin rounded-full border-2 border-white/25 border-t-white" />
+                  ) : (
+                    <span className="flex size-[18px] items-center justify-center rounded-full bg-white">
+                      <GoogleIcon width={12} height={12} />
+                    </span>
+                  )}
+                  {googleLoading ? "Connecting…" : "Continue with Google"}
+                </button>
+              ) : null}
+
+              {demoEnabled && demoAccounts.length > 0 ? (
+                <div className="space-y-3">
+                  {supabaseReady ? (
+                    <div className="flex items-center gap-3">
+                      <span className="h-px flex-1 bg-neutral-200" />
+                      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+                        Local sandbox
+                      </span>
+                      <span className="h-px flex-1 bg-neutral-200" />
+                    </div>
+                  ) : (
+                    <p className="text-center text-[12.5px] text-neutral-500">
+                      Local development sandbox
+                    </p>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    {demoAccounts.map((account) => (
+                      <button
+                        key={account.email}
+                        type="button"
+                        disabled={loadingRole !== null}
+                        onClick={() => void signInWithAccount(account)}
+                        className={cn(
+                          "flex h-11 flex-col items-center justify-center rounded-xl border border-black/[0.08] bg-white px-2",
+                          "text-[13px] font-medium tracking-[-0.01em] text-neutral-950",
+                          "transition-colors hover:bg-neutral-50",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950/10",
+                          "disabled:pointer-events-none disabled:opacity-50",
+                        )}
+                      >
+                        {loadingRole === account.role ? (
+                          <span className="size-4 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
+                        ) : (
+                          <>
+                            <span>{account.role === "admin" ? "Admin" : "Teacher"}</span>
+                            <span className="text-[10.5px] font-normal text-neutral-400">
+                              {account.name.split(" ")[0]}
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : !supabaseReady ? (
+                <button
+                  type="button"
+                  onClick={handleGoogleClick}
+                  disabled={googleLoading}
+                  className={cn(
+                    "flex h-11 w-full items-center justify-center gap-2.5 rounded-full",
+                    "bg-neutral-950 text-[14px] font-medium tracking-[-0.01em] text-white",
+                    "transition-[opacity,transform] duration-150",
+                    "hover:opacity-90 active:scale-[0.99]",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950/20 focus-visible:ring-offset-2",
+                    "disabled:pointer-events-none disabled:opacity-50",
+                  )}
+                >
+                  Continue with Google
+                </button>
+              ) : null}
 
               <LegalConsent
                 checked={acceptedLegal}
