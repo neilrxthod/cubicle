@@ -11,6 +11,7 @@ import {
   StatsDisplay,
   type StatItem,
 } from "@/components/tool-ui/stats-display";
+import { ShareInvitesList } from "@/components/share-invites-list";
 import { SwapRequestsList } from "@/components/swap-requests-list";
 import { usePlatformStore } from "@/lib/data/platform-store";
 import type { Booking, Issue, SessionUser } from "@/lib/types";
@@ -228,6 +229,11 @@ function HomeBoard({ user }: { user: SessionUser }) {
             id="schedule-stats"
             className="w-full max-w-none"
             stats={stats}
+          />
+          <ShareInvitesList
+            bookings={state.bookings}
+            carts={state.carts}
+            userId={user.id}
           />
           <SwapRequestsList
             requests={incomingSwaps}

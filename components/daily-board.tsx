@@ -58,6 +58,14 @@ import {
   updateBookingLabel,
 } from "@/lib/actions"
 import { Calendar } from "@/components/ui/calendar"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
 import {
@@ -71,8 +79,6 @@ import {
   Loader2,
   Trash2,
   UserPlus,
-  Check,
-  X,
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -252,6 +258,11 @@ export function DailyBoard({
   )
   const [renameDraft, setRenameDraft] = useState("")
   const [renameBusy, setRenameBusy] = useState(false)
+  /** Admin two-step delete: trash → confirm dialog → delete. */
+  const [pendingDelete, setPendingDelete] = useState<{
+    booking: Booking
+    cartName: string
+  } | null>(null)
 
   const isAdmin = session.role === "admin"
 
@@ -269,6 +280,7 @@ export function DailyBoard({
         return
       }
       toast({ title: "Booking deleted" })
+      setPendingDelete(null)
       router.refresh()
     } finally {
       setDeletingBookingId(null)
@@ -1013,25 +1025,30 @@ export function DailyBoard({
                             )
                           ) : null}
 
-                          {/* Pending share invite — friend request icon for invitee */}
+                          {/* Share invite for you — same slot look + Accept / Decline */}
                           {inviteForMe ? (
-                            <div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-1 p-1">
-                              <span
-                                className={cn(
-                                  "flex size-9 items-center justify-center rounded-full sm:size-10",
-                                  "bg-sky-500 text-white shadow-sm ring-2 ring-white/30",
-                                )}
-                                title={title}
-                              >
-                                <UserPlus
-                                  className="size-4 sm:size-4.5"
-                                  strokeWidth={2}
-                                />
-                              </span>
+                            <div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-1.5 p-1">
                               <div className="flex items-center gap-1">
                                 <button
                                   type="button"
-                                  title="Accept share"
+                                  title="Decline"
+                                  aria-label="Decline share invite"
+                                  disabled={inviteBusy}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    void respondShareInvite(booking, "decline")
+                                  }}
+                                  className={cn(
+                                    "h-7 rounded-full px-2.5 text-[10.5px] font-medium",
+                                    "bg-white/95 text-neutral-700 shadow-sm ring-1 ring-black/10",
+                                    "hover:bg-neutral-100 disabled:opacity-50",
+                                  )}
+                                >
+                                  Decline
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Accept"
                                   aria-label="Accept share invite"
                                   disabled={inviteBusy}
                                   onClick={(e) => {
@@ -1039,9 +1056,9 @@ export function DailyBoard({
                                     void respondShareInvite(booking, "accept")
                                   }}
                                   className={cn(
-                                    "flex size-7 items-center justify-center rounded-full",
-                                    "bg-white text-emerald-700 shadow-sm ring-1 ring-black/10",
-                                    "hover:bg-emerald-50 disabled:opacity-50",
+                                    "h-7 rounded-full px-2.5 text-[10.5px] font-medium",
+                                    "bg-white text-neutral-950 shadow-sm ring-1 ring-black/10",
+                                    "hover:bg-neutral-100 disabled:opacity-50",
                                   )}
                                 >
                                   {inviteBusy ? (
@@ -1050,28 +1067,8 @@ export function DailyBoard({
                                       strokeWidth={2}
                                     />
                                   ) : (
-                                    <Check
-                                      className="size-3.5"
-                                      strokeWidth={2.25}
-                                    />
+                                    "Accept"
                                   )}
-                                </button>
-                                <button
-                                  type="button"
-                                  title="Decline share"
-                                  aria-label="Decline share invite"
-                                  disabled={inviteBusy}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    void respondShareInvite(booking, "decline")
-                                  }}
-                                  className={cn(
-                                    "flex size-7 items-center justify-center rounded-full",
-                                    "bg-white text-red-600 shadow-sm ring-1 ring-black/10",
-                                    "hover:bg-red-50 disabled:opacity-50",
-                                  )}
-                                >
-                                  <X className="size-3.5" strokeWidth={2.25} />
                                 </button>
                               </div>
                             </div>
@@ -1165,7 +1162,10 @@ export function DailyBoard({
                                   disabled={deleting}
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    void adminDeleteBooking(booking)
+                                    setPendingDelete({
+                                      booking,
+                                      cartName: cart.name,
+                                    })
                                   }}
                                   className={cn(
                                     "flex size-8 items-center justify-center rounded-full sm:size-9",
@@ -1175,17 +1175,10 @@ export function DailyBoard({
                                     "disabled:opacity-50",
                                   )}
                                 >
-                                  {deleting ? (
-                                    <Loader2
-                                      className="size-3.5 animate-spin sm:size-4"
-                                      strokeWidth={1.75}
-                                    />
-                                  ) : (
-                                    <Trash2
-                                      className="size-3.5 sm:size-4"
-                                      strokeWidth={1.75}
-                                    />
-                                  )}
+                                  <Trash2
+                                    className="size-3.5 sm:size-4"
+                                    strokeWidth={1.75}
+                                  />
                                 </button>
                               ) : null}
                             </div>
@@ -1318,6 +1311,71 @@ export function DailyBoard({
           onClose={() => setManageDialog(null)}
         />
       )}
+
+      {/* Admin two-step delete: trash → confirm → remove */}
+      <Dialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deletingBookingId) setPendingDelete(null)
+        }}
+      >
+        <DialogContent
+          showCloseButton={!deletingBookingId}
+          className="gap-0 overflow-hidden rounded-2xl border-border/60 bg-white p-0 shadow-xl sm:max-w-sm"
+        >
+          <DialogHeader className="space-y-1.5 px-5 pt-5 pb-0 text-left">
+            <DialogTitle className="text-[15px] font-light tracking-[-0.02em] text-neutral-950">
+              Delete this booking?
+            </DialogTitle>
+            <DialogDescription className="text-[12.5px] leading-relaxed text-neutral-500">
+              {pendingDelete ? (
+                <>
+                  Removes{" "}
+                  <span className="font-medium text-neutral-800">
+                    {nameByTeacherId.get(pendingDelete.booking.teacherId) ||
+                      pendingDelete.booking.teacherName}
+                  </span>
+                  ’s reservation for{" "}
+                  <span className="font-medium text-neutral-800">
+                    {pendingDelete.cartName}
+                  </span>{" "}
+                  · {pendingDelete.booking.period}. This cannot be undone.
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-row items-center justify-end gap-3 px-5 py-5 sm:space-x-0">
+            <button
+              type="button"
+              disabled={Boolean(deletingBookingId)}
+              onClick={() => setPendingDelete(null)}
+              className="h-9 px-1 text-[13px] font-medium text-neutral-400 transition-colors hover:text-neutral-900 disabled:opacity-40"
+            >
+              Keep booking
+            </button>
+            <button
+              type="button"
+              disabled={Boolean(deletingBookingId) || !pendingDelete}
+              onClick={() => {
+                if (!pendingDelete) return
+                void adminDeleteBooking(pendingDelete.booking)
+              }}
+              className={cn(
+                "inline-flex h-9 min-w-[7.5rem] items-center justify-center gap-1.5 rounded-lg px-4",
+                "bg-red-600 text-[13px] font-medium text-white",
+                "transition-colors hover:bg-red-700",
+                "disabled:pointer-events-none disabled:opacity-50",
+              )}
+            >
+              {deletingBookingId ? (
+                <Loader2 className="size-3.5 animate-spin" strokeWidth={2} />
+              ) : (
+                "Delete booking"
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }
