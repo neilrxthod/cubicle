@@ -16,8 +16,8 @@ import { cn } from "@/lib/utils";
 
 const SEVERITIES = ["low", "medium", "high"] as const;
 
-/** Match DialogContent exit duration so parent unmount waits for animation. */
-const CLOSE_MS = 300;
+/** Dialog panel is instant (no exit animation). */
+const CLOSE_MS = 0;
 
 /** Minimal report sheet — title, two fields, actions. */
 export function IssueDialog({
@@ -51,6 +51,10 @@ export function IssueDialog({
   function requestClose() {
     if (!open) return;
     setOpen(false);
+    if (CLOSE_MS <= 0) {
+      onClose();
+      return;
+    }
     if (closeTimer.current) clearTimeout(closeTimer.current);
     closeTimer.current = setTimeout(() => {
       onClose();

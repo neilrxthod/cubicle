@@ -87,6 +87,20 @@
   --tracking-title: -0.03em;
   --tracking-body: -0.015em;
   --tracking-label: 0.14em;
+
+  /*
+    Motion system — short, composite-friendly (opacity/transform).
+    Keep micro-interactions under ~180ms to feel instant, not floaty.
+  */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-micro: 120ms;
+  --duration-fast: 160ms;
+  --duration-panel: 180ms;
+  /* tw-animate-css / shadcn enter-exit defaults */
+  --tw-animation-duration: var(--duration-fast);
+  --tw-enter-opacity: 0;
+  --tw-exit-opacity: 0;
 }
 
 .dark {
@@ -381,6 +395,106 @@ body[data-scroll-locked] [data-radix-portal] {
   html {
     scroll-behavior: smooth;
   }
+}
+
+/* Respect OS “reduce motion” — kill decorative motion globally. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+  Floating UI enter/exit — short, no lag.
+  Dialog panel has NO animation (text must not move). Overlay may fade only.
+*/
+[data-slot="dialog-overlay"] {
+  animation-duration: 100ms !important;
+  animation-timing-function: ease-out !important;
+}
+
+[data-slot="dialog-content"] {
+  /* Hard-disable any enter/exit motion that could shift text. */
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+[data-slot="popover-content"],
+[data-slot="dropdown-menu-content"],
+[data-slot="select-content"],
+[data-slot="tooltip-content"] {
+  animation-duration: var(--duration-fast) !important;
+  animation-timing-function: var(--ease-out-expo) !important;
+}
+
+/* Micro interaction utility — color/opacity only (never layout). */
+@layer utilities {
+  .motion-micro {
+    transition-property: color, background-color, border-color, opacity,
+      box-shadow, transform, filter;
+    transition-duration: var(--duration-micro);
+    transition-timing-function: var(--ease-out-soft);
+  }
+
+  .motion-fast {
+    transition-property: color, background-color, border-color, opacity,
+      box-shadow, transform, filter;
+    transition-duration: var(--duration-fast);
+    transition-timing-function: var(--ease-out-expo);
+  }
+
+  /* Promote independent layers only while interacting — avoids permanent will-change cost */
+  .motion-layer {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+}
+
+/*
+  react-day-picker v8 — force a real month grid.
+  DayPicker renders a <table>; default table CSS + flex can stack cells.
+  We force flex weeks with fixed cell size so it always looks like a calendar.
+*/
+.rdp table {
+  width: 100% !important;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.rdp thead tr,
+.rdp tbody tr {
+  display: flex !important;
+  width: 100%;
+}
+
+.rdp th,
+.rdp td {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem !important;
+  min-width: 2.5rem !important;
+  max-width: 2.5rem !important;
+  height: 2.5rem !important;
+  padding: 0 !important;
+  box-sizing: border-box;
+}
+
+.rdp thead th {
+  height: 2rem !important;
+}
+
+.rdp td button {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  margin: 0 auto;
 }
 
 @layer base {

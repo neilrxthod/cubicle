@@ -5,20 +5,28 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { DayPicker } from "react-day-picker";
 
 import { cn } from "@/lib/utils";
-import { buttonVariants } from "@/components/ui/button";
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
 
+/** Fixed day cell — 7 × 2.5rem = true month grid width. */
+const DAY = "2.5rem";
+
 function formatWeekdayName(date: Date) {
-  const labels = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
+  const labels = ["S", "M", "T", "W", "T", "F", "S"] as const;
   return labels[date.getDay()] ?? "";
 }
 
+/**
+ * Real month calendar (7 equal columns), corporate & minimal.
+ * Fixed cell sizes — never collapses into a stacked date list.
+ */
 function Calendar({
   className,
   classNames,
   showOutsideDays = true,
   formatters,
+  styles,
+  components,
   ...props
 }: CalendarProps) {
   return (
@@ -26,8 +34,9 @@ function Calendar({
       showOutsideDays={showOutsideDays}
       weekStartsOn={0}
       className={cn(
-        // Landscape sheet: wide, low height — fills parent width.
-        "w-full min-w-0 max-w-full select-none bg-white px-2.5 py-2 text-neutral-950 sm:px-3 sm:py-2.5",
+        "rdp select-none bg-white p-4 text-neutral-950",
+        // 7 days × 2.5rem + horizontal padding (p-4 × 2)
+        "w-[calc(7*2.5rem+2rem)]",
         className,
       )}
       formatters={{
@@ -40,68 +49,70 @@ function Calendar({
         ...formatters,
       }}
       classNames={{
-        months: "flex w-full min-w-0 flex-col",
-        month: "flex w-full min-w-0 flex-col gap-1.5",
-        caption: "relative flex h-8 items-center justify-center px-8",
+        months: "flex w-full flex-col",
+        month: "w-full space-y-3",
+        caption: "relative flex h-8 w-full items-center justify-center",
         caption_label:
-          "truncate text-[13px] font-medium tracking-[-0.02em] text-neutral-950",
-        nav: "absolute inset-x-0 flex items-center justify-between",
+          "text-[13.5px] font-medium tracking-[-0.02em] text-neutral-950",
+        nav: "absolute inset-x-0 top-0 flex h-8 items-center justify-between",
         nav_button: cn(
-          buttonVariants({ variant: "ghost" }),
-          "size-7 shrink-0 rounded-md bg-transparent p-0 text-neutral-400",
-          "transition-colors hover:bg-black/[0.04] hover:text-neutral-950",
-          "focus-visible:ring-1 focus-visible:ring-black/10",
+          "inline-flex size-7 items-center justify-center rounded-md",
+          "text-neutral-400 motion-micro",
+          "hover:bg-neutral-100 hover:text-neutral-950",
+          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/12",
+          "disabled:pointer-events-none disabled:opacity-30",
         ),
-        nav_button_previous: "static",
-        nav_button_next: "static",
-        table: "w-full min-w-0 border-collapse",
-        head_row: "mb-0.5 flex w-full min-w-0 gap-0.5",
+        nav_button_previous: "",
+        nav_button_next: "",
+        table: "w-full border-collapse",
+        // Flex + fixed cell width = calendar weeks, not a vertical stack.
+        head_row: "flex w-full",
         head_cell: cn(
-          "flex h-6 min-w-0 flex-1 items-center justify-center",
-          "text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400",
+          "flex items-center justify-center",
+          "text-[11px] font-medium tracking-[0.04em] text-neutral-400",
           "select-none",
         ),
-        row: "mt-0.5 flex w-full min-w-0 gap-0.5",
+        row: "mt-1 flex w-full",
         cell: cn(
-          // Wide short cells → horizontal rectangular grid.
-          "relative h-8 min-w-0 flex-1 p-0 text-center text-sm sm:h-9",
+          "relative p-0 text-center text-[13px]",
           "focus-within:relative focus-within:z-20",
-          "[&:has([aria-selected])]:bg-neutral-100",
-          "[&:has([aria-selected].day-outside)]:bg-neutral-50",
           props.mode === "range"
-            ? "[&:has(>.day-range-end)]:rounded-r-md [&:has(>.day-range-start)]:rounded-l-md first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md"
-            : "[&:has([aria-selected])]:rounded-md",
+            ? [
+                "[&:has(>.day-range-end)]:rounded-r-md",
+                "[&:has(>.day-range-start)]:rounded-l-md",
+                "first:[&:has([aria-selected])]:rounded-l-md",
+                "last:[&:has([aria-selected])]:rounded-r-md",
+                "[&:has([aria-selected])]:bg-neutral-100",
+              ].join(" ")
+            : "",
         ),
         day: cn(
-          buttonVariants({ variant: "ghost" }),
-          // Fill the wide cell as a short rectangle (not a circle).
-          "h-full w-full rounded-md p-0 font-normal tabular-nums tracking-tight",
-          "text-[12px] text-neutral-800 aria-selected:opacity-100 sm:text-[13px]",
-          "hover:bg-black/[0.05] hover:text-neutral-950",
-          "focus-visible:bg-black/[0.05] focus-visible:ring-1 focus-visible:ring-black/10",
-          "transition-colors duration-150",
+          "inline-flex items-center justify-center rounded-full p-0",
+          "text-[13px] font-normal tabular-nums tracking-tight text-neutral-800",
+          "motion-micro",
+          "hover:bg-neutral-100 hover:text-neutral-950",
+          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/12",
+          "aria-selected:opacity-100",
         ),
-        day_range_start: "day-range-start rounded-md",
-        day_range_end: "day-range-end rounded-md",
+        day_range_start: "day-range-start",
+        day_range_end: "day-range-end",
         day_selected: cn(
-          "bg-neutral-950 text-white",
+          "bg-neutral-950 text-white shadow-sm",
           "hover:bg-neutral-900 hover:text-white",
           "focus:bg-neutral-950 focus:text-white",
           "aria-selected:bg-neutral-950 aria-selected:text-white",
         ),
         day_today: cn(
-          "relative font-medium text-neutral-950",
+          "font-semibold text-neutral-950",
           "bg-neutral-100",
-          "ring-1 ring-inset ring-neutral-300",
-          "aria-selected:bg-neutral-950 aria-selected:text-white",
-          "aria-selected:ring-0",
+          "aria-selected:bg-neutral-950 aria-selected:text-white aria-selected:font-medium",
         ),
         day_outside: cn(
           "day-outside text-neutral-300",
           "aria-selected:bg-neutral-100 aria-selected:text-neutral-400",
         ),
         day_disabled: cn(
-          "text-neutral-300 opacity-40",
+          "cursor-not-allowed text-neutral-300 opacity-40",
           "hover:bg-transparent hover:text-neutral-300",
         ),
         day_range_middle: cn(
@@ -111,6 +122,12 @@ function Calendar({
         ),
         day_hidden: "invisible",
         ...classNames,
+      }}
+      styles={{
+        head_cell: { width: DAY, height: "2rem", ...styles?.head_cell },
+        cell: { width: DAY, height: DAY, ...styles?.cell },
+        day: { width: DAY, height: DAY, ...styles?.day },
+        ...styles,
       }}
       components={{
         IconLeft: ({ className: iconClassName, ...iconProps }) => (
@@ -127,6 +144,7 @@ function Calendar({
             {...iconProps}
           />
         ),
+        ...components,
       }}
       {...props}
     />

@@ -283,7 +283,7 @@ export function RestrictionsPanel({
               </button>
             </PopoverTrigger>
             <PopoverContent
-              className="w-auto overflow-hidden rounded-lg border border-neutral-200 p-0 shadow-md"
+              className="w-auto overflow-hidden rounded-xl border border-black/[0.08] bg-white p-0 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_rgba(0,0,0,0.08)]"
               align="end"
             >
               <Calendar
@@ -1072,7 +1072,7 @@ function BatchToolsDialog({
                         </button>
                       </PopoverTrigger>
                       <PopoverContent
-                        className="w-auto overflow-hidden rounded-xl border-neutral-200 p-0 shadow-lg"
+                        className="w-auto overflow-hidden rounded-xl border border-black/[0.08] bg-white p-0 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_rgba(0,0,0,0.08)]"
                         align="start"
                       >
                         <Calendar

@@ -96,7 +96,7 @@ function NavLink({
       className={cn(
         "group relative inline-flex h-full items-center justify-center px-3",
         "text-[12px] font-normal tracking-[0.12em] uppercase",
-        "transition-colors duration-200 ease-out",
+        "motion-micro",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10 focus-visible:ring-offset-2",
         active
           ? "text-neutral-950"
@@ -109,7 +109,8 @@ function NavLink({
         <span
           aria-hidden
           className={cn(
-            "pointer-events-none absolute -bottom-1 left-0 right-0 h-px origin-center bg-neutral-950 transition-transform duration-300 ease-out",
+            "pointer-events-none absolute -bottom-1 left-0 right-0 h-px origin-center bg-neutral-950",
+            "transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
             active
               ? "scale-x-100"
               : "scale-x-0 group-hover:scale-x-100 group-hover:bg-neutral-400",
@@ -215,7 +216,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
                     onClick={() => handlePerspective(opt.role)}
                     className={cn(
                       "inline-flex h-7 items-center rounded-[5px] px-2 sm:px-2.5",
-                      "text-[11px] font-medium tracking-[-0.01em] transition-colors",
+                      "text-[11px] font-medium tracking-[-0.01em] motion-micro",
                       active
                         ? "bg-white text-neutral-950 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
                         : "text-neutral-500 hover:text-neutral-800",
@@ -233,7 +234,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex h-8 max-w-[min(11rem,40vw)] items-center gap-2 rounded-full border border-transparent bg-transparent py-0.5 pl-0.5 pr-2 text-left transition-colors duration-200 hover:border-neutral-200/80 hover:bg-neutral-50/90"
+                className="flex h-8 max-w-[min(11rem,40vw)] items-center gap-2 rounded-full border border-transparent bg-transparent py-0.5 pl-0.5 pr-2 text-left motion-micro hover:border-neutral-200/80 hover:bg-neutral-50/90"
               >
                 <Avatar user={user} size="sm" />
                 <span className="hidden min-w-0 flex-col leading-tight sm:flex">

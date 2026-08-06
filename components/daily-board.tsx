@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
@@ -10,7 +10,6 @@ import type {
   BookingPolicy,
   Cart,
   Period,
-  RestrictionCategory,
   SessionUser,
   SlotRestriction,
 } from "@/lib/types"
@@ -19,18 +18,6 @@ import {
   bookingInvolvesUser,
   getBookingPurpose,
 } from "@/lib/types"
-
-type LockKind = "general" | "ap_exam" | "holiday"
-
-const LOCK_KINDS: ReadonlyArray<{
-  id: LockKind
-  label: string
-  hint: string
-}> = [
-  { id: "general", label: "General", hint: "Block open slots" },
-  { id: "ap_exam", label: "AP exam", hint: "Reserve for AP exams" },
-  { id: "holiday", label: "Holiday", hint: "School closed / no carts" },
-]
 
 function restrictionLabel(restriction: SlotRestriction): string {
   if (restriction.category === "ap_exam") return "AP exam"
@@ -60,12 +47,10 @@ const ManageBookingDialog = dynamic(
 
 import {
   acceptShareInvite,
-  batchRestrictSlots,
   cancelBooking,
   declineShareInvite,
 } from "@/lib/actions"
 import { Calendar } from "@/components/ui/calendar"
-import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   ArrowLeftRight,
@@ -94,7 +79,7 @@ function parseLocalYmd(ymd: string): Date {
 }
 
 const cellBase =
-  "flex min-h-14 min-w-0 border-l border-[var(--hairline)] transition-colors duration-150 ease-out sm:min-h-16"
+  "flex min-h-14 min-w-0 border-l border-[var(--hairline)] motion-micro sm:min-h-16"
 
 /** Dominant face in the slot; cell height tracks so neighbors stay clear. */
 const SLOT_AVATAR =
@@ -244,11 +229,6 @@ export function DailyBoard({
   const [swapDialog, setSwapDialog] = useState<Booking | null>(null)
   const [manageDialog, setManageDialog] = useState<Booking | null>(null)
   const [datePickerOpen, setDatePickerOpen] = useState(false)
-  /** Admin must pick a lock type before Lock becomes active. */
-  const [lockKind, setLockKind] = useState<LockKind | null>(null)
-  const [lockReason, setLockReason] = useState("")
-  const [lockBusy, setLockBusy] = useState<"lock" | "unlock" | null>(null)
-  const lockInFlight = useRef(false)
   const [deletingBookingId, setDeletingBookingId] = useState<string | null>(
     null,
   )
@@ -310,203 +290,6 @@ export function DailyBoard({
     }
   }
 
-  /** Carts that can receive day locks (prefer active; fall back to all). */
-  const lockableCarts = useMemo(() => {
-    const active = carts.filter((c) => c.status === "active")
-    return active.length > 0 ? active : carts
-  }, [carts])
-
-  /** Live day occupancy for the selected board date (drives Unlock enablement). */
-  const dayLockStats = useMemo(() => {
-    const cartIds = new Set(lockableCarts.map((c) => c.id))
-    const total = lockableCarts.length * PERIODS.length
-    const bookedKeys = new Set<string>()
-    for (const b of bookings) {
-      if (b.date.slice(0, 10) !== date || !cartIds.has(b.cartId)) continue
-      bookedKeys.add(`${b.cartId}:${b.period}`)
-    }
-    const lockedKeys = new Set<string>()
-    const kinds = { ap: 0, holiday: 0, general: 0 }
-    for (const r of slotRestrictions) {
-      if (r.date.slice(0, 10) !== date || !cartIds.has(r.cartId)) continue
-      lockedKeys.add(`${r.cartId}:${r.period}`)
-      if (r.category === "ap_exam") kinds.ap += 1
-      else if (
-        r.category === "other" &&
-        (r.reason ?? "").toLowerCase().includes("holiday")
-      ) {
-        kinds.holiday += 1
-      } else {
-        kinds.general += 1
-      }
-    }
-    let open = 0
-    for (const cart of lockableCarts) {
-      for (const period of PERIODS) {
-        const key = `${cart.id}:${period}`
-        if (!bookedKeys.has(key) && !lockedKeys.has(key)) open += 1
-      }
-    }
-    // Dominant type for this day (for panel label — not under the date cell)
-    const dominant: LockKind | null =
-      kinds.ap > 0
-        ? "ap_exam"
-        : kinds.holiday > 0
-          ? "holiday"
-          : kinds.general > 0
-            ? "general"
-            : null
-    return {
-      total,
-      booked: bookedKeys.size,
-      locked: lockedKeys.size,
-      open,
-      dominant,
-    }
-  }, [bookings, date, lockableCarts, slotRestrictions])
-
-  function resetLockDraft() {
-    setLockKind(null)
-    setLockReason("")
-    setLockBusy(null)
-  }
-
-  function resolveLockPayload(): {
-    category: RestrictionCategory
-    reason?: string
-  } | null {
-    if (!lockKind) return null
-    const note = lockReason.trim().slice(0, 120)
-    if (lockKind === "ap_exam") {
-      return { category: "ap_exam", reason: note || undefined }
-    }
-    if (lockKind === "holiday") {
-      // DB allows ap_exam | general | other — holiday maps to other.
-      return { category: "other", reason: note || "Holiday" }
-    }
-    return { category: "general", reason: note || undefined }
-  }
-
-  async function applyDayLock(action: "restrict" | "available") {
-    if (lockInFlight.current) return
-    if (!isAdmin) {
-      toast({
-        title: "Admin only",
-        description: "Sign in with an admin account to lock carts.",
-        variant: "destructive",
-      })
-      return
-    }
-    if (lockableCarts.length === 0) {
-      toast({
-        title: "No carts",
-        description: "Add carts under Admin → Inventory first.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (action === "restrict" && !lockKind) {
-      toast({
-        title: "Choose a lock type",
-        description: "Select General, AP exam, or Holiday first.",
-      })
-      return
-    }
-
-    if (action === "available" && dayLockStats.locked === 0) {
-      toast({
-        title: "Nothing to unlock",
-        description: "There are no locks on this day.",
-      })
-      return
-    }
-
-    if (action === "restrict" && dayLockStats.open === 0 && dayLockStats.locked === 0) {
-      toast({
-        title: "Nothing to lock",
-        description: "Every slot is booked — locks never overwrite bookings.",
-      })
-      return
-    }
-
-    const shortDate = format(parseLocalYmd(date), "MMM d")
-    const cartIds = lockableCarts.map((c) => c.id)
-    const payload = action === "restrict" ? resolveLockPayload() : undefined
-
-    lockInFlight.current = true
-    setLockBusy(action === "restrict" ? "lock" : "unlock")
-    try {
-      const res = await batchRestrictSlots(
-        cartIds,
-        date,
-        date,
-        PERIODS,
-        action,
-        payload ?? undefined,
-      )
-      if (!res.ok) {
-        toast({
-          title:
-            action === "restrict"
-              ? "Could not lock carts"
-              : "Could not unlock day",
-          description: res.error || "Try again.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      const count = res.data?.restrictedCount ?? 0
-      const skipped = res.data?.skippedBookedCount ?? 0
-
-      if (action === "restrict" && count === 0) {
-        toast({
-          title: "Nothing to lock",
-          description:
-            skipped > 0
-              ? `All open slots are booked (${skipped} skipped).`
-              : "Slots may already be locked for this day.",
-        })
-        return
-      }
-
-      if (action === "available" && count === 0) {
-        toast({
-          title: "Nothing to unlock",
-          description: "There are no locks on this day.",
-        })
-        return
-      }
-
-      toast({
-        title: action === "restrict" ? "Carts locked" : "Day unlocked",
-        description:
-          action === "restrict"
-            ? `${count} slots locked for ${shortDate}${
-                skipped ? ` · ${skipped} booked skipped` : ""
-              }`
-            : `${count} locks cleared for ${shortDate}`,
-      })
-      if (action === "restrict") {
-        // Keep type selected so admin can re-lock another day quickly;
-        // only clear custom note after a successful lock.
-        setLockReason("")
-      }
-      // Soft refresh — platform store already rehydrated inside batchRestrictSlots.
-      router.refresh()
-    } catch (err) {
-      toast({
-        title: "Could not update locks",
-        description: err instanceof Error ? err.message : "Unexpected error.",
-        variant: "destructive",
-      })
-    } finally {
-      lockInFlight.current = false
-      setLockBusy(null)
-    }
-  }
-
   const bookingsForDate = bookings.filter(
     (b) => (b.date.length >= 10 ? b.date.slice(0, 10) : b.date) === date,
   )
@@ -542,10 +325,6 @@ export function DailyBoard({
         variant: "destructive",
       })
       return
-    }
-    if (next !== date) {
-      // New day → admin must pick a lock type again before Lock activates.
-      resetLockDraft()
     }
     const url = new URL(window.location.href)
     url.searchParams.set("date", next)
@@ -650,24 +429,9 @@ export function DailyBoard({
     ? carts.find((c) => c.id === manageDialog.cartId)
     : undefined
 
-  /** Single day-lock control: Lock when a type is picked, Unlock when day already locked. */
-  const hasLockableCarts = lockableCarts.length > 0
-  const canLockDay = Boolean(lockKind) && hasLockableCarts
-  const canUnlockDay = dayLockStats.locked > 0 && !lockKind
-  const dayLockActionReady = canLockDay || canUnlockDay
-  /** Quiet status under the control — only when guidance is needed. */
-  const dayLockHint =
-    !hasLockableCarts
-      ? null
-      : canUnlockDay
-        ? "Clears locks for this day. Bookings are unchanged."
-        : !lockKind
-          ? "Step 1 of 2 — choose a type"
-          : "Step 2 of 2 — confirm lock"
-
   const navBtn = cn(
     "flex size-8 items-center justify-center rounded-full",
-    "text-neutral-400 transition-colors duration-200",
+    "text-neutral-400 motion-micro",
     "hover:bg-black/[0.04] hover:text-black",
     "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
     "disabled:pointer-events-none disabled:opacity-25",
@@ -719,19 +483,19 @@ export function DailyBoard({
                 aria-label="Choose date"
                 aria-expanded={datePickerOpen}
                 className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-full px-2.5",
+                  "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5",
                   "border border-black/[0.08] bg-white",
-                  "text-[12px] font-normal tabular-nums tracking-[-0.02em] text-black",
+                  "text-[12px] font-medium tabular-nums tracking-[-0.02em] text-neutral-900",
                   "transition-colors duration-150",
-                  "hover:bg-black/[0.03]",
-                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/10",
-                  "data-[state=open]:border-black data-[state=open]:bg-black data-[state=open]:text-white",
+                  "hover:bg-neutral-50",
+                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/12",
+                  "data-[state=open]:border-neutral-900 data-[state=open]:bg-neutral-900 data-[state=open]:text-white",
                 )}
               >
                 <CalendarIcon
                   className={cn(
                     "size-3 shrink-0",
-                    datePickerOpen ? "text-white/60" : "text-neutral-400",
+                    datePickerOpen ? "text-white/55" : "text-neutral-400",
                   )}
                   strokeWidth={1.5}
                 />
@@ -740,11 +504,9 @@ export function DailyBoard({
             </PopoverTrigger>
             <PopoverContent
               className={cn(
-                // Landscape panel: wide rectangle, viewport-safe.
-                "z-[60] w-[min(28rem,calc(100vw-1.25rem))] max-w-[calc(100vw-1.25rem)]",
-                "max-h-[min(28rem,calc(100dvh-1.25rem))] overflow-x-hidden overflow-y-auto p-0",
+                "z-[60] w-auto max-w-[calc(100vw-1.25rem)] overflow-hidden p-0",
                 "rounded-2xl border border-black/[0.08] bg-white",
-                "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_40px_rgba(0,0,0,0.1)]",
+                "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_40px_rgba(0,0,0,0.1)]",
               )}
               align="end"
               side="bottom"
@@ -752,210 +514,25 @@ export function DailyBoard({
               collisionPadding={12}
               avoidCollisions
             >
-              <div
-                className={cn(
-                  "flex min-w-0 flex-col",
-                  // Admin: calendar + locks sit side-by-side on wider screens.
-                  isAdmin && "sm:flex-row sm:items-stretch",
-                )}
-              >
-                <div
-                  className={cn(
-                    "min-w-0 flex-1",
-                    isAdmin && "sm:border-r sm:border-black/[0.05]",
-                  )}
-                >
-                  <Calendar
-                    mode="single"
-                    selected={parseLocalYmd(date)}
-                    defaultMonth={parseLocalYmd(date)}
-                    onSelect={(val) => {
-                      if (!val) return
-                      setDate(format(val, "yyyy-MM-dd"))
-                      // Keep open for admins so they can lock the chosen day.
-                      if (!isAdmin) setDatePickerOpen(false)
-                    }}
-                    disabled={(day) => {
-                      if (
-                        isTeacherWindowEnforced &&
-                        format(day, "yyyy-MM-dd") > lastBookableDate
-                      ) {
-                        return true
-                      }
-                      return false
-                    }}
-                  />
-                </div>
-
-                {isAdmin ? (
-                  <div
-                    className={cn(
-                      "flex min-w-0 flex-col gap-2.5 border-t border-black/[0.05] bg-neutral-50/60 px-3 py-3",
-                      "sm:w-[12rem] sm:shrink-0 sm:border-t-0 sm:px-3.5 sm:py-3.5",
-                    )}
-                    onPointerDown={(e) => e.stopPropagation()}
-                  >
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-medium tracking-[-0.01em] text-neutral-900">
-                        {canUnlockDay ? "Day locked" : "Day lock"}
-                      </p>
-                      {dayLockStats.dominant ? (
-                        <p className="mt-0.5 text-[10.5px] tracking-[-0.01em] text-neutral-500">
-                          {dayLockStats.dominant === "ap_exam"
-                            ? "AP exam"
-                            : dayLockStats.dominant === "holiday"
-                              ? "Holiday"
-                              : "General"}
-                          {dayLockStats.locked > 0
-                            ? ` · ${dayLockStats.locked} slots`
-                            : null}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    {/* No inventory: one calm message + single next step. */}
-                    {!hasLockableCarts ? (
-                      <div role="status" className="flex min-w-0 flex-col gap-2.5">
-                        <p className="text-[11px] leading-relaxed tracking-[-0.01em] text-neutral-500">
-                          Add laptop carts in Inventory before locking days.
-                        </p>
-                        <Link
-                          href="/admin"
-                          onClick={() => setDatePickerOpen(false)}
-                          className={cn(
-                            "inline-flex h-8 w-full items-center justify-center rounded-md",
-                            "border border-black/[0.08] bg-white",
-                            "text-[12px] font-medium tracking-[-0.01em] text-neutral-900",
-                            "transition-colors hover:bg-neutral-50",
-                            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
-                          )}
-                        >
-                          Open Inventory
-                        </Link>
-                      </div>
-                    ) : (
-                      <>
-                        {!canUnlockDay ? (
-                          <>
-                            <div
-                              role="radiogroup"
-                              aria-label="Lock type"
-                              className="grid min-w-0 grid-cols-3 gap-1 sm:grid-cols-1"
-                            >
-                              {LOCK_KINDS.map((opt) => {
-                                const active = lockKind === opt.id
-                                return (
-                                  <button
-                                    key={opt.id}
-                                    type="button"
-                                    role="radio"
-                                    aria-checked={active}
-                                    title={opt.hint}
-                                    disabled={lockBusy !== null}
-                                    onClick={() =>
-                                      setLockKind((prev) =>
-                                        prev === opt.id ? null : opt.id,
-                                      )
-                                    }
-                                    className={cn(
-                                      "flex h-7 min-w-0 items-center justify-center truncate rounded-md border px-1.5",
-                                      "text-[11px] tracking-[-0.01em] transition-colors sm:h-8 sm:justify-start sm:px-2 sm:text-[12px]",
-                                      active
-                                        ? "border-neutral-900 bg-neutral-900 text-white"
-                                        : "border-black/[0.08] bg-white text-neutral-600 hover:border-black/[0.14]",
-                                      "disabled:pointer-events-none disabled:opacity-40",
-                                      "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
-                                    )}
-                                  >
-                                    {opt.label}
-                                  </button>
-                                )
-                              })}
-                            </div>
-
-                            <Input
-                              type="text"
-                              value={lockReason}
-                              onChange={(e) => setLockReason(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault()
-                                  if (lockKind && !lockBusy) {
-                                    void applyDayLock("restrict")
-                                  }
-                                }
-                              }}
-                              placeholder={
-                                lockKind === "holiday"
-                                  ? "Note (Holiday)"
-                                  : "Note (optional)"
-                              }
-                              maxLength={120}
-                              autoComplete="off"
-                              disabled={lockBusy !== null || !lockKind}
-                              className="h-7 rounded-md border-black/[0.08] bg-white text-[12px] shadow-none sm:h-8 sm:text-[13px]"
-                            />
-                          </>
-                        ) : null}
-
-                        {dayLockHint ? (
-                          <p
-                            id="day-lock-hint"
-                            className="text-[10.5px] leading-snug tracking-[-0.01em] text-neutral-400"
-                          >
-                            {dayLockHint}
-                          </p>
-                        ) : null}
-
-                        <button
-                          type="button"
-                          aria-describedby={
-                            dayLockHint ? "day-lock-hint" : undefined
-                          }
-                          disabled={lockBusy !== null}
-                          onClick={() => {
-                            if (canUnlockDay) {
-                              void applyDayLock("available")
-                              return
-                            }
-                            if (!lockKind) {
-                              toast({
-                                title: "Choose a type",
-                                description:
-                                  "Select General, AP exam, or Holiday.",
-                              })
-                              return
-                            }
-                            void applyDayLock("restrict")
-                          }}
-                          className={cn(
-                            "mt-auto inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md",
-                            "text-[12px] tracking-[-0.01em] transition-colors",
-                            canUnlockDay
-                              ? "border border-black/[0.08] bg-white text-neutral-700 hover:bg-neutral-50 hover:text-neutral-950"
-                              : dayLockActionReady
-                                ? "bg-neutral-900 text-white hover:bg-neutral-800"
-                                : "border border-black/[0.06] bg-white text-neutral-400",
-                            "disabled:pointer-events-none disabled:opacity-40",
-                            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
-                          )}
-                        >
-                          {lockBusy !== null ? (
-                            <Loader2 className="size-3.5 animate-spin" />
-                          ) : canUnlockDay ? (
-                            "Unlock day"
-                          ) : (
-                            <>
-                              <Lock className="size-3" strokeWidth={2} />
-                              Lock day
-                            </>
-                          )}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                ) : null}
-              </div>
+              <Calendar
+                mode="single"
+                selected={parseLocalYmd(date)}
+                defaultMonth={parseLocalYmd(date)}
+                onSelect={(val) => {
+                  if (!val) return
+                  setDate(format(val, "yyyy-MM-dd"))
+                  setDatePickerOpen(false)
+                }}
+                disabled={(day) => {
+                  if (
+                    isTeacherWindowEnforced &&
+                    format(day, "yyyy-MM-dd") > lastBookableDate
+                  ) {
+                    return true
+                  }
+                  return false
+                }}
+              />
             </PopoverContent>
           </Popover>
 
@@ -1039,7 +616,7 @@ export function DailyBoard({
               </p>
               <p className="mt-1.5 max-w-[18rem] text-[12px] leading-relaxed tracking-[-0.01em] text-neutral-500">
                 {session.role === "admin"
-                  ? "Add laptop carts in Inventory to open the schedule for booking and day locks."
+                  ? "Add laptop carts in Inventory to open the schedule for booking."
                   : "The schedule opens once an administrator adds laptop carts."}
               </p>
               {session.role === "admin" ? (

@@ -393,14 +393,14 @@ function CartsGrid({
         </div>
       </div>
 
-      <AnimatePresence mode="popLayout" initial={false}>
+      <AnimatePresence mode="wait" initial={false}>
         {sortedCarts.length === 0 ? (
           <motion.div
             key="empty"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
             className="flex flex-col items-center rounded-2xl border border-dashed border-neutral-200/80 bg-white px-6 py-16 text-center"
           >
             <p className="text-[13.5px] font-medium tracking-[-0.015em] text-neutral-950">
@@ -412,7 +412,7 @@ function CartsGrid({
             <button
               type="button"
               onClick={() => setEditor({ mode: "create" })}
-              className="mt-5 inline-flex h-8 items-center gap-1.5 rounded-md bg-neutral-950 px-3.5 text-[12.5px] font-medium text-white transition-opacity duration-200 hover:opacity-90"
+              className="mt-5 inline-flex h-8 items-center gap-1.5 rounded-md bg-neutral-950 px-3.5 text-[12.5px] font-medium text-white motion-micro hover:opacity-90"
             >
               <Plus className="size-3.5" strokeWidth={1.75} />
               Add first cart
@@ -421,10 +421,13 @@ function CartsGrid({
         ) : (
           <motion.div
             key="grid"
-            layout
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
             className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
           >
-            <AnimatePresence mode="popLayout" initial={false}>
+            <AnimatePresence initial={false}>
               {sortedCarts.map((cart) => {
                 const visualStatus =
                   optimisticStatusById[cart.id] ?? cart.status
@@ -434,27 +437,13 @@ function CartsGrid({
                 return (
                   <motion.div
                     key={cart.id}
-                    layout
-                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{
-                      opacity: 0,
-                      scale: 0.96,
-                      y: -6,
-                      transition: {
-                        duration: 0.28,
-                        ease: [0.16, 1, 0.3, 1],
-                      },
-                    }}
-                    transition={{
-                      layout: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
-                      opacity: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
-                      y: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
-                      scale: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
-                    }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                    transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
                     className={cn(
                       "group relative flex flex-col justify-between overflow-hidden rounded-2xl border bg-white p-4 pl-5",
-                      "transition-[border-color,box-shadow,background-color] duration-200 ease-out",
+                      "motion-fast",
                       paused
                         ? "border-neutral-200/80 bg-[#fafafa]"
                         : "border-[var(--hairline-strong)] shadow-[var(--shadow-surface)] hover:border-neutral-300/90 hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_20px_rgba(0,0,0,0.04)]",
@@ -488,7 +477,7 @@ function CartsGrid({
                         className={cn(
                           "flex shrink-0 items-center gap-0.5",
                           "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100",
-                          "transition-opacity duration-200 ease-out",
+                          "motion-micro",
                         )}
                       >
                         <button
@@ -498,7 +487,7 @@ function CartsGrid({
                           onClick={() => setEditor({ mode: "edit", cart })}
                           className={cn(
                             "flex size-7 items-center justify-center rounded-md",
-                            "text-neutral-300 transition-colors duration-200",
+                            "text-neutral-300 motion-micro",
                             "hover:bg-neutral-100 hover:text-neutral-700",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
                           )}
@@ -512,7 +501,7 @@ function CartsGrid({
                           onClick={() => setDeletingCart(cart)}
                           className={cn(
                             "flex size-7 items-center justify-center rounded-md",
-                            "text-neutral-300 transition-colors duration-200",
+                            "text-neutral-300 motion-micro",
                             "hover:bg-red-50 hover:text-red-600",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/15",
                           )}
@@ -529,7 +518,7 @@ function CartsGrid({
                         onClick={() => toggle(cart)}
                         className={cn(
                           "inline-flex h-8 min-w-[4.75rem] items-center justify-center gap-1.5 rounded-full px-3.5",
-                          "text-[12px] font-medium tracking-[-0.01em] transition-colors duration-200",
+                          "text-[12px] font-medium tracking-[-0.01em] motion-micro",
                           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
                           "disabled:pointer-events-none disabled:opacity-40",
                           paused
@@ -1824,7 +1813,7 @@ function BookingsTable({
                 </button>
               </PopoverTrigger>
               <PopoverContent
-                className="w-auto rounded-xl border-[var(--hairline-strong)] p-0 shadow-[var(--shadow-soft)]"
+                className="w-auto overflow-hidden rounded-xl border border-black/[0.08] bg-white p-0 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_rgba(0,0,0,0.08)]"
                 align="start"
               >
                 <Calendar
@@ -3152,7 +3141,10 @@ function DailyBoardLite({ bookings, carts }: { bookings: Booking[]; carts: Cart[
               {format(parseISO(activeDate), "EEE, MMM d, yyyy")}
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto rounded-xl p-0 shadow-lg" align="start">
+          <PopoverContent
+            className="w-auto overflow-hidden rounded-xl border border-black/[0.08] bg-white p-0 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_rgba(0,0,0,0.08)]"
+            align="start"
+          >
             <Calendar
               mode="single"
               selected={parseISO(activeDate)}

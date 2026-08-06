@@ -127,6 +127,11 @@ export async function wipeOperationalData(): Promise<Result> {
   forceEmptyPlatformState();
   // Local sandbox: restore demo personas + starter carts after an inventory wipe.
   if (isLocalDemoMode()) {
+    try {
+      localStorage.removeItem("cubicle_local_demo_seed_revision");
+    } catch {
+      // ignore
+    }
     ensureLocalDemoSandbox();
   }
   return { ok: true };
