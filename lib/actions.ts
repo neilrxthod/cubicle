@@ -245,70 +245,31 @@ export async function createBooking(
     sharePendingAvatarUrl = partner.avatarUrl;
   }
 
-  const { bookingOccupiesUser } = await import("@/lib/types");
+  const { canTeacherBookSlot } = await import("@/lib/booking/slot-rules");
 
-  function teacherBusyThisPeriod(userId: string): boolean {
-    return state.bookings.some(
-      (booking) =>
-        booking.date === date &&
-        booking.period === period &&
-        bookingOccupiesUser(booking, userId),
-    );
-  }
-
-  function teacherDaySlotCount(userId: string): number {
-    const dayKey = date.slice(0, 10);
-    return state.bookings.filter(
-      (booking) =>
-        booking.date.slice(0, 10) === dayKey &&
-        bookingOccupiesUser(booking, userId),
-    ).length;
-  }
-
-  // One cart per teacher per period — includes shared slots.
+  // Teachers: up to 2 carts same period (or cross-period within daily cap).
+  // Admins: unlimited.
   if (session.role !== "admin") {
-    if (teacherBusyThisPeriod(session.id)) {
-      return {
-        ok: false,
-        error:
-          "You already have a cart this period. Cancel or reassign that booking first.",
-      };
-    }
-
-    const maxSlots = Math.min(
-      15,
-      Math.max(1, state.bookingPolicy.maxSlotsPerTeacherPerDay ?? 5),
-    );
-    if (teacherDaySlotCount(session.id) >= maxSlots) {
-      return {
-        ok: false,
-        error:
-          maxSlots === 1
-            ? "You can book at most 1 cart slot per day. Cancel another booking first."
-            : `You can book at most ${maxSlots} cart slots per day. Cancel another booking first.`,
-      };
-    }
+    const selfCheck = canTeacherBookSlot({
+      bookings: state.bookings,
+      policy: state.bookingPolicy,
+      userId: session.id,
+      date,
+      period,
+    });
+    if (!selfCheck.ok) return selfCheck;
   }
 
-  if (sharePendingId) {
-    if (teacherBusyThisPeriod(sharePendingId)) {
-      return {
-        ok: false,
-        error: `${sharePendingName ?? "That colleague"} already has a cart this period.`,
-      };
-    }
-    if (session.role !== "admin") {
-      const maxSlots = Math.min(
-        15,
-        Math.max(1, state.bookingPolicy.maxSlotsPerTeacherPerDay ?? 5),
-      );
-      if (teacherDaySlotCount(sharePendingId) >= maxSlots) {
-        return {
-          ok: false,
-          error: `${sharePendingName ?? "That colleague"} is at their daily cart limit.`,
-        };
-      }
-    }
+  if (sharePendingId && session.role !== "admin") {
+    const partnerCheck = canTeacherBookSlot({
+      bookings: state.bookings,
+      policy: state.bookingPolicy,
+      userId: sharePendingId,
+      userLabel: sharePendingName ?? "That colleague",
+      date,
+      period,
+    });
+    if (!partnerCheck.ok) return partnerCheck;
   }
 
   const restricted = state.slotRestrictions.find(
@@ -450,19 +411,25 @@ export async function acceptShareInvite(bookingId: string): Promise<Result> {
     return { ok: false, error: "This share request is not for you." };
   }
 
-  const { bookingOccupiesUser } = await import("@/lib/types");
-  const conflict = state.bookings.some(
-    (b) =>
-      b.id !== booking.id &&
-      b.date === booking.date &&
-      b.period === booking.period &&
-      bookingOccupiesUser(b, session.id),
-  );
-  if (conflict) {
-    return {
-      ok: false,
-      error: "You already have a cart this period. Decline or free a slot first.",
-    };
+  if (session.role !== "admin") {
+    const { canTeacherBookSlot } = await import("@/lib/booking/slot-rules");
+    // Accepting a share counts as occupying this period — exclude this booking.
+    const withoutThis = state.bookings.filter((b) => b.id !== booking.id);
+    const check = canTeacherBookSlot({
+      bookings: withoutThis,
+      policy: state.bookingPolicy,
+      userId: session.id,
+      date: booking.date,
+      period: booking.period,
+    });
+    if (!check.ok) {
+      return {
+        ok: false,
+        error:
+          check.error ||
+          "You already have the max carts this period. Decline or free a slot first.",
+      };
+    }
   }
 
   if (isRemoteEnabled()) {
@@ -1225,6 +1192,59 @@ export async function deleteBookings(bookingIds: string[]): Promise<Result> {
   if (!__demo.ok) return __demo;
   mutate((draft) => {
     draft.bookings = draft.bookings.filter((entry) => !ids.has(entry.id));
+  });
+  return { ok: true };
+}
+
+/**
+ * Rename the purpose / multi-book tag on a booking (className + subject).
+ * Owner or admin only.
+ */
+export async function updateBookingLabel(
+  bookingId: string,
+  label: string,
+): Promise<Result> {
+  const session = requireSession();
+  if (!session) return { ok: false, error: "Sign in required." };
+
+  const next = label.trim().slice(0, 40);
+  if (!next) return { ok: false, error: "Tag cannot be empty." };
+
+  const state = getState();
+  const booking = state.bookings.find((entry) => entry.id === bookingId);
+  if (!booking) return { ok: false, error: "Booking not found." };
+
+  const isOwner =
+    booking.teacherId === session.id || booking.sharedWithId === session.id;
+  if (!isOwner && session.role !== "admin") {
+    return { ok: false, error: "Not allowed to rename this tag." };
+  }
+
+  const editor = {
+    id: session.id,
+    name: session.name,
+    avatarUrl: session.avatarUrl,
+  };
+
+  if (isRemoteEnabled()) {
+    const { dbUpdateBookingLabel } = await import("@/lib/supabase/platform-api");
+    const { error } = await dbUpdateBookingLabel(bookingId, next, editor);
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
+  mutate((draft) => {
+    const target = draft.bookings.find((entry) => entry.id === bookingId);
+    if (target) {
+      target.className = next;
+      target.subject = next;
+      target.lastEditedById = editor.id;
+      target.lastEditedByName = editor.name;
+      target.lastEditedByAvatarUrl = editor.avatarUrl;
+      target.lastEditedAt = new Date().toISOString();
+    }
   });
   return { ok: true };
 }

@@ -900,6 +900,44 @@ export async function dbDeleteRestrictionsMatching(
 const MAX_SLOTS_MIGRATION_HINT =
   "Run supabase/booking-policy-max-slots.sql in the Supabase SQL Editor (then retry Save).";
 
+/** Update booking purpose / multi-book tag (class_name + subject). */
+export async function dbUpdateBookingLabel(
+  bookingId: string,
+  label: string,
+  editor?: { id?: string; name?: string; avatarUrl?: string },
+): Promise<{ error?: string }> {
+  const supabase = client();
+  const editedAt = new Date().toISOString();
+  const payload: Record<string, unknown> = {
+    class_name: label,
+    subject: label,
+  };
+  if (editor?.id) {
+    payload.last_edited_by_id = editor.id;
+    payload.last_edited_by_name = editor.name ?? null;
+    payload.last_edited_by_avatar_url = editor.avatarUrl ?? null;
+    payload.last_edited_at = editedAt;
+  }
+  const { error } = await supabase
+    .from("bookings")
+    .update(payload)
+    .eq("id", bookingId);
+  if (error) {
+    // Retry without editor columns if migration missing.
+    const msg = error.message.toLowerCase();
+    if (msg.includes("last_edited")) {
+      const retry = await supabase
+        .from("bookings")
+        .update({ class_name: label, subject: label })
+        .eq("id", bookingId);
+      if (retry.error) return { error: retry.error.message };
+      return {};
+    }
+    return { error: error.message };
+  }
+  return {};
+}
+
 export async function dbUpdateBookingPolicy(input: {
   maxAdvanceDays?: number;
   maxSlotsPerTeacherPerDay?: number;

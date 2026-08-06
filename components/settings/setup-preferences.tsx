@@ -226,8 +226,8 @@ function AdminBookingWindow({ user }: { user: SessionUser }) {
           </p>
           <p className="mt-1 text-[12.5px] leading-snug text-neutral-400">
             Cap how many cart periods a teacher can book on one school day
-            (1–{MAX_SLOTS_PER_TEACHER_PER_DAY}). Teachers still get at most one
-            cart per period.
+            (1–{MAX_SLOTS_PER_TEACHER_PER_DAY}). Teachers may hold up to two
+            carts in the same period.
           </p>
         </div>
 

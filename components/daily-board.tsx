@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
@@ -18,6 +18,11 @@ import {
   bookingInvolvesUser,
   getBookingPurpose,
 } from "@/lib/types"
+import {
+  bookingBoardTagText,
+  canTeacherBookSlot,
+  DEFAULT_ADMIN_MULTI_TAG,
+} from "@/lib/booking/slot-rules"
 
 function restrictionLabel(restriction: SlotRestriction): string {
   if (restriction.category === "ap_exam") return "AP exam"
@@ -48,10 +53,13 @@ const ManageBookingDialog = dynamic(
 import {
   acceptShareInvite,
   cancelBooking,
+  createBooking,
   declineShareInvite,
+  updateBookingLabel,
 } from "@/lib/actions"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Switch } from "@/components/ui/switch"
 import {
   ArrowLeftRight,
   Calendar as CalendarIcon,
@@ -235,6 +243,15 @@ export function DailyBoard({
   const [shareInviteBusyId, setShareInviteBusyId] = useState<string | null>(
     null,
   )
+  /** Admin multi-book: click open slots to book instantly. */
+  const [multiMode, setMultiMode] = useState(false)
+  const [multiTag, setMultiTag] = useState(DEFAULT_ADMIN_MULTI_TAG)
+  const multiBusy = useRef(false)
+  const [renamingBookingId, setRenamingBookingId] = useState<string | null>(
+    null,
+  )
+  const [renameDraft, setRenameDraft] = useState("")
+  const [renameBusy, setRenameBusy] = useState(false)
 
   const isAdmin = session.role === "admin"
 
@@ -336,6 +353,59 @@ export function DailyBoard({
     setDate(next)
   }
 
+  async function quickMultiBook(cart: Cart, period: Period) {
+    if (multiBusy.current) return
+    multiBusy.current = true
+    try {
+      const formData = new FormData()
+      formData.set("cartId", cart.id)
+      formData.set("date", date)
+      formData.set("period", period)
+      const tag = multiTag.trim() || DEFAULT_ADMIN_MULTI_TAG
+      formData.set("className", tag)
+      formData.set("subject", tag)
+      const res = await createBooking(formData)
+      if (res && "error" in res && res.error) {
+        toast({
+          title: "Could not book",
+          description: res.error,
+          variant: "destructive",
+        })
+        router.refresh()
+        return
+      }
+      // Quiet multi-book — no toast spam on every click.
+      router.refresh()
+    } finally {
+      multiBusy.current = false
+    }
+  }
+
+  async function commitTagRename(bookingId: string) {
+    const next = renameDraft.trim()
+    if (!next) {
+      setRenamingBookingId(null)
+      return
+    }
+    setRenameBusy(true)
+    try {
+      const res = await updateBookingLabel(bookingId, next)
+      if (res && "error" in res && res.error) {
+        toast({
+          title: "Could not rename tag",
+          description: res.error,
+          variant: "destructive",
+        })
+        return
+      }
+      setMultiTag(next)
+      setRenamingBookingId(null)
+      router.refresh()
+    } finally {
+      setRenameBusy(false)
+    }
+  }
+
   function onCellClick(cart: Cart, period: Period) {
     if (cart.status === "maintenance") return
 
@@ -401,25 +471,29 @@ export function DailyBoard({
       return
     }
     if (session.role !== "admin") {
-      const maxSlots = Math.min(
-        15,
-        Math.max(1, bookingPolicy.maxSlotsPerTeacherPerDay ?? 5),
-      )
-      const mineToday = bookingsForDate.filter((b) =>
-        bookingInvolvesUser(b, session.id),
-      ).length
-      if (mineToday >= maxSlots) {
+      const check = canTeacherBookSlot({
+        bookings,
+        policy: bookingPolicy,
+        userId: session.id,
+        date,
+        period,
+      })
+      if (!check.ok) {
         toast({
-          title: "Daily limit reached",
-          description:
-            maxSlots === 1
-              ? "You can book at most 1 cart slot per day."
-              : `You can book at most ${maxSlots} cart slots per day.`,
+          title: "Limit reached",
+          description: check.error,
           variant: "destructive",
         })
         return
       }
     }
+
+    // Admin Multiple mode: book on every open-slot click (no dialog).
+    if (isAdmin && multiMode) {
+      void quickMultiBook(cart, period)
+      return
+    }
+
     setBookDialog({ cart, period })
   }
 
@@ -460,13 +534,80 @@ export function DailyBoard({
               Booking through {format(parseISO(lastBookableDate), "MMM d")}
             </p>
           ) : null}
+          {/* Multi mode status — lives with the date, not the chrome */}
+          {isAdmin && multiMode ? (
+            <p className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-[12px] tracking-[-0.01em] text-neutral-500">
+              <span>Click open slots to book</span>
+              <span aria-hidden className="text-neutral-300">
+                ·
+              </span>
+              <label className="inline-flex min-w-0 items-center gap-1">
+                <span className="shrink-0 text-neutral-400">Tag</span>
+                <input
+                  type="text"
+                  value={multiTag}
+                  onChange={(e) => setMultiTag(e.target.value.slice(0, 18))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+                  }}
+                  aria-label="Booking tag"
+                  placeholder={DEFAULT_ADMIN_MULTI_TAG}
+                  className={cn(
+                    "min-w-[3rem] max-w-[7rem] border-0 bg-transparent p-0",
+                    "text-[12px] font-medium tracking-[-0.01em] text-neutral-900",
+                    "placeholder:font-normal placeholder:text-neutral-300",
+                    "focus-visible:outline-none",
+                    "underline decoration-neutral-200 underline-offset-4",
+                    "focus-visible:decoration-neutral-900",
+                  )}
+                />
+              </label>
+            </p>
+          ) : null}
         </div>
 
-        <div
-          role="group"
-          aria-label="Change board date"
-          className="flex shrink-0 items-center gap-0.5 self-start sm:self-center"
-        >
+        <div className="flex shrink-0 items-center gap-3 self-start sm:self-center">
+          {isAdmin ? (
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="admin-multi-book"
+                className={cn(
+                  "cursor-pointer select-none text-[12.5px] tracking-[-0.015em]",
+                  multiMode
+                    ? "font-medium text-neutral-950"
+                    : "font-normal text-neutral-500",
+                )}
+              >
+                Multi
+              </label>
+              <Switch
+                id="admin-multi-book"
+                checked={multiMode}
+                onCheckedChange={setMultiMode}
+                aria-label="Multi-book mode"
+                className={cn(
+                  "h-[18px] w-[32px] shadow-none",
+                  "data-[state=checked]:bg-neutral-950 data-[state=unchecked]:bg-neutral-200/90",
+                  "[&_[data-slot=switch-thumb]]:size-[14px] [&_[data-slot=switch-thumb]]:shadow-none",
+                  "data-[state=checked]:[&_[data-slot=switch-thumb]]:translate-x-[14px]",
+                  "data-[state=unchecked]:[&_[data-slot=switch-thumb]]:translate-x-[2px]",
+                )}
+              />
+            </div>
+          ) : null}
+
+          {isAdmin ? (
+            <span
+              aria-hidden
+              className="hidden h-4 w-px shrink-0 bg-black/10 sm:block"
+            />
+          ) : null}
+
+          <div
+            role="group"
+            aria-label="Change board date"
+            className="flex items-center gap-0.5"
+          >
           <button
             type="button"
             aria-label="Previous day"
@@ -565,6 +706,7 @@ export function DailyBoard({
               </button>
             </>
           ) : null}
+          </div>
         </div>
       </div>
 
@@ -744,6 +886,14 @@ export function DailyBoard({
                       const classLabel = booking.className?.trim()
                       const purpose = getBookingPurpose(booking)
                       const purposeTag = purpose?.tag
+                      const boardTag = bookingBoardTagText(
+                        booking,
+                        purposeTag ?? null,
+                      )
+                      const canRenameTag =
+                        isAdmin &&
+                        (booking.teacherId === session.id || multiMode)
+                      const isRenaming = renamingBookingId === booking.id
                       // Anyone (teacher or admin) may request a swap on someone else's slot.
                       const isSwapTarget = !isInvolved && !inviteForMe
                       const hasPendingSwap =
@@ -788,18 +938,79 @@ export function DailyBoard({
                               : "bg-[#211d1d]/10 hover:bg-[#211d1d]/15",
                           )}
                         >
-                          {purposeTag && purpose ? (
-                            <span
-                              className={cn(
-                                "pointer-events-none absolute top-1 right-1 z-[2]",
-                                "rounded px-1 py-px text-[8.5px] font-semibold uppercase tracking-[0.04em]",
-                                isInvolved || inviteForMe
-                                  ? purpose.tagClassOnDark
-                                  : purpose.tagClass,
-                              )}
-                            >
-                              {purposeTag}
-                            </span>
+                          {boardTag ? (
+                            isRenaming ? (
+                              <input
+                                autoFocus
+                                value={renameDraft}
+                                disabled={renameBusy}
+                                maxLength={24}
+                                onChange={(e) =>
+                                  setRenameDraft(e.target.value)
+                                }
+                                onBlur={() => {
+                                  void commitTagRename(booking.id)
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault()
+                                    void commitTagRename(booking.id)
+                                  }
+                                  if (e.key === "Escape") {
+                                    e.preventDefault()
+                                    setRenamingBookingId(null)
+                                  }
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className={cn(
+                                  "absolute top-0.5 right-0.5 z-[3] h-5 w-[4.5rem] rounded px-1",
+                                  "border border-white/30 bg-neutral-950 text-[9px] font-semibold uppercase",
+                                  "tracking-[0.04em] text-white shadow-sm",
+                                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40",
+                                )}
+                              />
+                            ) : (
+                              <span
+                                role={canRenameTag ? "button" : undefined}
+                                tabIndex={canRenameTag ? 0 : undefined}
+                                title={
+                                  canRenameTag
+                                    ? "Double-click to rename tag"
+                                    : boardTag
+                                }
+                                onDoubleClick={(e) => {
+                                  if (!canRenameTag) return
+                                  e.stopPropagation()
+                                  e.preventDefault()
+                                  setRenameDraft(boardTag)
+                                  setRenamingBookingId(booking.id)
+                                }}
+                                onKeyDown={(e) => {
+                                  if (!canRenameTag) return
+                                  if (e.key === "Enter" || e.key === "F2") {
+                                    e.stopPropagation()
+                                    setRenameDraft(boardTag)
+                                    setRenamingBookingId(booking.id)
+                                  }
+                                }}
+                                className={cn(
+                                  "absolute top-1 right-1 z-[2]",
+                                  "rounded px-1 py-px text-[8.5px] font-semibold uppercase tracking-[0.04em]",
+                                  canRenameTag
+                                    ? "cursor-text select-none"
+                                    : "pointer-events-none",
+                                  purpose?.tag
+                                    ? isInvolved || inviteForMe
+                                      ? purpose.tagClassOnDark
+                                      : purpose.tagClass
+                                    : isInvolved || inviteForMe
+                                      ? "bg-white/15 text-white"
+                                      : "bg-neutral-700 text-white",
+                                )}
+                              >
+                                {boardTag}
+                              </span>
+                            )
                           ) : null}
 
                           {/* Pending share invite — friend request icon for invitee */}
@@ -1056,6 +1267,11 @@ export function DailyBoard({
                         key={period}
                         type="button"
                         onClick={() => onCellClick(cart, period)}
+                        title={
+                          multiMode && isAdmin
+                            ? `Book as “${multiTag.trim() || DEFAULT_ADMIN_MULTI_TAG}”`
+                            : "Book this slot"
+                        }
                         className={cn(
                           cellBase,
                           "group/cell items-center justify-center bg-white",

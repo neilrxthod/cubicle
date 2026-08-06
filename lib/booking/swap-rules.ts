@@ -4,7 +4,7 @@
  * Product model:
  * - Exchange is **same calendar day** (any period the requester already holds).
  * - Requester picks which of their carts to offer when they hold more than one.
- * - Teachers hold **at most one cart per period** — accept checks period conflicts.
+ * - Teachers hold **at most two carts per period** — accept checks period caps.
  * - **Exchange**: both cells swap people (each keeps class/subject/notes).
  * - **Handoff**: requester offers no cart → owner gives the slot away.
  */
@@ -19,6 +19,10 @@ import type {
   SwapRequest,
 } from "@/lib/types";
 import { PERIODS } from "@/lib/types";
+import {
+  countUserPeriodSlots,
+  MAX_CARTS_PER_PERIOD_TEACHER,
+} from "@/lib/booking/slot-rules";
 
 export const SWAP_REASON_MAX = 280;
 
@@ -204,37 +208,34 @@ export function findCounterpartyBooking(
 }
 
 /**
- * After an exchange, neither teacher may end up with two carts in one period.
+ * After an exchange, neither teacher may exceed the per-period cart cap.
  */
 function periodConflictAfterExchange(
   bookings: Booking[],
   target: Booking,
   offered: Booking,
 ): string | null {
-  // Requester keeps offered.period unless offered.period === target.period (pure swap).
   // After: requester owns target cell (target.period); owner owns offered cell (offered.period).
   if (offered.period !== target.period) {
-    const requesterAlreadyOnTargetPeriod = bookings.some(
-      (b) =>
-        b.teacherId === offered.teacherId &&
-        normalizeDate(b.date) === normalizeDate(target.date) &&
-        b.period === target.period &&
-        b.id !== offered.id &&
-        b.id !== target.id,
+    const requesterOnTarget = countUserPeriodSlots(
+      bookings,
+      offered.teacherId,
+      target.date,
+      target.period,
+      [offered.id, target.id],
     );
-    if (requesterAlreadyOnTargetPeriod) {
-      return "You already have a cart that period. Pick a different cart to offer, or cancel that booking first.";
+    if (requesterOnTarget >= MAX_CARTS_PER_PERIOD_TEACHER) {
+      return `You already have ${MAX_CARTS_PER_PERIOD_TEACHER} carts that period. Pick a different cart to offer, or cancel a booking first.`;
     }
-    const ownerAlreadyOnOfferedPeriod = bookings.some(
-      (b) =>
-        b.teacherId === target.teacherId &&
-        normalizeDate(b.date) === normalizeDate(offered.date) &&
-        b.period === offered.period &&
-        b.id !== target.id &&
-        b.id !== offered.id,
+    const ownerOnOffered = countUserPeriodSlots(
+      bookings,
+      target.teacherId,
+      offered.date,
+      offered.period,
+      [offered.id, target.id],
     );
-    if (ownerAlreadyOnOfferedPeriod) {
-      return "They already have a cart in the period you are offering. Choose another cart.";
+    if (ownerOnOffered >= MAX_CARTS_PER_PERIOD_TEACHER) {
+      return `They already have ${MAX_CARTS_PER_PERIOD_TEACHER} carts in the period you are offering. Choose another cart.`;
     }
   }
   return null;
@@ -364,20 +365,18 @@ export function evaluateSwapRequest(input: {
   }
 
   if (wantsHandoff) {
-    // Handoff adds a new slot — cannot already hold this period.
-    if (
-      userHoldsPeriod(
-        bookings,
-        session.id,
-        booking.date,
-        booking.period,
-        booking.id,
-      )
-    ) {
+    // Handoff adds a new slot — stay under the per-period cart cap.
+    const periodCount = countUserPeriodSlots(
+      bookings,
+      session.id,
+      booking.date,
+      booking.period,
+      [booking.id],
+    );
+    if (periodCount >= MAX_CARTS_PER_PERIOD_TEACHER) {
       return {
         ok: false,
-        error:
-          "You already have a cart this period. Offer an exchange instead of a handoff.",
+        error: `You already have ${MAX_CARTS_PER_PERIOD_TEACHER} carts this period. Offer an exchange instead of a handoff.`,
       };
     }
     // Day cap (owner + shared slots).
@@ -521,20 +520,19 @@ export function evaluateSwapAccept(input: {
     return { ok: true, mode: "exchange", counterparty };
   }
 
-  // Handoff: requester must not already hold this period (owned or shared).
+  // Handoff: requester must stay under the per-period cart cap.
   if (
-    userHoldsPeriod(
+    countUserPeriodSlots(
       bookings,
       request.requesterId,
       booking.date,
       booking.period,
-      booking.id,
-    )
+      [booking.id],
+    ) >= MAX_CARTS_PER_PERIOD_TEACHER
   ) {
     return {
       ok: false,
-      error:
-        "Requester already has a cart this period — ask them to re-send as an exchange.",
+      error: `Requester already has ${MAX_CARTS_PER_PERIOD_TEACHER} carts this period — ask them to re-send as an exchange.`,
     };
   }
 
