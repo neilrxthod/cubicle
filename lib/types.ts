@@ -98,6 +98,13 @@ export type Booking = {
   sharePendingName?: string;
   sharePendingAvatarUrl?: string;
   /**
+   * Invitee declined a share invite — shown to the booking owner until dismissed.
+   */
+  shareDeclinedById?: string;
+  shareDeclinedByName?: string;
+  shareDeclinedByAvatarUrl?: string;
+  shareDeclinedAt?: string;
+  /**
    * Who last created or changed this slot (teacher booker or admin editor).
    * Shown to all roles so multi-admin edits are visible on the board.
    */

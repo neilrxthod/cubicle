@@ -37,6 +37,10 @@ export type DbBooking = {
   share_pending_id?: string | null;
   share_pending_name?: string | null;
   share_pending_avatar_url?: string | null;
+  share_declined_by_id?: string | null;
+  share_declined_by_name?: string | null;
+  share_declined_by_avatar_url?: string | null;
+  share_declined_at?: string | null;
   last_edited_by_id?: string | null;
   last_edited_by_name?: string | null;
   last_edited_by_avatar_url?: string | null;
@@ -141,6 +145,10 @@ export function mapBooking(row: DbBooking): Booking {
     sharePendingId: row.share_pending_id ?? undefined,
     sharePendingName: row.share_pending_name ?? undefined,
     sharePendingAvatarUrl: row.share_pending_avatar_url ?? undefined,
+    shareDeclinedById: row.share_declined_by_id ?? undefined,
+    shareDeclinedByName: row.share_declined_by_name ?? undefined,
+    shareDeclinedByAvatarUrl: row.share_declined_by_avatar_url ?? undefined,
+    shareDeclinedAt: row.share_declined_at ?? undefined,
     lastEditedById: row.last_edited_by_id ?? undefined,
     lastEditedByName: row.last_edited_by_name ?? undefined,
     lastEditedByAvatarUrl: row.last_edited_by_avatar_url ?? undefined,

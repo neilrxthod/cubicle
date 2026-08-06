@@ -439,6 +439,7 @@ export async function acceptShareInvite(bookingId: string): Promise<Result> {
       sharedWithName: session.name,
       sharedWithAvatarUrl: session.avatarUrl ?? null,
       clearPending: true,
+      clearDeclined: true,
     });
     if (error) return { ok: false, error };
     return refreshRemote();
@@ -455,11 +456,15 @@ export async function acceptShareInvite(bookingId: string): Promise<Result> {
     b.sharePendingId = undefined;
     b.sharePendingName = undefined;
     b.sharePendingAvatarUrl = undefined;
+    b.shareDeclinedById = undefined;
+    b.shareDeclinedByName = undefined;
+    b.shareDeclinedByAvatarUrl = undefined;
+    b.shareDeclinedAt = undefined;
   });
   return { ok: true };
 }
 
-/** Invitee declines a share request. */
+/** Invitee declines a share request (or owner cancels a pending invite). */
 export async function declineShareInvite(bookingId: string): Promise<Result> {
   const session = requireSession();
   if (!session) return { ok: false, error: "Sign in required." };
@@ -474,10 +479,68 @@ export async function declineShareInvite(bookingId: string): Promise<Result> {
     return { ok: false, error: "Not allowed to clear this invite." };
   }
 
+  // Only the invitee declining should notify the owner (not owner cancel).
+  const inviteeDeclined = booking.sharePendingId === session.id;
+
   if (isRemoteEnabled()) {
     const { dbResolveShareInvite } = await import("@/lib/supabase/platform-api");
     const { error } = await dbResolveShareInvite(bookingId, {
       clearPending: true,
+      declinedBy: inviteeDeclined
+        ? {
+            id: session.id,
+            name: session.name,
+            avatarUrl: session.avatarUrl ?? null,
+          }
+        : null,
+      clearDeclined: !inviteeDeclined,
+    });
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
+  const demoOk = assertLocalDemoAllowed();
+  if (!demoOk.ok) return demoOk;
+  const now = new Date().toISOString();
+  mutate((draft) => {
+    const b = draft.bookings.find((x) => x.id === bookingId);
+    if (!b) return;
+    b.sharePendingId = undefined;
+    b.sharePendingName = undefined;
+    b.sharePendingAvatarUrl = undefined;
+    if (inviteeDeclined) {
+      b.shareDeclinedById = session.id;
+      b.shareDeclinedByName = session.name;
+      b.shareDeclinedByAvatarUrl = session.avatarUrl;
+      b.shareDeclinedAt = now;
+    } else {
+      b.shareDeclinedById = undefined;
+      b.shareDeclinedByName = undefined;
+      b.shareDeclinedByAvatarUrl = undefined;
+      b.shareDeclinedAt = undefined;
+    }
+  });
+  return { ok: true };
+}
+
+/** Owner dismisses “declined your share” notice. */
+export async function dismissShareDeclineNotice(
+  bookingId: string,
+): Promise<Result> {
+  const session = requireSession();
+  if (!session) return { ok: false, error: "Sign in required." };
+
+  const booking = getState().bookings.find((b) => b.id === bookingId);
+  if (!booking) return { ok: false, error: "Booking not found." };
+  if (booking.teacherId !== session.id && session.role !== "admin") {
+    return { ok: false, error: "Not allowed." };
+  }
+
+  if (isRemoteEnabled()) {
+    const { dbResolveShareInvite } = await import("@/lib/supabase/platform-api");
+    const { error } = await dbResolveShareInvite(bookingId, {
+      clearPending: false,
+      clearDeclined: true,
     });
     if (error) return { ok: false, error };
     return refreshRemote();
@@ -488,9 +551,10 @@ export async function declineShareInvite(bookingId: string): Promise<Result> {
   mutate((draft) => {
     const b = draft.bookings.find((x) => x.id === bookingId);
     if (!b) return;
-    b.sharePendingId = undefined;
-    b.sharePendingName = undefined;
-    b.sharePendingAvatarUrl = undefined;
+    b.shareDeclinedById = undefined;
+    b.shareDeclinedByName = undefined;
+    b.shareDeclinedByAvatarUrl = undefined;
+    b.shareDeclinedAt = undefined;
   });
   return { ok: true };
 }

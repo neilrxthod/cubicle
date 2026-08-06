@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
 import type { Booking, Cart } from "@/lib/types"
 import { bookingHasShareInviteFor } from "@/lib/types"
-import { acceptShareInvite, declineShareInvite } from "@/lib/actions"
+import {
+  acceptShareInvite,
+  declineShareInvite,
+  dismissShareDeclineNotice,
+} from "@/lib/actions"
 import { usePlatformStore } from "@/lib/data/platform-store"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -86,19 +90,33 @@ export function ShareInvitesList({
   const outgoing = bookings.filter(
     (b) => b.teacherId === userId && Boolean(b.sharePendingId),
   )
+  const declined = bookings.filter(
+    (b) =>
+      b.teacherId === userId &&
+      Boolean(b.shareDeclinedById) &&
+      !b.sharePendingId,
+  )
 
-  if (incoming.length === 0 && outgoing.length === 0) return null
+  if (
+    incoming.length === 0 &&
+    outgoing.length === 0 &&
+    declined.length === 0
+  ) {
+    return null
+  }
 
   async function run(
     bookingId: string,
-    action: "accept" | "decline" | "cancel",
+    action: "accept" | "decline" | "cancel" | "dismiss",
   ) {
     setBusyId(bookingId)
     try {
       const res =
         action === "accept"
           ? await acceptShareInvite(bookingId)
-          : await declineShareInvite(bookingId)
+          : action === "dismiss"
+            ? await dismissShareDeclineNotice(bookingId)
+            : await declineShareInvite(bookingId)
       if (res && "error" in res && res.error) {
         toast({
           title:
@@ -106,7 +124,9 @@ export function ShareInvitesList({
               ? "Could not accept"
               : action === "cancel"
                 ? "Could not cancel"
-                : "Could not decline",
+                : action === "dismiss"
+                  ? "Could not dismiss"
+                  : "Could not decline",
           description: res.error,
           variant: "destructive",
         })
@@ -118,7 +138,9 @@ export function ShareInvitesList({
             ? "Share accepted"
             : action === "cancel"
               ? "Invite cancelled"
-              : "Invite declined",
+              : action === "dismiss"
+                ? "Dismissed"
+                : "Invite declined",
       })
       router.refresh()
     } finally {
@@ -194,6 +216,60 @@ export function ShareInvitesList({
                 {busy ? "…" : "Accept"}
               </button>
             </div>
+          </article>
+        )
+      })}
+
+      {/* Declined — owner notified */}
+      {declined.map((booking) => {
+        const cartName = cartMap.get(booking.cartId)?.name ?? "Cart"
+        const name =
+          booking.shareDeclinedByName?.trim() || "Someone"
+        const avatarSrc =
+          (booking.shareDeclinedById
+            ? avatarByUserId.get(booking.shareDeclinedById)
+            : undefined) ?? booking.shareDeclinedByAvatarUrl
+        const busy = busyId === booking.id
+
+        return (
+          <article
+            key={`declined-${booking.id}`}
+            className={cn(
+              "flex flex-col gap-3 rounded-xl border border-red-200/90 bg-white p-3.5 sm:flex-row sm:items-center sm:gap-4 sm:p-4",
+              "shadow-[0_1px_0_rgba(0,0,0,0.03)]",
+              "border-l-[3px] border-l-red-500",
+            )}
+          >
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <Avatar name={name} src={avatarSrc} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] leading-snug tracking-[-0.01em] text-neutral-950">
+                  <span className="font-semibold">{name}</span>
+                  <span className="font-normal text-neutral-500">
+                    {" "}
+                    declined your cart share
+                  </span>
+                </p>
+                <p className="mt-0.5 truncate text-[12px] tabular-nums text-neutral-400">
+                  {slotMeta(booking, cartName)}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              disabled={blocked}
+              onClick={() => void run(booking.id, "dismiss")}
+              className={cn(
+                "h-9 w-full shrink-0 rounded-lg border border-neutral-200 bg-white px-3 sm:w-auto",
+                "text-[12.5px] font-medium text-neutral-600",
+                "transition-colors hover:bg-neutral-50 hover:text-neutral-950",
+                "disabled:opacity-50",
+                "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-900/15",
+              )}
+            >
+              {busy ? "…" : "Dismiss"}
+            </button>
           </article>
         )
       })}
