@@ -92,8 +92,16 @@ function parseLocalYmd(ymd: string): Date {
   return new Date(y ?? 0, (m ?? 1) - 1, d ?? 1)
 }
 
+/**
+ * Period cell: 1px white strip around each slot (all sides).
+ * Fill sits in the inner face.
+ */
 const cellBase =
-  "flex min-h-14 min-w-0 border-l border-[var(--hairline)] motion-micro sm:min-h-16"
+  "box-border flex min-h-14 min-w-0 border-l border-[var(--hairline)] bg-white p-px motion-micro sm:min-h-16"
+
+/** Slot fill inside the white strip. */
+const slotFace =
+  "relative flex h-full w-full min-h-0 flex-1 items-center justify-center overflow-hidden"
 
 /** Dominant face in the slot; cell height tracks so neighbors stay clear. */
 const SLOT_AVATAR =
@@ -848,15 +856,16 @@ export function DailyBoard({
 
                     if (isMaintenance) {
                       return (
-                        <div
-                          key={period}
-                          title="Cart paused — not bookable"
-                          className={cn(
-                            cellBase,
-                            "items-center justify-center bg-neutral-50 text-neutral-300",
-                          )}
-                        >
-                          <Wrench className="size-3.5" strokeWidth={1.25} />
+                        <div key={period} className={cellBase}>
+                          <div
+                            title="Cart paused — not bookable"
+                            className={cn(
+                              slotFace,
+                              "bg-neutral-50 text-neutral-300",
+                            )}
+                          >
+                            <Wrench className="size-3.5" strokeWidth={1.25} />
+                          </div>
                         </div>
                       )
                     }
@@ -940,11 +949,11 @@ export function DailyBoard({
                       const inviteBusy = shareInviteBusyId === booking.id
 
                       return (
+                        <div key={period} className={cellBase}>
                         <div
-                          key={period}
                           className={cn(
-                            cellBase,
-                            "group/slot relative items-center justify-center p-1.5",
+                            slotFace,
+                            "group/slot",
                             isInvolved || inviteForMe
                               ? "bg-[#211d1d] hover:bg-[#2a2525]"
                               : "bg-[#211d1d]/10 hover:bg-[#211d1d]/15",
@@ -1184,104 +1193,109 @@ export function DailyBoard({
                             </div>
                           ) : null}
                         </div>
+                        </div>
                       )
                     }
 
                     if (isRestricted && session.role !== "admin") {
                       return (
-                        <div
-                          key={period}
-                          title={restrictionTitle}
-                          className={cn(
-                            cellBase,
-                            "flex-col items-center justify-center gap-1 bg-[repeating-linear-gradient(-45deg,transparent,transparent_3px,rgba(0,0,0,0.03)_3px,rgba(0,0,0,0.03)_4px)] text-neutral-400",
-                          )}
-                        >
-                          <Lock className="size-3" strokeWidth={1.25} />
-                          <span className="text-[9px] font-medium uppercase tracking-[0.14em] text-neutral-400">
-                            {restriction?.category === "ap_exam"
-                              ? "AP"
-                              : restriction?.category === "other" &&
-                                  (restriction.reason ?? "")
-                                    .toLowerCase()
-                                    .includes("holiday")
-                                ? "Off"
-                                : "Locked"}
-                          </span>
+                        <div key={period} className={cellBase}>
+                          <div
+                            title={restrictionTitle}
+                            className={cn(
+                              slotFace,
+                              "flex-col gap-1 bg-[repeating-linear-gradient(-45deg,transparent,transparent_3px,rgba(0,0,0,0.03)_3px,rgba(0,0,0,0.03)_4px)] text-neutral-400",
+                            )}
+                          >
+                            <Lock className="size-3" strokeWidth={1.25} />
+                            <span className="text-[9px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+                              {restriction?.category === "ap_exam"
+                                ? "AP"
+                                : restriction?.category === "other" &&
+                                    (restriction.reason ?? "")
+                                      .toLowerCase()
+                                      .includes("holiday")
+                                  ? "Off"
+                                  : "Locked"}
+                            </span>
+                          </div>
                         </div>
                       )
                     }
 
                     if (isRestricted && session.role === "admin") {
                       return (
-                        <button
-                          key={period}
-                          type="button"
-                          onClick={() => onCellClick(cart, period)}
-                          title={`${restrictionTitle} — admins can still book`}
-                          className={cn(
-                            cellBase,
-                            "flex-col items-center justify-center gap-1",
-                            "bg-[repeating-linear-gradient(-45deg,transparent,transparent_3px,rgba(0,0,0,0.03)_3px,rgba(0,0,0,0.03)_4px)]",
-                            "text-neutral-500",
-                            "hover:bg-neutral-100 hover:text-neutral-950",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-900/10",
-                          )}
-                        >
-                          <Lock className="size-3" strokeWidth={1.25} />
-                          <span className="text-[9px] font-medium uppercase tracking-[0.14em]">
-                            Admin
-                          </span>
-                        </button>
+                        <div key={period} className={cellBase}>
+                          <button
+                            type="button"
+                            onClick={() => onCellClick(cart, period)}
+                            title={`${restrictionTitle} — admins can still book`}
+                            className={cn(
+                              slotFace,
+                              "flex-col gap-1",
+                              "bg-[repeating-linear-gradient(-45deg,transparent,transparent_3px,rgba(0,0,0,0.03)_3px,rgba(0,0,0,0.03)_4px)]",
+                              "text-neutral-500",
+                              "hover:bg-neutral-100 hover:text-neutral-950",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-900/10",
+                            )}
+                          >
+                            <Lock className="size-3" strokeWidth={1.25} />
+                            <span className="text-[9px] font-medium uppercase tracking-[0.14em]">
+                              Admin
+                            </span>
+                          </button>
+                        </div>
                       )
                     }
 
                     if (!canBookOpenSlots) {
                       return (
-                        <div
-                          key={period}
-                          title={
-                            isPastDate
-                              ? "Past date — cannot book"
-                              : "Outside booking window"
-                          }
-                          className={cn(
-                            cellBase,
-                            "items-center justify-center bg-white text-neutral-200",
-                          )}
-                        >
-                          <span className="text-[11px] font-light">—</span>
+                        <div key={period} className={cellBase}>
+                          <div
+                            title={
+                              isPastDate
+                                ? "Past date — cannot book"
+                                : "Outside booking window"
+                            }
+                            className={cn(
+                              slotFace,
+                              "bg-neutral-50/80 text-neutral-200",
+                            )}
+                          >
+                            <span className="text-[11px] font-light">—</span>
+                          </div>
                         </div>
                       )
                     }
 
                     return (
-                      <button
-                        key={period}
-                        type="button"
-                        onClick={() => onCellClick(cart, period)}
-                        title={
-                          multiMode && isAdmin
-                            ? `Book as “${multiTag.trim() || DEFAULT_ADMIN_MULTI_TAG}”`
-                            : "Book this slot"
-                        }
-                        className={cn(
-                          cellBase,
-                          "group/cell items-center justify-center bg-white",
-                          "hover:bg-neutral-950",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-900/15",
-                        )}
-                      >
-                        <span
+                      <div key={period} className={cellBase}>
+                        <button
+                          type="button"
+                          onClick={() => onCellClick(cart, period)}
+                          title={
+                            multiMode && isAdmin
+                              ? `Book as “${multiTag.trim() || DEFAULT_ADMIN_MULTI_TAG}”`
+                              : "Book this slot"
+                          }
                           className={cn(
-                            "text-[10px] font-medium uppercase tracking-[0.16em]",
-                            "text-neutral-300 transition-colors duration-150",
-                            "group-hover/cell:text-white",
+                            slotFace,
+                            "group/cell bg-neutral-50/50",
+                            "hover:bg-neutral-950",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-900/15",
                           )}
                         >
-                          Book
-                        </span>
-                      </button>
+                          <span
+                            className={cn(
+                              "text-[10px] font-medium uppercase tracking-[0.16em]",
+                              "text-neutral-300 transition-colors duration-150",
+                              "group-hover/cell:text-white",
+                            )}
+                          >
+                            Book
+                          </span>
+                        </button>
+                      </div>
                     )
                   })}
                 </div>
