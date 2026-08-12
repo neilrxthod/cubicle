@@ -51,18 +51,19 @@ export function inviteAcceptEmphasizedClassName(className?: string) {
 }
 
 /**
- * Compact chips on a dark/colored booking slot (daily board).
- * Soft frosted surface; Decline stays quieter, Accept slightly stronger.
+ * Compact capsules on a booking slot (daily board share invite).
+ * Rest: frosted white. Hover: Decline → red/white · Accept → green/white.
  */
 export function inviteChipDeclineClassName(className?: string) {
   return cn(
     "inline-flex items-center justify-center font-medium outline-none",
-    "bg-white/90 text-neutral-600 ring-1 ring-black/10 backdrop-blur-[2px]",
-    "shadow-[0_1px_2px_rgba(0,0,0,0.06)]",
-    "hover:bg-white hover:text-neutral-950 hover:ring-black/15",
-    "hover:shadow-[0_2px_8px_rgba(0,0,0,0.1)]",
-    "active:bg-neutral-100 active:shadow-none",
-    "focus-visible:ring-2 focus-visible:ring-white/80",
+    "bg-white/95 text-neutral-600 ring-1 ring-black/[0.08] backdrop-blur-[2px]",
+    "shadow-[0_1px_2px_rgba(0,0,0,0.05)]",
+    // Corporate decline: solid red capsule, white label
+    "hover:bg-red-600 hover:text-white hover:ring-red-600/90",
+    "hover:shadow-[0_2px_8px_rgba(220,38,38,0.22)]",
+    "active:bg-red-700 active:text-white active:ring-red-700 active:shadow-none",
+    "focus-visible:ring-2 focus-visible:ring-red-500/45 focus-visible:ring-offset-1 focus-visible:ring-offset-transparent",
     motion,
     className,
   );
@@ -71,12 +72,13 @@ export function inviteChipDeclineClassName(className?: string) {
 export function inviteChipAcceptClassName(className?: string) {
   return cn(
     "inline-flex items-center justify-center font-medium outline-none",
-    "bg-white text-neutral-950 ring-1 ring-black/10",
-    "shadow-[0_1px_3px_rgba(0,0,0,0.1)]",
-    "hover:bg-neutral-950 hover:text-white hover:ring-neutral-950",
-    "hover:shadow-[0_4px_12px_rgba(0,0,0,0.2)]",
-    "active:bg-neutral-900 active:text-white active:shadow-none",
-    "focus-visible:ring-2 focus-visible:ring-white/80",
+    "bg-white text-neutral-800 ring-1 ring-black/[0.08]",
+    "shadow-[0_1px_2px_rgba(0,0,0,0.05)]",
+    // Corporate accept: solid green capsule, white label
+    "hover:bg-emerald-500 hover:text-white hover:ring-emerald-500",
+    "hover:shadow-[0_2px_8px_rgba(16,185,129,0.22)]",
+    "active:bg-emerald-600 active:text-white active:ring-emerald-600 active:shadow-none",
+    "focus-visible:ring-2 focus-visible:ring-emerald-500/45 focus-visible:ring-offset-1 focus-visible:ring-offset-transparent",
     motion,
     className,
   );

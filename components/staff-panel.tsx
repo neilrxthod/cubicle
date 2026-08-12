@@ -2,6 +2,7 @@
 
 import {
   useMemo,
+  useRef,
   useState,
   useTransition,
   type FormEvent,
@@ -29,11 +30,13 @@ import {
 import {
   createTeacherCredentials,
   deleteTeacherCredentials,
+  purgeRevokedStaff,
   setStaffVerified,
   updateTeacherCredentials,
 } from "@/lib/actions"
 import { isRemotePlatformEnabled } from "@/lib/data/durability"
 import { SCHOOL_EMAIL_DOMAIN } from "@/lib/auth/school-domain"
+import { splitDisplayName } from "@/lib/profile/display-name"
 import {
   EMPLOYMENT_TYPES,
   employmentLabel,
@@ -119,6 +122,8 @@ export function StaffPanel({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [accessDialog, setAccessDialog] = useState<AccessDialog | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
+  /** permanent = purge revoked row; access = soft remove from allowlist */
+  const [deleteMode, setDeleteMode] = useState<"access" | "permanent">("access")
   const [formError, setFormError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [busyKey, setBusyKey] = useState<string | null>(null)
@@ -424,6 +429,20 @@ export function StaffPanel({
     event.preventDefault()
     if (!accessDialog) return
     const formData = new FormData(event.currentTarget)
+    const firstName = String(formData.get("firstName") ?? "").trim()
+    const lastName = String(formData.get("lastName") ?? "").trim()
+    const fullName = [firstName, lastName].filter(Boolean).join(" ")
+    formData.set("name", fullName)
+    // Local-part field + fixed @rbe.sk.ca (users never type the domain).
+    const localRaw = String(formData.get("emailLocal") ?? "").trim()
+    const local =
+      localRaw || emailLocalFromNames(firstName, lastName)
+    if (local) {
+      formData.set("email", composeSchoolEmail(local))
+    }
+    formData.delete("emailLocal")
+    formData.delete("firstName")
+    formData.delete("lastName")
     const key =
       accessDialog.mode === "edit" ? accessDialog.user.id : "create"
     setBusyKey(key)
@@ -468,23 +487,32 @@ export function StaffPanel({
   function handleRemove() {
     if (!deleteTarget) return
     const user = deleteTarget
+    const permanent = deleteMode === "permanent"
     setBusyKey(`delete:${user.id}`)
     setDeleteError(null)
 
     startTransition(async () => {
-      const res = await deleteTeacherCredentials(user.id)
+      const res = permanent
+        ? await purgeRevokedStaff(user.id)
+        : await deleteTeacherCredentials(user.id)
       setBusyKey(null)
       if (!res.ok) {
         setDeleteError(res.error)
         toast({
-          title: "Could not remove staff",
+          title: permanent
+            ? "Could not delete staff"
+            : "Could not remove staff",
           description: res.error,
           variant: "destructive",
         })
         return
       }
-      toast({ title: "Access removed", description: user.name })
+      toast({
+        title: permanent ? "Deleted" : "Access removed",
+        description: user.name,
+      })
       setDeleteTarget(null)
+      setDeleteMode("access")
       if (selectedId === user.id) setSelectedId(null)
       router.refresh()
     })
@@ -693,6 +721,12 @@ export function StaffPanel({
                 onEdit={() => openEdit(selected)}
                 onRemove={() => {
                   setDeleteError(null)
+                  setDeleteMode("access")
+                  setDeleteTarget(selected)
+                }}
+                onPurge={() => {
+                  setDeleteError(null)
+                  setDeleteMode("permanent")
                   setDeleteTarget(selected)
                 }}
                 onSetVerified={(verified) => {
@@ -724,24 +758,30 @@ export function StaffPanel({
         </div>
       </div>
 
-      {/* Add / edit */}
+      {/* Add / edit — corporate minimal access sheet */}
       <Dialog
         open={accessDialog !== null}
         onOpenChange={(open) => !open && setAccessDialog(null)}
       >
-        <DialogContent className="gap-0 overflow-hidden rounded-lg border-neutral-200 p-0 sm:max-w-[24rem]">
-          <DialogHeader className="gap-1 border-b border-neutral-200 px-5 py-4 text-left">
-            <DialogTitle className="text-[14px] font-medium text-neutral-950">
+        <DialogContent
+          className={cn(
+            "gap-0 overflow-hidden border border-black/[0.07] bg-white p-0",
+            "rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_40px_rgba(0,0,0,0.1)]",
+            "sm:max-w-[26rem]",
+          )}
+        >
+          <DialogHeader className="gap-0 border-b border-black/[0.05] px-5 pb-3.5 pt-5 pr-12 text-left">
+            <DialogTitle className="text-[16px] font-medium tracking-[-0.02em] text-neutral-950">
               {isRestore
-                ? "Restore access"
+                ? "Restore"
                 : accessDialog?.mode === "edit"
                   ? "Edit staff"
                   : "Add staff"}
             </DialogTitle>
-            <DialogDescription className="text-[12.5px] text-neutral-500">
+            <DialogDescription className="sr-only">
               {googleMode
-                ? `School accounts only (@${SCHOOL_EMAIL_DOMAIN})`
-                : "Create a staff login for the demo"}
+                ? `Allowlist @${SCHOOL_EMAIL_DOMAIN}`
+                : `Sandbox login @${SCHOOL_EMAIL_DOMAIN}`}
             </DialogDescription>
           </DialogHeader>
 
@@ -752,89 +792,97 @@ export function StaffPanel({
                 : "add"
             }
             onSubmit={handleAccessSubmit}
-            className="grid gap-4 px-5 py-5"
+            className="flex flex-col"
           >
-            <Field
-              label="Full name"
-              name="name"
-              defaultValue={editing?.name ?? ""}
-              placeholder="Sarah Chen"
-              required
-            />
-            <Field
-              label="Work email"
-              name="email"
-              type="email"
-              defaultValue={editing?.email ?? ""}
-              placeholder={
-                googleMode
-                  ? `name@${SCHOOL_EMAIL_DOMAIN}`
-                  : "teacher@school.edu"
-              }
-              required
-            />
+            <div className="flex flex-col gap-4 px-5 py-4">
+              <StaffIdentityFields
+                defaultFirstName={
+                  editing?.firstName ??
+                  splitDisplayName(editing?.name ?? "").firstName ??
+                  ""
+                }
+                defaultLastName={
+                  editing?.lastName ??
+                  splitDisplayName(editing?.name ?? "").lastName ??
+                  ""
+                }
+                defaultEmail={editing?.email ?? ""}
+                autoFocus={!editing}
+              />
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="staff-role"
-                  className="text-[12px] font-medium text-neutral-600"
-                >
-                  Role
-                </label>
-                <select
-                  id="staff-role"
-                  name="role"
-                  defaultValue={editing?.role ?? "teacher"}
-                  className="h-9 w-full rounded-md border border-neutral-200 bg-white px-2.5 text-[13px] outline-none focus:border-neutral-400"
-                >
-                  <option value="teacher">Teacher</option>
-                  <option value="admin">Admin</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label
+                    htmlFor="staff-role"
+                    className={staffFieldLabelClassName}
+                  >
+                    Role
+                  </label>
+                  <select
+                    id="staff-role"
+                    name="role"
+                    defaultValue={editing?.role ?? "teacher"}
+                    className={staffSelectClassName}
+                  >
+                    <option value="teacher">Teacher</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label
+                    htmlFor="staff-employment"
+                    className={staffFieldLabelClassName}
+                  >
+                    Employment
+                  </label>
+                  <select
+                    id="staff-employment"
+                    name="employmentType"
+                    defaultValue={editing?.employmentType ?? "permanent"}
+                    className={staffSelectClassName}
+                  >
+                    {EMPLOYMENT_TYPES.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.shortLabel}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="staff-employment"
-                  className="text-[12px] font-medium text-neutral-600"
+
+              <p className="flex items-center gap-1.5 text-[11.5px] text-neutral-400">
+                <VerifiedBadge size="xs" className="opacity-90" />
+                Permanent = verified tick
+              </p>
+
+              {formError ? (
+                <p
+                  role="alert"
+                  className="rounded-lg border border-red-200/90 bg-red-50 px-3 py-2 text-[12.5px] text-red-700"
                 >
-                  Employment
-                </label>
-                <select
-                  id="staff-employment"
-                  name="employmentType"
-                  defaultValue={editing?.employmentType ?? "permanent"}
-                  className="h-9 w-full rounded-md border border-neutral-200 bg-white px-2.5 text-[13px] outline-none focus:border-neutral-400"
-                >
-                  {EMPLOYMENT_TYPES.map((opt) => (
-                    <option key={opt.id} value={opt.id}>
-                      {opt.shortLabel}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  {formError}
+                </p>
+              ) : null}
             </div>
 
-            <p className="text-[12px] leading-snug text-neutral-500">
-              Permanent = verified blue tick on their name.
-            </p>
-
-            {formError ? (
-              <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
-                {formError}
-              </p>
-            ) : null}
-
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="flex items-center justify-end gap-2 border-t border-black/[0.05] px-5 py-3">
               <DialogCancel
-                className="h-8"
+                className="h-9 px-3"
                 onClick={() => setAccessDialog(null)}
               >
                 Cancel
               </DialogCancel>
               <Button
                 type="submit"
-                size="sm"
-                className="h-8 rounded-md px-3.5"
+                className={cn(
+                  "h-9 min-w-[5.5rem] rounded-full px-4",
+                  "bg-neutral-950 text-[13px] font-medium tracking-[-0.01em] text-white",
+                  "shadow-[0_1px_2px_rgba(0,0,0,0.12)]",
+                  "transition-[background-color,box-shadow,transform] duration-150",
+                  "hover:bg-neutral-800 hover:shadow-[0_4px_12px_rgba(0,0,0,0.14)]",
+                  "active:scale-[0.98]",
+                  "disabled:opacity-50",
+                )}
                 disabled={
                   busyKey ===
                   (accessDialog?.mode === "edit"
@@ -848,14 +896,14 @@ export function StaffPanel({
                   : "create") ? (
                   <span className="flex items-center gap-2">
                     <Spinner className="size-3.5" />
-                    Saving…
+                    Saving
                   </span>
                 ) : isRestore ? (
                   "Restore"
                 ) : accessDialog?.mode === "edit" ? (
-                  "Save changes"
+                  "Save"
                 ) : (
-                  "Add staff"
+                  "Add"
                 )}
               </Button>
             </div>
@@ -863,28 +911,31 @@ export function StaffPanel({
         </DialogContent>
       </Dialog>
 
-      {/* Remove */}
+      {/* Remove access / permanent delete revoked */}
       <Dialog
         open={deleteTarget !== null}
         onOpenChange={(open) => {
           if (!open) {
             setDeleteTarget(null)
             setDeleteError(null)
+            setDeleteMode("access")
           }
         }}
       >
-        <DialogContent className="gap-0 overflow-hidden rounded-lg border-neutral-200 p-0 sm:max-w-[22rem]">
-          <DialogHeader className="gap-1 border-b border-neutral-200 px-5 py-4 text-left">
-            <DialogTitle className="text-[14px] font-medium text-neutral-950">
-              Remove access
+        <DialogContent className="gap-0 overflow-hidden rounded-2xl border-neutral-200 p-0 sm:max-w-[22rem]">
+          <DialogHeader className="gap-1 border-b border-neutral-200 px-5 py-4 pr-12 text-left">
+            <DialogTitle className="text-[15px] font-medium tracking-[-0.02em] text-neutral-950">
+              {deleteMode === "permanent" ? "Delete permanently" : "Remove access"}
             </DialogTitle>
             <DialogDescription className="text-[12.5px] text-neutral-500">
-              They will not be able to sign in. Booking history is kept.
+              {deleteMode === "permanent"
+                ? "Removes them from the directory. This cannot be undone."
+                : "They will not be able to sign in. History is kept."}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 px-5 py-5">
             {deleteTarget ? (
-              <div className="flex items-center gap-3 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2.5">
+              <div className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5">
                 <StaffAvatar user={deleteTarget} />
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-1.5">
@@ -924,8 +975,12 @@ export function StaffPanel({
                 onClick={handleRemove}
               >
                 {deleteTarget && busyKey === `delete:${deleteTarget.id}`
-                  ? "Removing…"
-                  : "Remove access"}
+                  ? deleteMode === "permanent"
+                    ? "Deleting…"
+                    : "Removing…"
+                  : deleteMode === "permanent"
+                    ? "Delete"
+                    : "Remove access"}
               </Button>
             </div>
           </div>
@@ -946,6 +1001,7 @@ function StaffDetail({
   onCopyEmail,
   onEdit,
   onRemove,
+  onPurge,
   onSetVerified,
 }: {
   user: User
@@ -956,10 +1012,12 @@ function StaffDetail({
   onCopyEmail: () => void
   onEdit: () => void
   onRemove: () => void
+  onPurge: () => void
   onSetVerified: (verified: boolean) => void
 }) {
   const verified = isVerifiedStaff(user)
   const canManageVerify = user.allowlisted !== false
+  const isRevoked = user.allowlisted === false
   const profileBits = [user.title, user.department].filter(Boolean)
   const roleLabel = user.role === "admin" ? "Admin" : "Teacher"
 
@@ -969,14 +1027,9 @@ function StaffDetail({
         <div className="flex items-start gap-3">
           <StaffAvatar user={user} size="lg" verified={verified} />
           <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-center gap-1.5">
-              <h3 className="truncate text-[15px] font-medium text-neutral-950">
-                {user.name}
-              </h3>
-              {verified ? (
-                <VerifiedBadge size="sm" title="Verified permanent staff" />
-              ) : null}
-            </div>
+            <h3 className="truncate text-[15px] font-medium text-neutral-950">
+              {user.name}
+            </h3>
             <button
               type="button"
               onClick={onCopyEmail}
@@ -999,7 +1052,7 @@ function StaffDetail({
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
-          {user.allowlisted !== false ? (
+          {!isRevoked ? (
             <>
               <ActionBtn onClick={onEdit} icon={<Pencil className="size-3" />}>
                 Edit
@@ -1013,9 +1066,18 @@ function StaffDetail({
               </ActionBtn>
             </>
           ) : (
-            <ActionBtn onClick={onEdit} icon={<UserPlus className="size-3" />}>
-              Restore access
-            </ActionBtn>
+            <>
+              <ActionBtn onClick={onEdit} icon={<UserPlus className="size-3" />}>
+                Restore
+              </ActionBtn>
+              <ActionBtn
+                onClick={onPurge}
+                icon={<Trash2 className="size-3" />}
+                danger
+              >
+                Delete
+              </ActionBtn>
+            </>
           )}
         </div>
       </div>
@@ -1361,38 +1423,191 @@ function ActionBtn({
   )
 }
 
-function Field({
-  label,
-  name,
-  type = "text",
-  defaultValue,
-  placeholder,
-  required,
+const staffFieldLabelClassName =
+  "text-[11.5px] font-medium tracking-[0.02em] text-neutral-500"
+
+const staffControlClassName = cn(
+  "h-10 w-full rounded-lg border border-neutral-200/90 bg-white",
+  "text-[13px] tracking-[-0.01em] text-neutral-950 shadow-none",
+  "outline-none transition-[border-color,box-shadow] duration-150",
+  "placeholder:text-neutral-400",
+  "focus-visible:border-neutral-400 focus-visible:ring-2 focus-visible:ring-neutral-900/[0.06]",
+)
+
+const staffSelectClassName = cn(
+  staffControlClassName,
+  "cursor-pointer appearance-none px-3 pr-8",
+  // Subtle chevron without extra icon markup
+  "bg-[length:12px_12px] bg-[right_0.7rem_center] bg-no-repeat",
+  "bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20fill%3D%22none%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20stroke%3D%22%23a3a3a3%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m3%204.5%203%203%203-3%22%2F%3E%3C%2Fsvg%3E')]",
+)
+
+/** Normalize a name token for email local-part (sarah, obrien). */
+function slugEmailToken(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "")
+}
+
+/** first + "." + last → e.g. sarah.chen */
+function emailLocalFromNames(firstName: string, lastName: string): string {
+  const first = slugEmailToken(firstName)
+  const last = slugEmailToken(lastName)
+  if (first && last) return `${first}.${last}`
+  return first || last || ""
+}
+
+/** Strip domain so the input only holds the local part. */
+function schoolEmailLocalPart(email: string): string {
+  const normalized = email.trim().toLowerCase()
+  if (!normalized) return ""
+  const at = normalized.indexOf("@")
+  if (at === -1) return normalized
+  return normalized.slice(0, at)
+}
+
+/** Build a full school email; forces @rbe.sk.ca even if user pastes another domain. */
+function composeSchoolEmail(localOrFull: string): string {
+  const local = schoolEmailLocalPart(localOrFull)
+    .replace(/[^a-z0-9._+-]/gi, "")
+    .replace(/^\.+|\.+$/g, "")
+  return `${local}@${SCHOOL_EMAIL_DOMAIN}`
+}
+
+/**
+ * First + last name, with work email auto-filled as first.last@rbe.sk.ca.
+ * Email stays in sync until the admin edits the local part manually.
+ */
+function StaffIdentityFields({
+  defaultFirstName = "",
+  defaultLastName = "",
+  defaultEmail = "",
+  autoFocus,
 }: {
-  label: string
-  name: string
-  type?: string
-  defaultValue?: string
-  placeholder?: string
-  required?: boolean
+  defaultFirstName?: string
+  defaultLastName?: string
+  defaultEmail?: string
+  autoFocus?: boolean
 }) {
+  const [firstName, setFirstName] = useState(defaultFirstName)
+  const [lastName, setLastName] = useState(defaultLastName)
+  const emailManual = useRef(false)
+  const [emailLocal, setEmailLocal] = useState(() => {
+    const fromEmail = schoolEmailLocalPart(defaultEmail)
+    if (fromEmail) return fromEmail
+    return emailLocalFromNames(defaultFirstName, defaultLastName)
+  })
+
+  function syncEmailFromNames(nextFirst: string, nextLast: string) {
+    if (emailManual.current) return
+    setEmailLocal(emailLocalFromNames(nextFirst, nextLast))
+  }
+
   return (
-    <div className="flex flex-col gap-1.5">
-      <label
-        htmlFor={name}
-        className="text-[12px] font-medium text-neutral-600"
-      >
-        {label}
-      </label>
-      <Input
-        id={name}
-        name={name}
-        type={type}
-        defaultValue={defaultValue}
-        placeholder={placeholder}
-        required={required}
-        className="h-9 rounded-md border-neutral-200 text-[13px] shadow-none"
-      />
+    <div className="flex flex-col gap-3.5">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="firstName" className={staffFieldLabelClassName}>
+            First
+          </label>
+          <Input
+            id="firstName"
+            name="firstName"
+            type="text"
+            autoComplete="given-name"
+            value={firstName}
+            onChange={(e) => {
+              const v = e.target.value
+              setFirstName(v)
+              syncEmailFromNames(v, lastName)
+            }}
+            placeholder="Sarah"
+            required
+            autoFocus={autoFocus}
+            className={cn(staffControlClassName, "px-3")}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="lastName" className={staffFieldLabelClassName}>
+            Last
+          </label>
+          <Input
+            id="lastName"
+            name="lastName"
+            type="text"
+            autoComplete="family-name"
+            value={lastName}
+            onChange={(e) => {
+              const v = e.target.value
+              setLastName(v)
+              syncEmailFromNames(firstName, v)
+            }}
+            placeholder="Chen"
+            required
+            className={cn(staffControlClassName, "px-3")}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="emailLocal" className={staffFieldLabelClassName}>
+          Email
+        </label>
+        <div
+          className={cn(
+            "flex h-10 w-full min-w-0 items-stretch overflow-hidden rounded-lg border border-neutral-200/90 bg-white",
+            "shadow-none transition-[border-color,box-shadow] duration-150",
+            "focus-within:border-neutral-400 focus-within:ring-2 focus-within:ring-neutral-900/[0.06]",
+          )}
+        >
+          <input
+            id="emailLocal"
+            name="emailLocal"
+            type="text"
+            inputMode="email"
+            autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            value={emailLocal}
+            placeholder="first.last"
+            required
+            aria-describedby="staff-email-domain"
+            className={cn(
+              "min-w-0 flex-1 border-0 bg-transparent px-3 text-[13px] tracking-[-0.01em] text-neutral-950 outline-none",
+              "placeholder:text-neutral-400",
+            )}
+            onChange={(e) => {
+              emailManual.current = true
+              setEmailLocal(
+                e.target.value
+                  .toLowerCase()
+                  .replace(/@.*$/, "")
+                  .replace(/\s+/g, ""),
+              )
+            }}
+            onBlur={(e) => {
+              const next = schoolEmailLocalPart(e.currentTarget.value)
+              if (next !== e.currentTarget.value) setEmailLocal(next)
+              if (!next) emailManual.current = false
+            }}
+          />
+          <span
+            id="staff-email-domain"
+            className={cn(
+              "inline-flex shrink-0 items-center border-l border-neutral-200/90 bg-neutral-50/90 px-3",
+              "text-[12.5px] font-medium tabular-nums tracking-[-0.015em] text-neutral-500",
+              "select-none",
+            )}
+            aria-hidden
+          >
+            @{SCHOOL_EMAIL_DOMAIN}
+          </span>
+        </div>
+      </div>
     </div>
   )
 }

@@ -2153,11 +2153,80 @@ export async function deleteTeacherCredentials(
     return refreshRemote();
   }
 
+  const localUser = getState().users.find((entry) => entry.id === teacherId);
   if (
-    getState().users.find((entry) => entry.id === teacherId)?.email.toLowerCase() ===
-    session.email.toLowerCase()
+    localUser?.email.toLowerCase() === session.email.toLowerCase()
   ) {
     return { ok: false, error: "You cannot remove your own access." };
+  }
+  if (localUser?.allowlisted === false) {
+    return { ok: false, error: "Already removed from the allowlist." };
+  }
+
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
+  // Soft-revoke so they land on Revoked (purge deletes permanently).
+  mutate((draft) => {
+    const entry = draft.users.find((u) => u.id === teacherId);
+    if (entry) {
+      entry.allowlisted = false;
+      entry.pendingInvite = false;
+    }
+  });
+
+  return { ok: true };
+}
+
+/**
+ * Permanently delete a *revoked* staff row from the directory.
+ * Remote: admin API deletes Auth user (profile cascades). Local: drops the user.
+ * Active allowlisted staff must use remove-access first.
+ */
+export async function purgeRevokedStaff(teacherId: string): Promise<Result> {
+  const session = requireSession();
+  if (!session || session.role !== "admin") {
+    return { ok: false, error: "Admin only." };
+  }
+
+  const user = getState().users.find((entry) => entry.id === teacherId);
+  if (!user) return { ok: false, error: "Staff member not found." };
+  if (user.allowlisted !== false) {
+    return {
+      ok: false,
+      error: "Only revoked accounts can be deleted permanently.",
+    };
+  }
+  if (user.email.toLowerCase() === session.email.toLowerCase()) {
+    return { ok: false, error: "You cannot delete your own account." };
+  }
+  if (user.pendingInvite || teacherId.startsWith("pending:")) {
+    return { ok: false, error: "Pending invites are not revoked accounts." };
+  }
+
+  if (isRemoteEnabled()) {
+    if (!isUuid(teacherId)) {
+      return { ok: false, error: "Invalid staff id." };
+    }
+    try {
+      const res = await fetch("/api/admin/staff/purge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: teacherId }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        ok?: boolean;
+      };
+      if (!res.ok) {
+        return {
+          ok: false,
+          error: body.error || "Could not delete staff member.",
+        };
+      }
+    } catch {
+      return { ok: false, error: "Could not reach the server. Try again." };
+    }
+    return refreshRemote();
   }
 
   const __demo = assertLocalDemoAllowed();
@@ -2165,7 +2234,6 @@ export async function deleteTeacherCredentials(
   mutate((draft) => {
     draft.users = draft.users.filter((entry) => entry.id !== teacherId);
   });
-
   return { ok: true };
 }
 
