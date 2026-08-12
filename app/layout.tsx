@@ -19,6 +19,10 @@ export const metadata: Metadata = {
   },
   description:
     "School laptop cart scheduling for authorized staff. Google sign-in for @rbe.sk.ca allowlisted accounts only.",
+  icons: {
+    icon: [{ url: "/logo.png", type: "image/png" }],
+    apple: [{ url: "/logo.png", type: "image/png" }],
+  },
   robots: {
     index: false,
     follow: false,
