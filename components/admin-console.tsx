@@ -2433,6 +2433,255 @@ function BookingsTable({
   )
 }
 
+/** Grade / class label for a booking — prefers className, falls back to subject tag. */
+function bookingGradeLabel(booking: Booking): string {
+  const classLabel = booking.className?.trim()
+  if (classLabel) return classLabel
+  const subject = booking.subject?.trim()
+  if (subject) return subject
+  return "—"
+}
+
+function formatBookingTimestamp(booking: Booking): { primary: string; secondary: string } {
+  try {
+    const day = format(parseISO(booking.date), "MMM d, yyyy")
+    const weekday = format(parseISO(booking.date), "EEE")
+    if (booking.createdAt) {
+      const created = parseISO(booking.createdAt)
+      return {
+        primary: day,
+        secondary: `${weekday} · ${format(created, "h:mm a")}`,
+      }
+    }
+    return { primary: day, secondary: weekday }
+  } catch {
+    return { primary: booking.date, secondary: booking.createdAt ?? "" }
+  }
+}
+
+/**
+ * Drill-down when an admin opens a Top subjects chip.
+ * Corporate sheet: search + dense table (teacher · time · grade · period).
+ */
+function SubjectBookingsDialog({
+  subject,
+  bookings,
+  teacherById,
+  onClose,
+}: {
+  subject: string | null
+  bookings: Booking[]
+  teacherById: Map<string, User>
+  onClose: () => void
+}) {
+  const open = Boolean(subject)
+  const [query, setQuery] = useState("")
+
+  // Reset search whenever a different subject capsule is opened.
+  const searchKey = subject ?? ""
+  const [prevSearchKey, setPrevSearchKey] = useState(searchKey)
+  if (searchKey !== prevSearchKey) {
+    setPrevSearchKey(searchKey)
+    setQuery("")
+  }
+
+  const rows = useMemo(() => {
+    if (!subject) return [] as Booking[]
+    return bookings
+      .filter((b) => (b.subject || "Unspecified") === subject)
+      .slice()
+      .sort((a, b) => {
+        const byDate = b.date.localeCompare(a.date)
+        if (byDate !== 0) return byDate
+        const byPeriod = a.period.localeCompare(b.period)
+        if (byPeriod !== 0) return byPeriod
+        return b.createdAt.localeCompare(a.createdAt)
+      })
+  }, [bookings, subject])
+
+  const filteredRows = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return rows
+    return rows.filter((booking) => {
+      const teacher = teacherById.get(booking.teacherId)
+      const grade = bookingGradeLabel(booking)
+      const stamp = formatBookingTimestamp(booking)
+      const haystack = [
+        booking.teacherName,
+        teacher?.email,
+        grade,
+        booking.period,
+        stamp.primary,
+        stamp.secondary,
+        booking.date,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [rows, query, teacherById])
+
+  function handleClose() {
+    setQuery("")
+    onClose()
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) handleClose()
+      }}
+    >
+      <DialogContent
+        showCloseButton
+        className={cn(
+          "w-[min(100%,34rem)] gap-0 overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white p-0",
+          "shadow-[0_8px_30px_rgba(0,0,0,0.06)] sm:max-w-lg",
+        )}
+      >
+        <DialogHeader className="space-y-3 border-b border-[var(--hairline)] px-5 py-4 pr-12 text-left">
+          <DialogTitle className="text-[14px] font-medium tracking-[-0.015em] text-neutral-950">
+            {subject ?? "Subject"}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Bookings for {subject ?? "subject"}
+          </DialogDescription>
+
+          {rows.length > 0 ? (
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400"
+                strokeWidth={1.75}
+              />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search"
+                aria-label="Search subject bookings"
+                className={cn(
+                  "h-8 rounded-md border-neutral-200/90 bg-neutral-50/80 pl-8 pr-8",
+                  "text-[13px] tracking-[-0.01em] text-neutral-900 shadow-none",
+                  "placeholder:text-neutral-400",
+                  "focus-visible:border-neutral-300 focus-visible:bg-white focus-visible:ring-0",
+                )}
+              />
+              {query ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded text-neutral-400 transition-colors hover:text-neutral-700"
+                  aria-label="Clear search"
+                >
+                  <X className="size-3.5" strokeWidth={1.75} />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </DialogHeader>
+
+        {rows.length === 0 ? (
+          <p className="px-5 py-12 text-center text-[13px] text-neutral-400">
+            No bookings
+          </p>
+        ) : filteredRows.length === 0 ? (
+          <p className="px-5 py-12 text-center text-[13px] text-neutral-400">
+            No results
+          </p>
+        ) : (
+          <div className="min-w-0">
+            {/* Full-bleed black header — covers dialog side hairlines */}
+            <div
+              className={cn(
+                "relative left-1/2 w-[calc(100%+2px)] -translate-x-1/2",
+                "grid grid-cols-[minmax(0,36%)_minmax(0,28%)_minmax(0,20%)_minmax(0,16%)]",
+                "bg-neutral-950",
+              )}
+              role="row"
+            >
+              {(["Teacher", "Date", "Grade", "Period"] as const).map((label) => (
+                <div
+                  key={label}
+                  role="columnheader"
+                  className="px-5 py-2 text-left text-[11px] font-medium tracking-[-0.01em] text-white"
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
+
+            <div className="board-scroll max-h-[min(22rem,58dvh)]">
+              <table className="w-full min-w-[26rem] table-fixed border-collapse text-left">
+                <colgroup>
+                  <col className="w-[36%]" />
+                  <col className="w-[28%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[16%]" />
+                </colgroup>
+                <tbody>
+                  {filteredRows.map((booking) => {
+                    const teacher = teacherById.get(booking.teacherId)
+                    const avatarUrl = teacher?.avatarUrl
+                    const stamp = formatBookingTimestamp(booking)
+                    const grade = bookingGradeLabel(booking)
+
+                    return (
+                      <tr
+                        key={booking.id}
+                        className="border-b border-[var(--hairline)] last:border-b-0 transition-colors hover:bg-neutral-50/70"
+                      >
+                        <td className="px-5 py-2.5 align-middle">
+                          <div className="flex min-w-0 items-center gap-2">
+                            {avatarUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={avatarUrl}
+                                alt=""
+                                referrerPolicy="no-referrer"
+                                className="size-6 shrink-0 rounded-full object-cover"
+                              />
+                            ) : (
+                              <span
+                                className="flex size-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[9px] font-medium text-neutral-500"
+                                aria-hidden
+                              >
+                                {bookingTeacherInitials(booking.teacherName)}
+                              </span>
+                            )}
+                            <span className="min-w-0 truncate text-[13px] tracking-[-0.01em] text-neutral-900">
+                              {booking.teacherName}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-2.5 align-middle">
+                          <span className="block truncate text-[12.5px] tabular-nums tracking-[-0.01em] text-neutral-600">
+                            {stamp.primary}
+                          </span>
+                        </td>
+                        <td className="px-5 py-2.5 align-middle">
+                          <span className="block truncate text-[12.5px] tracking-[-0.01em] text-neutral-600">
+                            {grade}
+                          </span>
+                        </td>
+                        <td className="px-5 py-2.5 align-middle">
+                          <span className="text-[12.5px] tabular-nums tracking-[-0.01em] text-neutral-600">
+                            {booking.period}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function ReportsPanel({
   bookings,
   issues,
@@ -2448,7 +2697,12 @@ function ReportsPanel({
   range: DateRange | undefined
   onOpenTab: (tab: Tab) => void
 }) {
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null)
   const cartMap = useMemo(() => new Map(carts.map((c) => [c.id, c])), [carts])
+  const teacherById = useMemo(
+    () => new Map(teachers.map((t) => [t.id, t])),
+    [teachers],
+  )
   const totalBookings = bookings.length
 
   const stats = useMemo(() => {
@@ -2990,29 +3244,54 @@ function ReportsPanel({
         </ChartCard>
       </div>
 
-      {/* Top subjects — compact strip */}
+      {/* Top subjects — quiet chips; open sheet for breakdown */}
       <div className="rounded-xl border border-[var(--hairline-strong)] bg-white p-4 shadow-[var(--shadow-surface)]">
         <h3 className="type-section-title mb-3">Top subjects</h3>
         {subjectRows.length === 0 ? (
           <p className="text-[13px] text-neutral-400">No subjects yet</p>
         ) : (
-          <ul className="flex flex-wrap gap-2">
-            {subjectRows.slice(0, 8).map(([subject, count]) => (
-              <li
-                key={subject}
-                className="inline-flex h-8 items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3"
-              >
-                <span className="text-[12.5px] font-medium text-neutral-800">
-                  {subject}
-                </span>
-                <span className="text-[12px] tabular-nums text-neutral-400">
-                  {count}
-                </span>
-              </li>
-            ))}
+          <ul className="flex flex-wrap gap-1.5">
+            {subjectRows.slice(0, 8).map(([subject, count]) => {
+              const selected = selectedSubject === subject
+              return (
+                <li key={subject}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSubject(subject)}
+                    aria-pressed={selected}
+                    className={cn(
+                      "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5",
+                      "text-left transition-[background-color,border-color,color]",
+                      selected
+                        ? "border-neutral-300 bg-neutral-100 text-neutral-950"
+                        : "border-transparent bg-neutral-50 text-neutral-700 hover:border-neutral-200 hover:bg-neutral-100/80 hover:text-neutral-950",
+                    )}
+                  >
+                    <span className="text-[12.5px] font-medium tracking-[-0.01em]">
+                      {subject}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[11.5px] tabular-nums",
+                        selected ? "text-neutral-500" : "text-neutral-400",
+                      )}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>
+
+      <SubjectBookingsDialog
+        subject={selectedSubject}
+        bookings={bookings}
+        teacherById={teacherById}
+        onClose={() => setSelectedSubject(null)}
+      />
 
       {/* Recent issues — full table */}
       <div className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white shadow-[var(--shadow-surface)]">

@@ -83,7 +83,10 @@ export function AuthLayout({
           )}
         >
           <header className="shrink-0">
-            <CubicleWordmark size={noScroll ? "sm" : "md"} />
+            <CubicleWordmark
+              size={noScroll ? "sm" : "md"}
+              className="font-bold"
+            />
           </header>
 
           <div

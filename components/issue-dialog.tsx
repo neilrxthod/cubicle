@@ -12,12 +12,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox";
 import { reportIssue } from "@/lib/actions";
 import { toast } from "@/hooks/use-toast";
 import type { Cart } from "@/lib/types";
@@ -70,9 +71,10 @@ export function IssueDialog({
   const [cartId, setCartId] = useState(cart?.id ?? carts?.[0]?.id ?? "");
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const cartOptions = carts ?? [];
   const selectedCart =
-    cart ?? carts?.find((entry) => entry.id === cartId) ?? null;
-  const canPickCart = !cart && Boolean(carts?.length);
+    cart ?? cartOptions.find((entry) => entry.id === cartId) ?? null;
+  const canPickCart = !cart && cartOptions.length > 0;
 
   useEffect(() => {
     return () => {
@@ -140,53 +142,60 @@ export function IssueDialog({
           }}
         >
           {canPickCart ? (
-            <Select
-              value={cartId}
-              onValueChange={(value) => {
-                if (value) setCartId(value);
-              }}
-            >
-              <SelectTrigger
-                aria-label="Cart"
-                size="default"
-                className={cn(
-                  "h-9 w-full rounded-lg border-neutral-200 bg-white px-3",
-                  "text-[13px] font-medium text-neutral-950 shadow-none",
-                  "data-[size=default]:h-9",
-                  "focus-visible:border-neutral-400",
-                )}
+            <div className="flex flex-col gap-1.5">
+              <span className="px-0.5 text-[11px] font-medium tracking-[0.06em] text-neutral-400 uppercase">
+                Cart
+              </span>
+              <Combobox
+                items={cartOptions}
+                value={selectedCart}
+                onValueChange={(next) => {
+                  setCartId(next?.id ?? "");
+                }}
+                itemToStringLabel={(entry) => entry.name}
+                isItemEqualToValue={(a, b) => a.id === b.id}
               >
-                <SelectValue placeholder="Select cart" />
-              </SelectTrigger>
-              <SelectContent
-                position="popper"
-                sideOffset={6}
-                className={cn(
-                  "z-[80] max-h-56 w-[var(--radix-select-trigger-width)]",
-                  "overflow-hidden rounded-xl border border-neutral-200/90 bg-white p-0",
-                  "shadow-[0_4px_24px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)]",
-                  // Snappy corporate open/close (overrides global if needed)
-                  "data-[state=open]:animate-in data-[state=closed]:animate-out",
-                  "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
-                  "data-[state=open]:zoom-in-[0.98] data-[state=closed]:zoom-out-[0.98]",
-                  "data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1",
-                  "duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                )}
-              >
-                {carts?.map((entry) => (
-                  <SelectItem
-                    key={entry.id}
-                    value={entry.id}
-                    className={cn(
-                      "cursor-pointer rounded-lg py-2 pl-3 pr-8 text-[13px] font-medium",
-                      "focus:bg-neutral-100 focus:text-neutral-950",
+                <ComboboxInput
+                  aria-label="Cart"
+                  placeholder="Search carts…"
+                  className={cn(
+                    "h-9 w-full rounded-lg border-neutral-200 bg-white",
+                    "text-[13px] font-medium text-neutral-950 shadow-none",
+                    "**:data-[slot=input-group-control]:h-9 **:data-[slot=input-group-control]:text-[13px]",
+                    "**:data-[slot=input-group-control]:placeholder:text-neutral-400",
+                    "has-[[data-slot=input-group-control]:focus-visible]:border-neutral-400",
+                    "has-[[data-slot=input-group-control]:focus-visible]:ring-0",
+                  )}
+                />
+                <ComboboxContent
+                  sideOffset={6}
+                  className={cn(
+                    "z-[80] max-h-56 rounded-xl border border-neutral-200/90 bg-white p-0",
+                    "shadow-[0_4px_24px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)]",
+                    "ring-0",
+                    "data-open:duration-150 data-closed:duration-100",
+                  )}
+                >
+                  <ComboboxEmpty className="py-3 text-[12.5px] text-neutral-400">
+                    No carts match
+                  </ComboboxEmpty>
+                  <ComboboxList className="max-h-52 p-1">
+                    {(entry) => (
+                      <ComboboxItem
+                        key={entry.id}
+                        value={entry}
+                        className={cn(
+                          "cursor-pointer rounded-lg py-2 pr-8 pl-3 text-[13px] font-medium",
+                          "data-highlighted:bg-neutral-100 data-highlighted:text-neutral-950",
+                        )}
+                      >
+                        {entry.name}
+                      </ComboboxItem>
                     )}
-                  >
-                    {entry.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  </ComboboxList>
+                </ComboboxContent>
+              </Combobox>
+            </div>
           ) : null}
 
           <SeveritySlider value={severity} onChange={setSeverity} />

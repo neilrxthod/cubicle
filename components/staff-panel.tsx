@@ -67,6 +67,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 
 /** Access-focused filters only — employment is managed on the person. */
@@ -573,15 +580,59 @@ export function StaffPanel({
                 </button>
               ) : null}
             </div>
-            <select
+            <Select
               value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as SortKey)}
-              className="h-8 shrink-0 rounded-md border border-neutral-200 bg-white px-2 text-[12.5px] text-neutral-600 outline-none focus:border-neutral-400"
-              aria-label="Sort"
+              onValueChange={(value) => setSortKey((value ?? "name") as SortKey)}
             >
-              <option value="name">Sort by name</option>
-              <option value="activity">Sort by activity</option>
-            </select>
+              <SelectTrigger
+                size="sm"
+                aria-label="Sort"
+                className={cn(
+                  "h-8 w-auto shrink-0 gap-1.5 rounded-md border-neutral-200 bg-white px-2.5",
+                  "text-[12.5px] font-medium text-neutral-600 shadow-none",
+                  "transition-[background-color,border-color,color] duration-150 ease-out",
+                  "hover:border-neutral-300 hover:bg-neutral-50",
+                  "data-[state=open]:border-neutral-400 data-[state=open]:bg-neutral-50",
+                  "focus-visible:border-neutral-400 focus-visible:ring-0",
+                )}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent
+                align="end"
+                position="popper"
+                className={cn(
+                  "min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg",
+                  "border-neutral-200 bg-white shadow-md",
+                  "data-[state=open]:duration-200 data-[state=closed]:duration-150",
+                  "data-[state=open]:ease-[cubic-bezier(0.22,1,0.36,1)]",
+                  "data-[state=closed]:ease-in",
+                )}
+              >
+                <SelectItem
+                  value="name"
+                  className={cn(
+                    "cursor-pointer rounded-md py-1.5 pl-2 pr-8 text-[12.5px] text-neutral-700",
+                    "transition-colors duration-150 ease-out",
+                    "focus:bg-neutral-100 focus:text-neutral-950",
+                    "data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-950",
+                  )}
+                >
+                  Sort by name
+                </SelectItem>
+                <SelectItem
+                  value="activity"
+                  className={cn(
+                    "cursor-pointer rounded-md py-1.5 pl-2 pr-8 text-[12.5px] text-neutral-700",
+                    "transition-colors duration-150 ease-out",
+                    "focus:bg-neutral-100 focus:text-neutral-950",
+                    "data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-950",
+                  )}
+                >
+                  Sort by activity
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div
