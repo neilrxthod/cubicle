@@ -11,7 +11,6 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowLeft,
-  ArrowRight,
   CalendarDays,
   Camera,
   Check,
@@ -922,7 +921,6 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
                   )}
                 >
                   Continue
-                  <ArrowRight className="size-4 opacity-80" strokeWidth={1.75} />
                 </button>
               ) : (
                 <button
@@ -939,9 +937,6 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
                     <Loader2 className="size-4 animate-spin" />
                   ) : null}
                   {pending ? "Opening…" : "Open schedule"}
-                  {!pending ? (
-                    <ArrowRight className="size-4 opacity-80" strokeWidth={1.75} />
-                  ) : null}
                 </button>
               )}
             </div>
