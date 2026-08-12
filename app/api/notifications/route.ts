@@ -9,9 +9,15 @@ import {
   type LocalEmailSink,
 } from "@/lib/email/delivery";
 import {
+  buildBookingCancelledEmail,
+  buildBookingRelocatedEmail,
   buildDevTestEmail,
   buildIssueReportEmail,
   buildShareInviteEmail,
+  buildSwapExchangeEmail,
+  buildSwapHandoffEmail,
+  buildSwapInviteEmail,
+  buildSwapInviteUpdateEmail,
 } from "@/lib/email/templates";
 import type { NotificationPayload } from "@/lib/email/queue";
 
@@ -90,32 +96,15 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   }
 
-  // Production paths need admin client for recipient lookup.
-  // Local sink can send from payload alone without DB.
-  if (plan.mode === "local_sink") {
+  const sink =
+    plan.mode === "local_sink"
+      ? { email: plan.email, name: "Local sink" as const }
+      : null;
+
+  // Local sink can render from payload alone (no DB) for most types.
+  if (sink) {
     try {
-      if (body.type === "issue_reported") {
-        return NextResponse.json(
-          await sendIssueEmail({
-            recipients: [{ email: plan.email, name: "Local sink" }],
-            payload: body,
-            subjectPrefix: true,
-          }),
-        );
-      }
-      if (body.type === "share_invite") {
-        return NextResponse.json(
-          await sendShareEmail({
-            to: { email: plan.email, name: "Local sink" },
-            payload: body,
-            subjectPrefix: true,
-          }),
-        );
-      }
-      return NextResponse.json(
-        { error: "Unknown notification type." },
-        { status: 400 },
-      );
+      return NextResponse.json(await dispatchLocalSink(body, sink));
     } catch (err) {
       console.error("[notifications] local sink", err);
       return NextResponse.json(
@@ -136,18 +125,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    if (body.type === "issue_reported") {
-      const result = await handleIssueReported(admin, actorId!, body);
-      return NextResponse.json(result);
-    }
-    if (body.type === "share_invite") {
-      const result = await handleShareInvite(admin, actorId!, body);
-      return NextResponse.json(result);
-    }
-    return NextResponse.json(
-      { error: "Unknown notification type." },
-      { status: 400 },
-    );
+    const result = await dispatchProduction(admin, actorId!, body);
+    return NextResponse.json(result);
   } catch (err) {
     console.error("[notifications]", err);
     return NextResponse.json(
@@ -155,6 +134,379 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+}
+
+function formatDateLabel(date: string): string {
+  try {
+    if (date) return format(parseISO(date), "EEE, MMM d");
+  } catch {
+    /* keep raw */
+  }
+  return date;
+}
+
+async function dispatchLocalSink(
+  body: NotificationPayload,
+  sink: { email: string; name: string },
+) {
+  if (body.type === "issue_reported") {
+    return sendIssueEmail({
+      recipients: [sink],
+      payload: body,
+      subjectPrefix: true,
+    });
+  }
+  if (body.type === "share_invite") {
+    return sendShareEmail({
+      to: sink,
+      payload: body,
+      subjectPrefix: true,
+    });
+  }
+  if (body.type === "booking_relocated") {
+    return sendRelocatedTo([sink], body, true);
+  }
+  if (body.type === "booking_cancelled") {
+    return sendCancelledTo([sink], body, true);
+  }
+  if (body.type === "swap_exchange") {
+    // One combined preview to sink (exchange notifies both parties in prod).
+    return sendExchangeTo(sink, body, "A", true);
+  }
+  if (body.type === "swap_handoff") {
+    return sendHandoffTo(sink, body, "admin", true);
+  }
+  if (body.type === "swap_invite") {
+    return sendSwapInviteTo(sink, body, true);
+  }
+  if (body.type === "swap_invite_update") {
+    return sendSwapInviteUpdateTo(sink, body, true);
+  }
+  return { error: "Unknown notification type.", ok: false as const };
+}
+
+async function dispatchProduction(
+  admin: ReturnType<typeof createAdminClient>,
+  actorId: string,
+  body: NotificationPayload,
+) {
+  if (body.type === "issue_reported") {
+    return handleIssueReported(admin, actorId, body);
+  }
+  if (body.type === "share_invite") {
+    return handleShareInvite(admin, actorId, body);
+  }
+  if (body.type === "booking_relocated") {
+    return handleBookingRelocated(admin, body);
+  }
+  if (body.type === "booking_cancelled") {
+    return handleBookingCancelled(admin, body);
+  }
+  if (body.type === "swap_exchange") {
+    return handleSwapExchange(admin, body);
+  }
+  if (body.type === "swap_handoff") {
+    return handleSwapHandoff(admin, body);
+  }
+  if (body.type === "swap_invite") {
+    return handleSwapInvite(admin, body);
+  }
+  if (body.type === "swap_invite_update") {
+    return handleSwapInviteUpdate(admin, body);
+  }
+  return { error: "Unknown notification type.", ok: false as const };
+}
+
+async function loadMailUser(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+): Promise<{ email: string; name?: string } | null> {
+  const { data } = await admin
+    .from("profiles")
+    .select("id, email, name, notify_email")
+    .eq("id", userId)
+    .maybeSingle();
+  if (!data) return null;
+  const row = data as {
+    email: string | null;
+    name: string | null;
+    notify_email: boolean | null;
+  };
+  if (row.notify_email === false || !row.email?.includes("@")) return null;
+  return { email: row.email, name: row.name ?? undefined };
+}
+
+async function loadAdminRecipients(
+  admin: ReturnType<typeof createAdminClient>,
+  excludeIds: string[] = [],
+): Promise<Array<{ email: string; name?: string }>> {
+  const exclude = new Set(excludeIds);
+  const { data, error } = await admin
+    .from("profiles")
+    .select("id, email, name, role, notify_email, notify_issues")
+    .eq("role", "admin");
+  if (error) {
+    console.error("[notifications] load admins", error.message);
+    return [];
+  }
+  return ((data ?? []) as ProfileMailRow[])
+    .filter(
+      (row) =>
+        !exclude.has(row.id) &&
+        row.notify_email !== false &&
+        Boolean(row.email?.includes("@")),
+    )
+    .map((row) => ({
+      email: row.email!,
+      name: row.name ?? undefined,
+    }));
+}
+
+async function sendRelocatedTo(
+  recipients: Array<{ email: string; name?: string }>,
+  payload: Extract<NotificationPayload, { type: "booking_relocated" }>,
+  localTesting?: boolean,
+) {
+  if (recipients.length === 0) return { ok: true as const, sent: 0 };
+  const built = buildBookingRelocatedEmail({
+    fromCartName: payload.fromCartName,
+    toCartName: payload.toCartName,
+    dateLabel: formatDateLabel(payload.date),
+    period: payload.period,
+    reason: payload.reason,
+    localTesting,
+  });
+  const subject = localTesting ? localSubject(built.subject) : built.subject;
+  let sent = 0;
+  for (const to of recipients) {
+    const result = await sendEmail({
+      to,
+      subject,
+      html: built.html,
+      text: built.text,
+      tags: ["booking-relocated", payload.reason, ...(localTesting ? ["local-dev"] : [])],
+    });
+    if (result.ok && !result.skipped) sent += 1;
+  }
+  return { ok: true as const, sent };
+}
+
+async function sendCancelledTo(
+  recipients: Array<{ email: string; name?: string }>,
+  payload: Extract<NotificationPayload, { type: "booking_cancelled" }>,
+  localTesting?: boolean,
+) {
+  if (recipients.length === 0) return { ok: true as const, sent: 0 };
+  const built = buildBookingCancelledEmail({
+    cartName: payload.cartName,
+    dateLabel: formatDateLabel(payload.date),
+    period: payload.period,
+    reason: payload.reason,
+    localTesting,
+  });
+  const subject = localTesting ? localSubject(built.subject) : built.subject;
+  let sent = 0;
+  for (const to of recipients) {
+    const result = await sendEmail({
+      to,
+      subject,
+      html: built.html,
+      text: built.text,
+      tags: ["booking-cancelled", payload.reason, ...(localTesting ? ["local-dev"] : [])],
+    });
+    if (result.ok && !result.skipped) sent += 1;
+  }
+  return { ok: true as const, sent };
+}
+
+async function sendExchangeTo(
+  to: { email: string; name?: string },
+  payload: Extract<NotificationPayload, { type: "swap_exchange" }>,
+  side: "A" | "B",
+  localTesting?: boolean,
+) {
+  const built = buildSwapExchangeEmail({
+    peerName: side === "A" ? payload.teacherBName : payload.teacherAName,
+    yourCartName: side === "A" ? payload.cartAName : payload.cartBName,
+    theirCartName: side === "A" ? payload.cartBName : payload.cartAName,
+    dateLabel: formatDateLabel(payload.date),
+    period: payload.period,
+    localTesting,
+  });
+  const subject = localTesting ? localSubject(built.subject) : built.subject;
+  const result = await sendEmail({
+    to,
+    subject,
+    html: built.html,
+    text: built.text,
+    tags: ["swap-exchange", ...(localTesting ? ["local-dev"] : [])],
+  });
+  if (!result.ok) return { ok: false as const, error: result.error };
+  return { ok: true as const, sent: result.skipped ? 0 : 1 };
+}
+
+async function sendHandoffTo(
+  to: { email: string; name?: string },
+  payload: Extract<NotificationPayload, { type: "swap_handoff" }>,
+  role: "receiver" | "owner" | "admin",
+  localTesting?: boolean,
+) {
+  const built = buildSwapHandoffEmail({
+    role,
+    fromTeacherName: payload.fromTeacherName,
+    toTeacherName: payload.toTeacherName,
+    cartName: payload.cartName,
+    dateLabel: formatDateLabel(payload.date),
+    period: payload.period,
+    localTesting,
+  });
+  const subject = localTesting ? localSubject(built.subject) : built.subject;
+  const result = await sendEmail({
+    to,
+    subject,
+    html: built.html,
+    text: built.text,
+    tags: ["swap-handoff", role, ...(localTesting ? ["local-dev"] : [])],
+  });
+  if (!result.ok) return { ok: false as const, error: result.error };
+  return { ok: true as const, sent: result.skipped ? 0 : 1 };
+}
+
+async function handleBookingRelocated(
+  admin: ReturnType<typeof createAdminClient>,
+  payload: Extract<NotificationPayload, { type: "booking_relocated" }>,
+) {
+  const user = await loadMailUser(admin, payload.teacherId);
+  if (!user) return { ok: true as const, sent: 0 };
+  return sendRelocatedTo([user], payload, false);
+}
+
+async function handleBookingCancelled(
+  admin: ReturnType<typeof createAdminClient>,
+  payload: Extract<NotificationPayload, { type: "booking_cancelled" }>,
+) {
+  const user = await loadMailUser(admin, payload.teacherId);
+  if (!user) return { ok: true as const, sent: 0 };
+  return sendCancelledTo([user], payload, false);
+}
+
+async function handleSwapExchange(
+  admin: ReturnType<typeof createAdminClient>,
+  payload: Extract<NotificationPayload, { type: "swap_exchange" }>,
+) {
+  let sent = 0;
+  const a = await loadMailUser(admin, payload.teacherAId);
+  if (a) {
+    const r = await sendExchangeTo(a, payload, "A", false);
+    if (r.ok) sent += r.sent ?? 0;
+  }
+  const b = await loadMailUser(admin, payload.teacherBId);
+  if (b) {
+    const r = await sendExchangeTo(b, payload, "B", false);
+    if (r.ok) sent += r.sent ?? 0;
+  }
+  return { ok: true as const, sent };
+}
+
+async function handleSwapHandoff(
+  admin: ReturnType<typeof createAdminClient>,
+  payload: Extract<NotificationPayload, { type: "swap_handoff" }>,
+) {
+  let sent = 0;
+  const owner = await loadMailUser(admin, payload.fromTeacherId);
+  if (owner) {
+    const r = await sendHandoffTo(owner, payload, "owner", false);
+    if (r.ok) sent += r.sent ?? 0;
+  }
+  const receiver = await loadMailUser(admin, payload.toTeacherId);
+  if (receiver) {
+    const r = await sendHandoffTo(receiver, payload, "receiver", false);
+    if (r.ok) sent += r.sent ?? 0;
+  }
+  const admins = await loadAdminRecipients(admin, [
+    payload.fromTeacherId,
+    payload.toTeacherId,
+  ]);
+  for (const adminTo of admins) {
+    const r = await sendHandoffTo(adminTo, payload, "admin", false);
+    if (r.ok) sent += r.sent ?? 0;
+  }
+  return { ok: true as const, sent };
+}
+
+async function sendSwapInviteTo(
+  to: { email: string; name?: string },
+  payload: Extract<NotificationPayload, { type: "swap_invite" }>,
+  localTesting?: boolean,
+) {
+  const built = buildSwapInviteEmail({
+    requesterName: payload.requesterName,
+    cartName: payload.cartName,
+    dateLabel: formatDateLabel(payload.date),
+    period: payload.period,
+    mode: payload.mode,
+    offeredCartName: payload.offeredCartName,
+    message: payload.message,
+    localTesting,
+  });
+  const subject = localTesting ? localSubject(built.subject) : built.subject;
+  const result = await sendEmail({
+    to,
+    subject,
+    html: built.html,
+    text: built.text,
+    tags: ["swap-invite", payload.mode, ...(localTesting ? ["local-dev"] : [])],
+  });
+  if (!result.ok) return { ok: false as const, error: result.error };
+  return { ok: true as const, sent: result.skipped ? 0 : 1 };
+}
+
+async function sendSwapInviteUpdateTo(
+  to: { email: string; name?: string },
+  payload: Extract<NotificationPayload, { type: "swap_invite_update" }>,
+  localTesting?: boolean,
+) {
+  const built = buildSwapInviteUpdateEmail({
+    decision: payload.decision,
+    deciderName: payload.deciderName,
+    cartName: payload.cartName,
+    dateLabel: formatDateLabel(payload.date),
+    period: payload.period,
+    mode: payload.mode,
+    localTesting,
+  });
+  const subject = localTesting ? localSubject(built.subject) : built.subject;
+  const result = await sendEmail({
+    to,
+    subject,
+    html: built.html,
+    text: built.text,
+    tags: [
+      "swap-invite-update",
+      payload.decision,
+      ...(localTesting ? ["local-dev"] : []),
+    ],
+  });
+  if (!result.ok) return { ok: false as const, error: result.error };
+  return { ok: true as const, sent: result.skipped ? 0 : 1 };
+}
+
+async function handleSwapInvite(
+  admin: ReturnType<typeof createAdminClient>,
+  payload: Extract<NotificationPayload, { type: "swap_invite" }>,
+) {
+  const owner = await loadMailUser(admin, payload.ownerId);
+  if (!owner) return { ok: true as const, sent: 0 };
+  return sendSwapInviteTo(owner, payload, false);
+}
+
+async function handleSwapInviteUpdate(
+  admin: ReturnType<typeof createAdminClient>,
+  payload: Extract<NotificationPayload, { type: "swap_invite_update" }>,
+) {
+  const requester = await loadMailUser(admin, payload.requesterId);
+  if (!requester) return { ok: true as const, sent: 0 };
+  return sendSwapInviteUpdateTo(requester, payload, false);
 }
 
 async function sendDevTest(email: string) {

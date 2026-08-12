@@ -2381,7 +2381,11 @@ function BookingsTable({
                         if (!reassigningBooking) return
                         setIsReassigning(true)
                         try {
-                          const res = await reassignBooking(reassigningBooking.id, c.id)
+                          const res = await reassignBooking(
+                            reassigningBooking.id,
+                            c.id,
+                            { reason: "admin" },
+                          )
                           if (!res.ok) {
                             toast({
                               title: "Could not move booking",

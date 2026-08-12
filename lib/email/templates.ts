@@ -365,6 +365,462 @@ export function buildDevTestEmail(input: {
   return { subject, html, text };
 }
 
+function whenLabel(dateLabel: string, period: string): string {
+  return [dateLabel, period].filter(Boolean).join(" · ") || "—";
+}
+
+export function buildBookingRelocatedEmail(input: {
+  fromCartName: string;
+  toCartName: string;
+  dateLabel: string;
+  period: string;
+  reason: "maintenance" | "admin";
+  localTesting?: boolean;
+}): { subject: string; html: string; text: string } {
+  const when = whenLabel(input.dateLabel, input.period);
+  const maintenance = input.reason === "maintenance";
+  const subject = maintenance
+    ? `Booking moved · ${input.toCartName}`
+    : `Cart updated · ${input.toCartName}`;
+  const title = "Your booking was moved";
+  const lead = maintenance
+    ? `${input.fromCartName} was placed in maintenance. Your reservation was reassigned so you keep the same slot.`
+    : `An administrator moved your reservation to a different cart.`;
+
+  const bodyHtml = `
+    <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#404040;">
+      ${escapeHtml(lead)}
+    </p>
+    ${emailMetaTable([
+      { label: "When", value: when },
+      { label: "From", value: input.fromCartName },
+      { label: "To", value: input.toCartName },
+      {
+        label: "Reason",
+        value: maintenance ? "Cart maintenance" : "Admin reassignment",
+      },
+    ])}
+    <p style="margin:18px 0 0;font-size:13px;line-height:1.5;color:#737373;">
+      Please use <strong style="color:#0a0a0a;">${escapeHtml(input.toCartName)}</strong> for this period.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `${input.fromCartName} → ${input.toCartName} · ${when}`,
+    eyebrow: "Schedule change",
+    title,
+    lead: "Your date and period are unchanged.",
+    bodyHtml,
+    cta: { label: "Open schedule", href: SITE_ORIGIN },
+    banner: input.localTesting
+      ? {
+          tone: "amber",
+          text: "Local testing — redirected to your sink address.",
+        }
+      : undefined,
+  });
+
+  const text = plainTextFromLines([
+    subject,
+    "",
+    lead,
+    `When: ${when}`,
+    `From: ${input.fromCartName}`,
+    `To: ${input.toCartName}`,
+    "",
+    `Open: ${SITE_ORIGIN}`,
+  ]);
+
+  return { subject, html, text };
+}
+
+export function buildBookingCancelledEmail(input: {
+  cartName: string;
+  dateLabel: string;
+  period: string;
+  reason: "maintenance" | "admin";
+  localTesting?: boolean;
+}): { subject: string; html: string; text: string } {
+  const when = whenLabel(input.dateLabel, input.period);
+  const maintenance = input.reason === "maintenance";
+  const subject = `Booking cancelled · ${input.cartName}`;
+  const lead = maintenance
+    ? `${input.cartName} was placed in maintenance and your reservation for this slot was cancelled.`
+    : `An administrator cancelled your reservation on ${input.cartName}.`;
+
+  const bodyHtml = `
+    <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#404040;">
+      ${escapeHtml(lead)}
+    </p>
+    ${emailMetaTable([
+      { label: "When", value: when },
+      { label: "Cart", value: input.cartName },
+      {
+        label: "Reason",
+        value: maintenance ? "Cart maintenance" : "Admin cancellation",
+      },
+    ])}
+    <p style="margin:18px 0 0;font-size:13px;line-height:1.5;color:#737373;">
+      Book another cart on the board if you still need equipment.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `Cancelled · ${input.cartName} · ${when}`,
+    eyebrow: "Schedule change",
+    title: "Booking cancelled",
+    lead: "This slot is no longer reserved for you.",
+    bodyHtml,
+    cta: { label: "Open schedule", href: SITE_ORIGIN },
+    banner: input.localTesting
+      ? {
+          tone: "amber",
+          text: "Local testing — redirected to your sink address.",
+        }
+      : undefined,
+  });
+
+  const text = plainTextFromLines([
+    subject,
+    "",
+    lead,
+    `When: ${when}`,
+    `Cart: ${input.cartName}`,
+    "",
+    `Open: ${SITE_ORIGIN}`,
+  ]);
+
+  return { subject, html, text };
+}
+
+export function buildSwapExchangeEmail(input: {
+  peerName: string;
+  yourCartName: string;
+  theirCartName: string;
+  dateLabel: string;
+  period: string;
+  localTesting?: boolean;
+}): { subject: string; html: string; text: string } {
+  const when = whenLabel(input.dateLabel, input.period);
+  const subject = `Cart exchange · ${input.theirCartName}`;
+  const bodyHtml = `
+    <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#404040;">
+      Your cart exchange with
+      <strong style="color:#0a0a0a;font-weight:600;">${escapeHtml(input.peerName)}</strong>
+      is complete.
+    </p>
+    ${emailMetaTable([
+      { label: "When", value: when },
+      { label: "You now have", value: input.theirCartName },
+      { label: "They now have", value: input.yourCartName },
+      { label: "With", value: input.peerName },
+    ])}
+  `;
+
+  const html = emailShell({
+    preheader: `Exchanged with ${input.peerName} · ${when}`,
+    eyebrow: "Cart exchange",
+    title: "Exchange complete",
+    lead: "Both of you have new carts for this period.",
+    bodyHtml,
+    cta: { label: "Open schedule", href: SITE_ORIGIN },
+    banner: input.localTesting
+      ? {
+          tone: "amber",
+          text: "Local testing — redirected to your sink address.",
+        }
+      : undefined,
+  });
+
+  const text = plainTextFromLines([
+    subject,
+    "",
+    `Exchange with ${input.peerName} is complete.`,
+    `When: ${when}`,
+    `You now have: ${input.theirCartName}`,
+    `They now have: ${input.yourCartName}`,
+    "",
+    `Open: ${SITE_ORIGIN}`,
+  ]);
+
+  return { subject, html, text };
+}
+
+export function buildSwapHandoffEmail(input: {
+  role: "receiver" | "owner" | "admin";
+  fromTeacherName: string;
+  toTeacherName: string;
+  cartName: string;
+  dateLabel: string;
+  period: string;
+  localTesting?: boolean;
+}): { subject: string; html: string; text: string } {
+  const when = whenLabel(input.dateLabel, input.period);
+
+  if (input.role === "receiver") {
+    const subject = `Handoff received · ${input.cartName}`;
+    const bodyHtml = `
+      <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#404040;">
+        <strong style="color:#0a0a0a;font-weight:600;">${escapeHtml(input.fromTeacherName)}</strong>
+        handed off a cart booking to you.
+      </p>
+      ${emailMetaTable([
+        { label: "When", value: when },
+        { label: "Cart", value: input.cartName },
+        { label: "From", value: input.fromTeacherName },
+      ])}
+    `;
+    const html = emailShell({
+      preheader: `${input.cartName} · ${when}`,
+      eyebrow: "Handoff",
+      title: "You received a cart",
+      lead: "This slot is now on your schedule.",
+      bodyHtml,
+      cta: { label: "Open schedule", href: SITE_ORIGIN },
+      banner: input.localTesting
+        ? {
+            tone: "amber",
+            text: "Local testing — redirected to your sink address.",
+          }
+        : undefined,
+    });
+    return {
+      subject,
+      html,
+      text: plainTextFromLines([
+        subject,
+        "",
+        `${input.fromTeacherName} handed off ${input.cartName} to you.`,
+        `When: ${when}`,
+        "",
+        `Open: ${SITE_ORIGIN}`,
+      ]),
+    };
+  }
+
+  if (input.role === "owner") {
+    const subject = `Handoff complete · ${input.cartName}`;
+    const bodyHtml = `
+      <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#404040;">
+        Your booking was handed off to
+        <strong style="color:#0a0a0a;font-weight:600;">${escapeHtml(input.toTeacherName)}</strong>.
+      </p>
+      ${emailMetaTable([
+        { label: "When", value: when },
+        { label: "Cart", value: input.cartName },
+        { label: "To", value: input.toTeacherName },
+      ])}
+    `;
+    const html = emailShell({
+      preheader: `Handed to ${input.toTeacherName} · ${when}`,
+      eyebrow: "Handoff",
+      title: "Booking handed off",
+      lead: "This slot is no longer on your schedule.",
+      bodyHtml,
+      cta: { label: "Open schedule", href: SITE_ORIGIN },
+      banner: input.localTesting
+        ? {
+            tone: "amber",
+            text: "Local testing — redirected to your sink address.",
+          }
+        : undefined,
+    });
+    return {
+      subject,
+      html,
+      text: plainTextFromLines([
+        subject,
+        "",
+        `You handed ${input.cartName} to ${input.toTeacherName}.`,
+        `When: ${when}`,
+        "",
+        `Open: ${SITE_ORIGIN}`,
+      ]),
+    };
+  }
+
+  // admin
+  const subject = `Handoff · ${input.fromTeacherName} → ${input.toTeacherName}`;
+  const bodyHtml = `
+    <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#404040;">
+      A cart handoff was completed on the schedule.
+    </p>
+    ${emailMetaTable([
+      { label: "When", value: when },
+      { label: "Cart", value: input.cartName },
+      { label: "From", value: input.fromTeacherName },
+      { label: "To", value: input.toTeacherName },
+    ])}
+  `;
+  const html = emailShell({
+    preheader: `${input.cartName} · ${input.fromTeacherName} → ${input.toTeacherName}`,
+    eyebrow: "Operations",
+    title: "Handoff completed",
+    lead: "Both teachers were notified of the change.",
+    bodyHtml,
+    cta: { label: "Open Cubicle", href: SITE_ORIGIN },
+    banner: input.localTesting
+      ? {
+          tone: "amber",
+          text: "Local testing — redirected to your sink address.",
+        }
+      : undefined,
+  });
+  return {
+    subject,
+    html,
+    text: plainTextFromLines([
+      subject,
+      "",
+      `Handoff: ${input.fromTeacherName} → ${input.toTeacherName}`,
+      `Cart: ${input.cartName}`,
+      `When: ${when}`,
+      "",
+      `Open: ${SITE_ORIGIN}`,
+    ]),
+  };
+}
+
+export function buildSwapInviteEmail(input: {
+  requesterName: string;
+  cartName: string;
+  dateLabel: string;
+  period: string;
+  mode: "exchange" | "handoff";
+  offeredCartName?: string;
+  message?: string;
+  localTesting?: boolean;
+}): { subject: string; html: string; text: string } {
+  const when = whenLabel(input.dateLabel, input.period);
+  const isExchange = input.mode === "exchange";
+  const subject = isExchange
+    ? `Swap request · ${input.requesterName}`
+    : `Handoff request · ${input.requesterName}`;
+
+  const rows: Array<{ label: string; value: string; multiline?: boolean }> = [
+    { label: "From", value: input.requesterName },
+    { label: "When", value: when },
+    { label: "Your cart", value: input.cartName },
+    { label: "Type", value: isExchange ? "Exchange" : "Handoff" },
+  ];
+  if (isExchange && input.offeredCartName) {
+    rows.push({ label: "They offer", value: input.offeredCartName });
+  }
+  if (input.message?.trim()) {
+    rows.push({ label: "Note", value: input.message.trim(), multiline: true });
+  }
+
+  const bodyHtml = `
+    <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#404040;">
+      <strong style="color:#0a0a0a;font-weight:600;">${escapeHtml(input.requesterName)}</strong>
+      ${
+        isExchange
+          ? "wants to exchange carts for this period."
+          : "is asking you to hand off this booking."
+      }
+    </p>
+    ${emailMetaTable(rows)}
+    <p style="margin:18px 0 0;font-size:13px;line-height:1.5;color:#737373;">
+      Accept or decline from your Cubicle board.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `${input.requesterName} · ${input.cartName} · ${when}`,
+    eyebrow: isExchange ? "Swap invite" : "Handoff invite",
+    title: isExchange ? "New swap request" : "New handoff request",
+    lead: "A colleague is waiting on your response.",
+    bodyHtml,
+    cta: { label: "Review request", href: SITE_ORIGIN },
+    banner: input.localTesting
+      ? {
+          tone: "amber",
+          text: "Local testing — redirected to your sink address.",
+        }
+      : undefined,
+  });
+
+  const text = plainTextFromLines([
+    subject,
+    "",
+    `${input.requesterName} requested a ${isExchange ? "swap" : "handoff"} on ${input.cartName}.`,
+    `When: ${when}`,
+    isExchange && input.offeredCartName
+      ? `They offer: ${input.offeredCartName}`
+      : "",
+    input.message?.trim() ? `Note: ${input.message.trim()}` : "",
+    "",
+    `Open: ${SITE_ORIGIN}`,
+  ]);
+
+  return { subject, html, text };
+}
+
+export function buildSwapInviteUpdateEmail(input: {
+  decision: "accepted" | "declined";
+  deciderName: string;
+  cartName: string;
+  dateLabel: string;
+  period: string;
+  mode: "exchange" | "handoff";
+  localTesting?: boolean;
+}): { subject: string; html: string; text: string } {
+  const when = whenLabel(input.dateLabel, input.period);
+  const accepted = input.decision === "accepted";
+  const kind = input.mode === "exchange" ? "swap" : "handoff";
+  const subject = accepted
+    ? `Request accepted · ${input.cartName}`
+    : `Request declined · ${input.cartName}`;
+
+  const bodyHtml = `
+    <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#404040;">
+      <strong style="color:#0a0a0a;font-weight:600;">${escapeHtml(input.deciderName)}</strong>
+      ${accepted ? "accepted" : "declined"} your ${kind} request.
+    </p>
+    ${emailMetaTable([
+      { label: "Status", value: accepted ? "Accepted" : "Declined" },
+      { label: "Cart", value: input.cartName },
+      { label: "When", value: when },
+      { label: "Type", value: input.mode === "exchange" ? "Exchange" : "Handoff" },
+    ])}
+    <p style="margin:18px 0 0;font-size:13px;line-height:1.5;color:#737373;">
+      ${
+        accepted
+          ? "Your schedule has been updated. Open Cubicle to confirm the board."
+          : "You can request a different slot or offer another cart."
+      }
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `${input.deciderName} ${accepted ? "accepted" : "declined"} · ${when}`,
+    eyebrow: "Request update",
+    title: accepted ? "Request accepted" : "Request declined",
+    lead: accepted
+      ? "You’re all set for this period."
+      : "This swap will not proceed.",
+    bodyHtml,
+    cta: { label: "Open schedule", href: SITE_ORIGIN },
+    banner: input.localTesting
+      ? {
+          tone: "amber",
+          text: "Local testing — redirected to your sink address.",
+        }
+      : undefined,
+  });
+
+  const text = plainTextFromLines([
+    subject,
+    "",
+    `${input.deciderName} ${accepted ? "accepted" : "declined"} your ${kind} on ${input.cartName}.`,
+    `When: ${when}`,
+    "",
+    `Open: ${SITE_ORIGIN}`,
+  ]);
+
+  return { subject, html, text };
+}
+
 export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")

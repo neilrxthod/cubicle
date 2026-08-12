@@ -680,20 +680,42 @@ export async function dismissShareDeclineNotice(
   return { ok: true };
 }
 
-export async function cancelBooking(bookingId: string): Promise<Result> {
+export async function cancelBooking(
+  bookingId: string,
+  options?: { reason?: "maintenance" | "admin" },
+): Promise<Result> {
   const session = requireSession();
   if (!session) return { ok: false, error: "Sign in required." };
 
-  const booking = getState().bookings.find((entry) => entry.id === bookingId);
+  const state = getState();
+  const booking = state.bookings.find((entry) => entry.id === bookingId);
   if (!booking) return { ok: false, error: "Booking not found." };
   if (session.role !== "admin" && booking.teacherId !== session.id) {
     return { ok: false, error: "You can only cancel your own bookings." };
   }
 
+  const cartName =
+    state.carts.find((c) => c.id === booking.cartId)?.name ?? "Cart";
+  const notifyTeacher =
+    session.role === "admin" &&
+    booking.teacherId !== session.id &&
+    (options?.reason === "maintenance" || options?.reason === "admin");
+
   if (isRemoteEnabled()) {
     const { error } = await dbDeleteBooking(bookingId);
     if (error) return { ok: false, error };
-    return refreshRemote();
+    const refreshed = await refreshRemote();
+    if (refreshed.ok && notifyTeacher && options?.reason) {
+      queueNotification({
+        type: "booking_cancelled",
+        teacherId: booking.teacherId,
+        cartName,
+        date: booking.date,
+        period: booking.period,
+        reason: options.reason,
+      });
+    }
+    return refreshed;
   }
 
   const __demo = assertLocalDemoAllowed();
@@ -704,6 +726,17 @@ export async function cancelBooking(bookingId: string): Promise<Result> {
       (entry) => entry.bookingId !== bookingId,
     );
   });
+
+  if (notifyTeacher && options?.reason) {
+    queueNotification({
+      type: "booking_cancelled",
+      teacherId: booking.teacherId,
+      cartName,
+      date: booking.date,
+      period: booking.period,
+      reason: options.reason,
+    });
+  }
 
   return { ok: true };
 }
@@ -1246,7 +1279,20 @@ export async function requestSwap(formData: FormData): Promise<Result> {
       }
       return { ok: false, error };
     }
-    return refreshRemote();
+    const refreshed = await refreshRemote();
+    if (refreshed.ok && booking) {
+      queueSwapInviteNotification({
+        booking,
+        cartName: cart?.name ?? "Cart",
+        requesterName: session.name,
+        mode: evaluated.mode,
+        offeredBookingId,
+        reason,
+        bookings: getState().bookings,
+        carts: getState().carts,
+      });
+    }
+    return refreshed;
   }
 
   const __demo = assertLocalDemoAllowed();
@@ -1265,7 +1311,50 @@ export async function requestSwap(formData: FormData): Promise<Result> {
     });
   });
 
+  if (booking) {
+    queueSwapInviteNotification({
+      booking,
+      cartName: cart?.name ?? "Cart",
+      requesterName: session.name,
+      mode: evaluated.mode,
+      offeredBookingId,
+      reason,
+      bookings: getState().bookings,
+      carts: getState().carts,
+    });
+  }
+
   return { ok: true };
+}
+
+function queueSwapInviteNotification(input: {
+  booking: Booking;
+  cartName: string;
+  requesterName: string;
+  mode: "exchange" | "handoff";
+  offeredBookingId?: string;
+  reason: string;
+  bookings: Booking[];
+  carts: { id: string; name: string }[];
+}) {
+  const offered = input.offeredBookingId
+    ? input.bookings.find((b) => b.id === input.offeredBookingId)
+    : undefined;
+  const offeredCartName = offered
+    ? input.carts.find((c) => c.id === offered.cartId)?.name
+    : undefined;
+
+  queueNotification({
+    type: "swap_invite",
+    ownerId: input.booking.teacherId,
+    requesterName: input.requesterName,
+    cartName: input.cartName,
+    date: input.booking.date,
+    period: input.booking.period,
+    mode: input.mode,
+    offeredCartName,
+    message: input.reason || undefined,
+  });
 }
 
 export async function acceptSwap(requestId: string): Promise<Result> {
@@ -1310,6 +1399,12 @@ export async function acceptSwap(requestId: string): Promise<Result> {
     avatarUrl: session.avatarUrl,
   };
 
+  const mode = evaluated.mode;
+  const ownerCartName = cart?.name ?? "Cart";
+  const counterpartyCartName = counterparty
+    ? state.carts.find((c) => c.id === counterparty.cartId)?.name ?? "Cart"
+    : undefined;
+
   if (isRemoteEnabled()) {
     const { error } = await dbAcceptSwap(request, {
       counterpartyBookingId: counterparty?.id,
@@ -1330,7 +1425,19 @@ export async function acceptSwap(requestId: string): Promise<Result> {
       editor,
     });
     if (error) return { ok: false, error };
-    return refreshRemote();
+    const refreshed = await refreshRemote();
+    if (refreshed.ok) {
+      queueSwapAcceptNotifications({
+        mode,
+        booking,
+        request,
+        counterparty,
+        ownerCartName,
+        counterpartyCartName,
+        deciderName: session.name,
+      });
+    }
+    return refreshed;
   }
 
   const __demo = assertLocalDemoAllowed();
@@ -1395,7 +1502,69 @@ export async function acceptSwap(requestId: string): Promise<Result> {
     }
   });
 
+  queueSwapAcceptNotifications({
+    mode,
+    booking,
+    request,
+    counterparty,
+    ownerCartName,
+    counterpartyCartName,
+    deciderName: session.name,
+  });
+
   return { ok: true };
+}
+
+function queueSwapAcceptNotifications(input: {
+  mode: "exchange" | "handoff";
+  booking: Booking;
+  request: { requesterId: string; requesterName: string };
+  counterparty?: Booking;
+  ownerCartName: string;
+  counterpartyCartName?: string;
+  deciderName: string;
+}) {
+  const { mode, booking, request, counterparty, ownerCartName } = input;
+
+  // Explicit update to the person who sent the invite.
+  queueNotification({
+    type: "swap_invite_update",
+    requesterId: request.requesterId,
+    decision: "accepted",
+    deciderName: input.deciderName,
+    cartName: ownerCartName,
+    date: booking.date,
+    period: booking.period,
+    mode,
+  });
+
+  if (mode === "exchange" && counterparty) {
+    queueNotification({
+      type: "swap_exchange",
+      teacherAId: booking.teacherId,
+      teacherAName: booking.teacherName,
+      cartAName: ownerCartName,
+      teacherBId: counterparty.teacherId,
+      teacherBName: counterparty.teacherName,
+      cartBName: input.counterpartyCartName ?? "Cart",
+      date: booking.date,
+      period: booking.period,
+    });
+    return;
+  }
+
+  if (mode === "handoff") {
+    queueNotification({
+      type: "swap_handoff",
+      fromTeacherId: booking.teacherId,
+      fromTeacherName: booking.teacherName,
+      toTeacherId: request.requesterId,
+      toTeacherName: request.requesterName,
+      cartName: ownerCartName,
+      date: booking.date,
+      period: booking.period,
+    });
+  }
 }
 
 export async function declineSwap(requestId: string): Promise<Result> {
@@ -1417,10 +1586,33 @@ export async function declineSwap(requestId: string): Promise<Result> {
     };
   }
 
+  // Capture before status changes for email.
+  const cartName = booking
+    ? getState().carts.find((c) => c.id === booking.cartId)?.name ?? "Cart"
+    : "Cart";
+  const modeHint = request?.offeredBookingId ? "exchange" : "handoff";
+  const notifyRequester =
+    Boolean(request) &&
+    request!.requesterId !== session.id &&
+    request!.status === "pending";
+
   if (isRemoteEnabled()) {
     const { error } = await dbDeclineSwap(requestId);
     if (error) return { ok: false, error };
-    return refreshRemote();
+    const refreshed = await refreshRemote();
+    if (refreshed.ok && notifyRequester && request && booking) {
+      queueNotification({
+        type: "swap_invite_update",
+        requesterId: request.requesterId,
+        decision: "declined",
+        deciderName: session.name,
+        cartName,
+        date: booking.date,
+        period: booking.period,
+        mode: modeHint,
+      });
+    }
+    return refreshed;
   }
 
   const __demo = assertLocalDemoAllowed();
@@ -1429,6 +1621,19 @@ export async function declineSwap(requestId: string): Promise<Result> {
     const swap = draft.swapRequests.find((entry) => entry.id === requestId);
     if (swap && swap.status === "pending") swap.status = "declined";
   });
+
+  if (notifyRequester && request && booking) {
+    queueNotification({
+      type: "swap_invite_update",
+      requesterId: request.requesterId,
+      decision: "declined",
+      deciderName: session.name,
+      cartName,
+      date: booking.date,
+      period: booking.period,
+      mode: modeHint,
+    });
+  }
 
   return { ok: true };
 }
@@ -1510,6 +1715,7 @@ export async function updateBookingLabel(
 export async function reassignBooking(
   bookingId: string,
   cartId: string,
+  options?: { reason?: "maintenance" | "admin" },
 ): Promise<Result> {
   const session = requireSession();
   if (!session || session.role !== "admin") {
@@ -1524,6 +1730,10 @@ export async function reassignBooking(
   if (!cart || cart.status !== "active") {
     return { ok: false, error: "Cart unavailable." };
   }
+
+  const fromCartName =
+    state.carts.find((c) => c.id === booking.cartId)?.name ?? "Cart";
+  const toCartName = cart.name;
 
   const conflict = state.bookings.find(
     (entry) =>
@@ -1540,10 +1750,26 @@ export async function reassignBooking(
     avatarUrl: session.avatarUrl,
   };
 
+  const reason = options?.reason ?? "admin";
+  const notify =
+    booking.cartId !== cartId && booking.teacherId !== session.id;
+
   if (isRemoteEnabled()) {
     const { error } = await dbReassignBooking(bookingId, cartId, editor);
     if (error) return { ok: false, error };
-    return refreshRemote();
+    const refreshed = await refreshRemote();
+    if (refreshed.ok && notify) {
+      queueNotification({
+        type: "booking_relocated",
+        teacherId: booking.teacherId,
+        fromCartName,
+        toCartName,
+        date: booking.date,
+        period: booking.period,
+        reason,
+      });
+    }
+    return refreshed;
   }
 
   const __demo = assertLocalDemoAllowed();
@@ -1558,6 +1784,18 @@ export async function reassignBooking(
       target.lastEditedAt = new Date().toISOString();
     }
   });
+
+  if (notify) {
+    queueNotification({
+      type: "booking_relocated",
+      teacherId: booking.teacherId,
+      fromCartName,
+      toCartName,
+      date: booking.date,
+      period: booking.period,
+      reason,
+    });
+  }
 
   return { ok: true };
 }

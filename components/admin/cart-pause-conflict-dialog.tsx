@@ -149,7 +149,9 @@ export function CartPauseConflictDialog({
         if (!plan) continue;
 
         if (plan.kind === "reassign") {
-          const res = await reassignBooking(booking.id, plan.cartId);
+          const res = await reassignBooking(booking.id, plan.cartId, {
+            reason: "maintenance",
+          });
           if (!res.ok) {
             setSubmitting(false);
             toast({
@@ -160,7 +162,9 @@ export function CartPauseConflictDialog({
             return;
           }
         } else {
-          const res = await cancelBooking(booking.id);
+          const res = await cancelBooking(booking.id, {
+            reason: "maintenance",
+          });
           if (!res.ok) {
             setSubmitting(false);
             toast({
