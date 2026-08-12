@@ -67,6 +67,7 @@ import {
   type RestrictionCategory,
   type SessionUser,
 } from "@/lib/types";
+import { queueNotification } from "@/lib/email/queue";
 type Ok<T = undefined> = { ok: true; data?: T; error?: undefined };
 type Fail = { ok: false; error: string };
 type Result<T = undefined> = Ok<T> | Fail;
@@ -430,6 +431,17 @@ export async function createBooking(
       return { ok: false, error: error ?? "Could not create booking." };
     }
 
+    if (sharePendingId && !shareSkipped) {
+      queueNotification({
+        type: "share_invite",
+        inviteeId: sharePendingId,
+        inviterName: session.name,
+        cartName: cart.name,
+        date,
+        period,
+      });
+    }
+
     return {
       ok: true,
       data: matched
@@ -486,6 +498,17 @@ export async function createBooking(
   });
   if (localConflict) {
     return { ok: false, error: "That slot is already booked." };
+  }
+
+  if (sharePendingId) {
+    queueNotification({
+      type: "share_invite",
+      inviteeId: sharePendingId,
+      inviterName: session.name,
+      cartName: cart.name,
+      date,
+      period,
+    });
   }
 
   const localBooking = getState().bookings.find((b) => b.id === localBookingId);
@@ -715,7 +738,20 @@ export async function reportIssue(formData: FormData): Promise<Result> {
       reporterName: session.name,
     });
     if (error) return { ok: false, error };
-    return refreshRemote();
+    const refreshed = await refreshRemote();
+    if (refreshed.ok) {
+      const cartName =
+        getState().carts.find((c) => c.id === cartId)?.name ?? "Cart";
+      queueNotification({
+        type: "issue_reported",
+        cartId,
+        cartName,
+        description,
+        severity,
+        reporterName: session.name,
+      });
+    }
+    return refreshed;
   }
 
   const __demo = assertLocalDemoAllowed();
@@ -736,6 +772,19 @@ export async function reportIssue(formData: FormData): Promise<Result> {
       if (cart) cart.status = "maintenance";
     }
   });
+
+  {
+    const cartName =
+      getState().carts.find((c) => c.id === cartId)?.name ?? "Cart";
+    queueNotification({
+      type: "issue_reported",
+      cartId,
+      cartName,
+      description,
+      severity,
+      reporterName: session.name,
+    });
+  }
 
   return { ok: true };
 }
