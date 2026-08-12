@@ -18,6 +18,7 @@ export type DbCart = {
   status: string;
   laptop_count: number | null;
   location: string | null;
+  sort_order?: number | null;
 };
 
 export type DbBooking = {
@@ -124,6 +125,10 @@ export function mapCart(row: DbCart): Cart {
     status: row.status as Cart["status"],
     laptopCount: row.laptop_count ?? undefined,
     location: row.location ?? undefined,
+    sortOrder:
+      typeof row.sort_order === "number" && Number.isFinite(row.sort_order)
+        ? row.sort_order
+        : undefined,
   };
 }
 

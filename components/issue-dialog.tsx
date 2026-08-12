@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "motion/react";
 import {
   Dialog,
   DialogCancel,
@@ -10,12 +11,42 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { reportIssue } from "@/lib/actions";
 import { toast } from "@/hooks/use-toast";
 import type { Cart } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const SEVERITIES = ["low", "medium", "high"] as const;
+type Severity = (typeof SEVERITIES)[number];
+
+/** Corporate triage tones — thumb fill + idle label. */
+const SEVERITY_TONE: Record<
+  Severity,
+  { thumb: string; activeText: string; idleText: string }
+> = {
+  low: {
+    thumb: "bg-emerald-600",
+    activeText: "text-white",
+    idleText: "text-neutral-500 hover:text-emerald-800",
+  },
+  medium: {
+    thumb: "bg-amber-500",
+    activeText: "text-white",
+    idleText: "text-neutral-500 hover:text-amber-800",
+  },
+  high: {
+    thumb: "bg-red-600",
+    activeText: "text-white",
+    idleText: "text-neutral-500 hover:text-red-700",
+  },
+};
 
 /** Dialog panel is instant (no exit animation). */
 const CLOSE_MS = 0;
@@ -109,39 +140,56 @@ export function IssueDialog({
           }}
         >
           {canPickCart ? (
-            <select
+            <Select
               value={cartId}
-              onChange={(e) => setCartId(e.target.value)}
-              aria-label="Cart"
-              className="h-9 w-full rounded-lg border border-neutral-200 bg-white px-3 text-[13px] text-neutral-950 outline-none focus:border-neutral-400"
+              onValueChange={(value) => {
+                if (value) setCartId(value);
+              }}
             >
-              {carts?.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
-
-          <div className="flex rounded-lg bg-neutral-100 p-0.5">
-            {SEVERITIES.map((level) => (
-              <button
-                key={level}
-                type="button"
-                onClick={() => setSeverity(level)}
+              <SelectTrigger
+                aria-label="Cart"
+                size="default"
                 className={cn(
-                  "h-8 flex-1 rounded-md text-[12.5px] font-medium capitalize transition-colors",
-                  severity === level
-                    ? level === "high"
-                      ? "bg-red-600 text-white"
-                      : "bg-white text-neutral-950 shadow-sm"
-                    : "text-neutral-500 hover:text-neutral-800",
+                  "h-9 w-full rounded-lg border-neutral-200 bg-white px-3",
+                  "text-[13px] font-medium text-neutral-950 shadow-none",
+                  "data-[size=default]:h-9",
+                  "focus-visible:border-neutral-400",
                 )}
               >
-                {level}
-              </button>
-            ))}
-          </div>
+                <SelectValue placeholder="Select cart" />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                sideOffset={6}
+                className={cn(
+                  "z-[80] max-h-56 w-[var(--radix-select-trigger-width)]",
+                  "overflow-hidden rounded-xl border border-neutral-200/90 bg-white p-0",
+                  "shadow-[0_4px_24px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)]",
+                  // Snappy corporate open/close (overrides global if needed)
+                  "data-[state=open]:animate-in data-[state=closed]:animate-out",
+                  "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
+                  "data-[state=open]:zoom-in-[0.98] data-[state=closed]:zoom-out-[0.98]",
+                  "data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1",
+                  "duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                )}
+              >
+                {carts?.map((entry) => (
+                  <SelectItem
+                    key={entry.id}
+                    value={entry.id}
+                    className={cn(
+                      "cursor-pointer rounded-lg py-2 pl-3 pr-8 text-[13px] font-medium",
+                      "focus:bg-neutral-100 focus:text-neutral-950",
+                    )}
+                  >
+                    {entry.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+
+          <SeveritySlider value={severity} onChange={setSeverity} />
 
           <textarea
             name="description"
@@ -171,5 +219,72 @@ export function IssueDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Corporate severity control — segmented track with a sliding color thumb.
+ * Low (green) · Medium (amber) · High (red).
+ */
+function SeveritySlider({
+  value,
+  onChange,
+}: {
+  value: Severity;
+  onChange: (next: Severity) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="px-0.5 text-[11px] font-medium tracking-[0.06em] text-neutral-400 uppercase">
+        Severity
+      </span>
+      <div
+        role="radiogroup"
+        aria-label="Severity"
+        className={cn(
+          "grid grid-cols-3 gap-0.5 rounded-full p-1",
+          "border border-neutral-200/80 bg-neutral-100/90",
+        )}
+      >
+        {SEVERITIES.map((level) => {
+          const selected = value === level;
+          const tone = SEVERITY_TONE[level];
+          return (
+            <button
+              key={level}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(level)}
+              className={cn(
+                "relative flex h-8 items-center justify-center rounded-full",
+                "text-[12.5px] font-medium capitalize tracking-[-0.01em]",
+                "outline-none transition-colors duration-150",
+                "focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+                selected ? tone.activeText : tone.idleText,
+              )}
+            >
+              {selected ? (
+                <motion.span
+                  layoutId="issue-severity-thumb"
+                  className={cn(
+                    "absolute inset-0 z-0 rounded-full",
+                    "shadow-[0_1px_2px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.12)]",
+                    tone.thumb,
+                  )}
+                  transition={{
+                    type: "spring",
+                    stiffness: 440,
+                    damping: 36,
+                    mass: 0.65,
+                  }}
+                />
+              ) : null}
+              <span className="relative z-[1]">{level}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

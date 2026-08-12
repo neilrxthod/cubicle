@@ -1,17 +1,49 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { format, parseISO, addDays } from "date-fns"
-import type {
-  Booking,
-  BookingPolicy,
-  Cart,
-  Period,
-  SessionUser,
-  SlotRestriction,
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  MeasuringStrategy,
+  PointerSensor,
+  closestCenter,
+  defaultDropAnimationSideEffects,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+  type DropAnimation,
+  type Modifier,
+} from "@dnd-kit/core"
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import {
+  sortCarts,
+  type Booking,
+  type BookingPolicy,
+  type Cart,
+  type Period,
+  type SessionUser,
+  type SlotRestriction,
 } from "@/lib/types"
 import {
   bookingHasShareInviteFor,
@@ -55,6 +87,7 @@ import {
   cancelBooking,
   createBooking,
   declineShareInvite,
+  reorderCarts,
   updateBookingLabel,
 } from "@/lib/actions"
 import {
@@ -77,6 +110,7 @@ import {
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
+  GripVertical,
   Wrench,
   AlertTriangle,
   Lock,
@@ -93,6 +127,53 @@ import {
 import { usePlatformStore } from "@/lib/data/platform-store"
 
 const PERIODS: Period[] = ["P1", "P2", "P3", "P4", "P5"]
+
+/** Linear / Notion style drop settle. */
+const CART_DROP_ANIMATION: DropAnimation = {
+  duration: 220,
+  easing: "cubic-bezier(0.2, 0, 0, 1)",
+  sideEffects: defaultDropAnimationSideEffects({
+    styles: {
+      active: {
+        opacity: "0.35",
+      },
+    },
+  }),
+}
+
+/**
+ * Clamp drag so the row stays inside the cart list only —
+ * never over the black Cart / P1–P5 header above.
+ */
+function createRestrictToElement(
+  elementRef: { current: HTMLElement | null },
+): Modifier {
+  return ({ transform, draggingNodeRect }) => {
+    const bounds = elementRef.current?.getBoundingClientRect()
+    if (!bounds || !draggingNodeRect) {
+      return { ...transform, x: 0 }
+    }
+
+    let { y } = transform
+    // Top of dragged row must stay ≥ list top (below black header)
+    const minY = bounds.top - draggingNodeRect.top
+    // Bottom of dragged row must stay ≤ list bottom
+    const maxY = bounds.bottom - draggingNodeRect.bottom
+
+    if (minY > maxY) {
+      // Row taller than list — pin to top edge of list
+      y = minY
+    } else {
+      y = Math.min(Math.max(y, minY), maxY)
+    }
+
+    return {
+      ...transform,
+      x: 0,
+      y,
+    }
+  }
+}
 
 /** Parse yyyy-MM-dd as local calendar day (no UTC shift). */
 function parseLocalYmd(ymd: string): Date {
@@ -281,6 +362,147 @@ export function DailyBoard({
   } | null>(null)
 
   const isAdmin = session.role === "admin"
+
+  /** Admin board order — dnd-kit sortable (handle-only). */
+  const [boardCarts, setBoardCarts] = useState(() => sortCarts(carts))
+  const boardCartsRef = useRef(boardCarts)
+  /** Cart rows only (excludes black period header). */
+  const cartListRef = useRef<HTMLDivElement | null>(null)
+  const orderAtDragStart = useRef<string>("")
+  const cartsAtDragStart = useRef<Cart[]>([])
+  const [activeCartId, setActiveCartId] = useState<string | null>(null)
+  /** Live DOM clone of the real board row (full periods UI) for DragOverlay. */
+  const [overlaySnapshot, setOverlaySnapshot] = useState<{
+    html: string
+    width: number
+    height: number
+  } | null>(null)
+  const [reorderBusy, setReorderBusy] = useState(false)
+  const isReordering = Boolean(activeCartId) || reorderBusy
+
+  const cartIds = useMemo(
+    () => boardCarts.map((c) => c.id),
+    [boardCarts],
+  )
+
+  /** No horizontal drag; never cross the black Cart/P1–P5 header. */
+  const cartDndModifiers = useMemo(
+    () => [restrictToVerticalAxis, createRestrictToElement(cartListRef)],
+    [],
+  )
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      // Intentional drag — won’t fight report / book clicks
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  )
+
+  useEffect(() => {
+    boardCartsRef.current = boardCarts
+  }, [boardCarts])
+
+  useEffect(() => {
+    if (activeCartId || reorderBusy) return
+    setBoardCarts(sortCarts(carts))
+  }, [carts, activeCartId, reorderBusy])
+
+  async function persistCartOrder(next: Cart[]) {
+    const ids = next.map((c) => c.id)
+    const started = orderAtDragStart.current
+    if (!started || ids.join("\0") === started) return
+
+    setReorderBusy(true)
+    try {
+      const res = await reorderCarts(ids)
+      if (res && "error" in res && res.error) {
+        setBoardCarts(cartsAtDragStart.current)
+        toast({
+          title: "Could not reorder carts",
+          description: res.error,
+          variant: "destructive",
+        })
+        return
+      }
+      router.refresh()
+    } finally {
+      setReorderBusy(false)
+      orderAtDragStart.current = ""
+      cartsAtDragStart.current = []
+    }
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    const id = String(event.active.id)
+    cartsAtDragStart.current = boardCartsRef.current
+    orderAtDragStart.current = boardCartsRef.current.map((c) => c.id).join("\0")
+
+    // Snapshot the real row UI *before* React dims the source placeholder.
+    const safeId = id.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+    const node = document.querySelector(
+      `[data-cart-row="${safeId}"]`,
+    ) as HTMLElement | null
+    if (node) {
+      const rect = node.getBoundingClientRect()
+      const clone = node.cloneNode(true) as HTMLElement
+      clone.removeAttribute("data-cart-row")
+      clone.style.cssText = [
+        "width:100%",
+        "height:100%",
+        "transform:none",
+        "opacity:1",
+        "transition:none",
+        "pointer-events:none",
+        "box-shadow:none",
+        "outline:none",
+      ].join(";")
+      // Undo any drag-state styling that might already be on children
+      clone.querySelectorAll<HTMLElement>("*").forEach((el) => {
+        if (el.style.opacity) el.style.opacity = "1"
+      })
+      setOverlaySnapshot({
+        html: clone.outerHTML,
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      })
+    } else {
+      setOverlaySnapshot(null)
+    }
+
+    setActiveCartId(id)
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    setActiveCartId(null)
+    setOverlaySnapshot(null)
+    if (!over || active.id === over.id) {
+      orderAtDragStart.current = ""
+      cartsAtDragStart.current = []
+      return
+    }
+    const oldIndex = boardCartsRef.current.findIndex((c) => c.id === active.id)
+    const newIndex = boardCartsRef.current.findIndex((c) => c.id === over.id)
+    if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) {
+      orderAtDragStart.current = ""
+      cartsAtDragStart.current = []
+      return
+    }
+    const next = arrayMove(boardCartsRef.current, oldIndex, newIndex)
+    setBoardCarts(next)
+    boardCartsRef.current = next
+    void persistCartOrder(next)
+  }
+
+  function handleDragCancel() {
+    setActiveCartId(null)
+    setOverlaySnapshot(null)
+    orderAtDragStart.current = ""
+    cartsAtDragStart.current = []
+  }
 
   async function adminDeleteBooking(booking: Booking) {
     if (deletingBookingId) return
@@ -801,55 +1023,47 @@ export function DailyBoard({
             </div>
           ) : null}
 
-            {carts.map((cart) => {
-              const isMaintenanceRow = cart.status === "maintenance"
-              return (
-                <div
-                  key={cart.id}
-                  className={cn(
-                    "board-cols group/row grid border-b border-[var(--hairline)] last:border-b-0",
-                    isMaintenanceRow ? "bg-neutral-50/80" : "bg-white",
-                  )}
+          <div
+            className="relative"
+            data-reordering={isReordering ? "true" : undefined}
+          >
+            {isAdmin ? (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                modifiers={cartDndModifiers}
+                measuring={{
+                  droppable: { strategy: MeasuringStrategy.Always },
+                }}
+                autoScroll={{
+                  threshold: { x: 0, y: 0.12 },
+                  acceleration: 10,
+                  interval: 5,
+                }}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDragCancel={handleDragCancel}
+              >
+                <SortableContext
+                  items={cartIds}
+                  strategy={verticalListSortingStrategy}
                 >
                   <div
-                    className={cn(
-                      "board-sticky-label flex items-center justify-between gap-1.5 border-r border-[var(--hairline)] px-3 py-2.5 sm:gap-2 sm:px-5 sm:py-3",
-                      isMaintenanceRow
-                        ? "bg-neutral-50/95 opacity-70"
-                        : "bg-white",
-                    )}
+                    ref={cartListRef}
+                    className="relative isolate"
+                    data-cart-list
                   >
-                    <div className="min-w-0">
-                      <span className="block truncate text-[13px] font-medium tracking-[-0.02em] text-neutral-950">
-                        {cart.name}
-                      </span>
-                      {isMaintenanceRow ? (
-                        <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
-                          Maintenance
-                        </span>
-                      ) : cart.location ? (
-                        <span className="mt-0.5 block truncate text-[11px] tracking-[-0.01em] text-neutral-400">
-                          {cart.location}
-                        </span>
-                      ) : null}
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`Report issue on ${cart.name}`}
-                      title="Report issue"
-                      onClick={() => setIssueDialog(cart)}
-                      className={cn(
-                        "flex size-8 shrink-0 items-center justify-center rounded-md",
-                        "text-red-600 transition-colors duration-150",
-                        "hover:bg-red-50 hover:text-red-700",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/25",
-                      )}
+                  {boardCarts.map((cart) => {
+                  const isMaintenanceRow = cart.status === "maintenance"
+                  return (
+                    <SortableBoardCartRow
+                      key={cart.id}
+                      cart={cart}
+                      disabled={reorderBusy}
+                      isMaintenanceRow={isMaintenanceRow}
+                      onReportIssue={() => setIssueDialog(cart)}
                     >
-                      <AlertTriangle className="size-3.5" strokeWidth={1.75} />
-                    </button>
-                  </div>
-
-                  {PERIODS.map((period) => {
+                      {PERIODS.map((period) => {
                     const booking = bookingMap.get(`${cart.id}:${period}`)
                     const restriction = restrictionMap.get(`${cart.id}:${period}`)
                     const isMaintenance = cart.status === "maintenance"
@@ -1298,9 +1512,521 @@ export function DailyBoard({
                       </div>
                     )
                   })}
-                </div>
-              )
-            })}
+                    </SortableBoardCartRow>
+                  )
+                })}
+                  </div>
+                </SortableContext>
+                <DragOverlay dropAnimation={CART_DROP_ANIMATION}>
+                  {overlaySnapshot ? (
+                    <BoardCartRowDragOverlay snapshot={overlaySnapshot} />
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
+            ) : (
+              boardCarts.map((cart) => {
+                const isMaintenanceRow = cart.status === "maintenance"
+                return (
+                  <div
+                    key={cart.id}
+                    data-cart-row={cart.id}
+                    className={cn(
+                      "board-cols group/row grid border-b border-[var(--hairline)] last:border-b-0",
+                      isMaintenanceRow ? "bg-neutral-50/80" : "bg-white",
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "board-sticky-label flex items-center justify-between gap-1.5 border-r border-[var(--hairline)] px-3 py-2.5 sm:gap-2 sm:px-5 sm:py-3",
+                        isMaintenanceRow
+                          ? "bg-neutral-50/95 opacity-70"
+                          : "bg-white",
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <span className="block truncate text-[13px] font-medium tracking-[-0.02em] text-neutral-950">
+                          {cart.name}
+                        </span>
+                        {isMaintenanceRow ? (
+                          <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+                            Maintenance
+                          </span>
+                        ) : cart.location ? (
+                          <span className="mt-0.5 block truncate text-[11px] tracking-[-0.01em] text-neutral-400">
+                            {cart.location}
+                          </span>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        aria-label={`Report issue on ${cart.name}`}
+                        title="Report issue"
+                        onClick={() => setIssueDialog(cart)}
+                        className={cn(
+                          "flex size-8 shrink-0 items-center justify-center rounded-md",
+                          "text-red-600 transition-colors duration-150",
+                          "hover:bg-red-50 hover:text-red-700",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/25",
+                        )}
+                      >
+                        <AlertTriangle className="size-3.5" strokeWidth={1.75} />
+                      </button>
+                    </div>
+
+                    {PERIODS.map((period) => {
+                    const booking = bookingMap.get(`${cart.id}:${period}`)
+                    const restriction = restrictionMap.get(`${cart.id}:${period}`)
+                    const isMaintenance = cart.status === "maintenance"
+                    const isRestricted = !!restriction
+                    const restrictionTitle = restriction
+                      ? restrictionLabel(restriction)
+                      : "Restricted by admin"
+
+                    if (isMaintenance) {
+                      return (
+                        <div key={period} className={cellBase}>
+                          <div
+                            title="Cart paused — not bookable"
+                            className={cn(
+                              slotFace,
+                              "bg-neutral-50 text-neutral-300",
+                            )}
+                          >
+                            <Wrench className="size-3.5" strokeWidth={1.25} />
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    if (booking) {
+                      const isInvolved = bookingInvolvesUser(
+                        booking,
+                        session.id,
+                      )
+                      const personName =
+                        nameByTeacherId.get(booking.teacherId) ||
+                        booking.teacherName
+                      const avatarSrc =
+                        avatarByTeacherId.get(booking.teacherId) ??
+                        (booking.teacherId === session.id
+                          ? session.avatarUrl
+                          : undefined)
+                      const shareName = booking.sharedWithId
+                        ? nameByTeacherId.get(booking.sharedWithId) ||
+                          booking.sharedWithName ||
+                          "Shared"
+                        : undefined
+                      const shareSrc = booking.sharedWithId
+                        ? (avatarByTeacherId.get(booking.sharedWithId) ??
+                          (booking.sharedWithId === session.id
+                            ? session.avatarUrl
+                            : undefined) ??
+                          booking.sharedWithAvatarUrl)
+                        : undefined
+                      const inviteForMe = bookingHasShareInviteFor(
+                        booking,
+                        session.id,
+                      )
+                      const invitePendingName = booking.sharePendingId
+                        ? nameByTeacherId.get(booking.sharePendingId) ||
+                          booking.sharePendingName ||
+                          "Colleague"
+                        : undefined
+                      const classLabel = booking.className?.trim()
+                      const purpose = getBookingPurpose(booking)
+                      const purposeTag = purpose?.tag
+                      const boardTag = bookingBoardTagText(
+                        booking,
+                        purposeTag ?? null,
+                      )
+                      const canRenameTag =
+                        isAdmin &&
+                        (booking.teacherId === session.id || multiMode)
+                      const isRenaming = renamingBookingId === booking.id
+                      // Anyone (teacher or admin) may request a swap on someone else's slot.
+                      const isSwapTarget = !isInvolved && !inviteForMe
+                      const hasPendingSwap =
+                        isSwapTarget &&
+                        platform.swapRequests.some(
+                          (s) =>
+                            s.status === "pending" &&
+                            s.bookingId === booking.id &&
+                            s.requesterId === session.id,
+                        )
+                      const shareBit = shareName
+                        ? ` · shared with ${shareName}`
+                        : invitePendingName
+                          ? inviteForMe
+                            ? " · share invite for you"
+                            : ` · invite pending (${invitePendingName})`
+                          : ""
+                      const purposeBit =
+                        purpose && purpose.id !== "class"
+                          ? ` · ${purpose.label}`
+                          : ""
+                      const title = inviteForMe
+                        ? `${personName} invited you to share this cart`
+                        : isInvolved
+                          ? `${classLabel || "Your booking"}${purposeBit}${shareBit} — click to manage`
+                          : hasPendingSwap
+                            ? `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — swap pending`
+                            : isAdmin
+                              ? `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — swap or delete`
+                              : `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — hover to swap`
+                      const deleting = deletingBookingId === booking.id
+                      const inviteBusy = shareInviteBusyId === booking.id
+
+                      return (
+                        <div key={period} className={cellBase}>
+                        <div
+                          className={cn(
+                            slotFace,
+                            "group/slot",
+                            isInvolved || inviteForMe
+                              ? "bg-[#211d1d] hover:bg-[#2a2525]"
+                              : "bg-[#211d1d]/10 hover:bg-[#211d1d]/15",
+                          )}
+                        >
+                          {boardTag ? (
+                            isRenaming ? (
+                              <input
+                                autoFocus
+                                value={renameDraft}
+                                disabled={renameBusy}
+                                maxLength={24}
+                                onChange={(e) =>
+                                  setRenameDraft(e.target.value)
+                                }
+                                onBlur={() => {
+                                  void commitTagRename(booking.id)
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault()
+                                    void commitTagRename(booking.id)
+                                  }
+                                  if (e.key === "Escape") {
+                                    e.preventDefault()
+                                    setRenamingBookingId(null)
+                                  }
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className={cn(
+                                  "absolute top-0.5 right-0.5 z-[3] h-5 w-[4.5rem] rounded px-1",
+                                  "border border-white/30 bg-neutral-950 text-[9px] font-semibold uppercase",
+                                  "tracking-[0.04em] text-white shadow-sm",
+                                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40",
+                                )}
+                              />
+                            ) : (
+                              <span
+                                role={canRenameTag ? "button" : undefined}
+                                tabIndex={canRenameTag ? 0 : undefined}
+                                title={
+                                  canRenameTag
+                                    ? "Double-click to rename tag"
+                                    : boardTag
+                                }
+                                onDoubleClick={(e) => {
+                                  if (!canRenameTag) return
+                                  e.stopPropagation()
+                                  e.preventDefault()
+                                  setRenameDraft(boardTag)
+                                  setRenamingBookingId(booking.id)
+                                }}
+                                onKeyDown={(e) => {
+                                  if (!canRenameTag) return
+                                  if (e.key === "Enter" || e.key === "F2") {
+                                    e.stopPropagation()
+                                    setRenameDraft(boardTag)
+                                    setRenamingBookingId(booking.id)
+                                  }
+                                }}
+                                className={cn(
+                                  "absolute top-1 right-1 z-[2]",
+                                  "rounded px-1 py-px text-[8.5px] font-semibold uppercase tracking-[0.04em]",
+                                  canRenameTag
+                                    ? "cursor-text select-none"
+                                    : "pointer-events-none",
+                                  purpose?.tag
+                                    ? isInvolved || inviteForMe
+                                      ? purpose.tagClassOnDark
+                                      : purpose.tagClass
+                                    : isInvolved || inviteForMe
+                                      ? "bg-white/15 text-white"
+                                      : "bg-neutral-700 text-white",
+                                )}
+                              >
+                                {boardTag}
+                              </span>
+                            )
+                          ) : null}
+
+                          {/* Share invite for you — same slot look + Accept / Decline */}
+                          {inviteForMe ? (
+                            <div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-1.5 p-1">
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  title="Decline"
+                                  aria-label="Decline share invite"
+                                  disabled={inviteBusy}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    void respondShareInvite(booking, "decline")
+                                  }}
+                                  className={inviteChipDeclineClassName(
+                                    "h-7 rounded-full px-2.5 text-[10.5px]",
+                                  )}
+                                >
+                                  Decline
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Accept"
+                                  aria-label="Accept share invite"
+                                  disabled={inviteBusy}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    void respondShareInvite(booking, "accept")
+                                  }}
+                                  className={inviteChipAcceptClassName(
+                                    "h-7 min-w-[3.25rem] rounded-full px-2.5 text-[10.5px]",
+                                  )}
+                                >
+                                  {inviteBusy ? (
+                                    <Loader2
+                                      className="size-3.5 animate-spin"
+                                      strokeWidth={2}
+                                    />
+                                  ) : (
+                                    "Accept"
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {/* Owner: pending invite indicator */}
+                          {!inviteForMe &&
+                          booking.sharePendingId &&
+                          booking.teacherId === session.id ? (
+                            <span
+                              title={`Invite pending: ${invitePendingName}`}
+                              className={cn(
+                                "pointer-events-none absolute bottom-1 left-1 z-[2]",
+                                "flex size-5 items-center justify-center rounded-full",
+                                "bg-sky-500/90 text-white ring-1 ring-white/25",
+                              )}
+                            >
+                              <UserPlus className="size-3" strokeWidth={2} />
+                            </span>
+                          ) : null}
+
+                          <button
+                            type="button"
+                            onClick={() => onCellClick(cart, period)}
+                            title={title}
+                            aria-label={title}
+                            disabled={deleting || inviteForMe}
+                            className={cn(
+                              "absolute inset-0 flex items-center justify-center p-1.5",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset",
+                              isInvolved
+                                ? "focus-visible:ring-white/20"
+                                : "focus-visible:ring-[#211d1d]/20",
+                              "disabled:pointer-events-none",
+                              inviteForMe && "opacity-40",
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "inline-flex transition-[opacity,transform] duration-150 ease-out",
+                                isSwapTarget &&
+                                  "group-hover/slot:opacity-30 group-focus-within/slot:opacity-30",
+                              )}
+                            >
+                              <SlotPeople
+                                primaryName={personName}
+                                primarySrc={avatarSrc}
+                                shareName={shareName}
+                                shareSrc={shareSrc}
+                                onDark={isInvolved || inviteForMe}
+                              />
+                            </span>
+                          </button>
+
+                          {isSwapTarget ? (
+                            <div
+                              className={cn(
+                                "absolute inset-0 z-[1] flex items-center justify-center gap-1",
+                                "opacity-0 transition-opacity duration-150 ease-out",
+                                "pointer-events-none group-hover/slot:pointer-events-auto group-hover/slot:opacity-100",
+                                "group-focus-within/slot:pointer-events-auto group-focus-within/slot:opacity-100",
+                              )}
+                            >
+                              <button
+                                type="button"
+                                title="Request swap"
+                                aria-label={`Request swap for ${personName}`}
+                                disabled={deleting}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onCellClick(cart, period)
+                                }}
+                                className={cn(
+                                  "flex size-8 items-center justify-center rounded-full sm:size-9",
+                                  "bg-white/95 text-neutral-900 shadow-sm ring-1 ring-black/10",
+                                  "transition-transform hover:scale-105 active:scale-95",
+                                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20",
+                                  "disabled:opacity-50",
+                                )}
+                              >
+                                <ArrowLeftRight
+                                  className="size-3.5 sm:size-4"
+                                  strokeWidth={1.75}
+                                />
+                              </button>
+                              {isAdmin ? (
+                                <button
+                                  type="button"
+                                  title="Delete booking"
+                                  aria-label={`Delete booking for ${personName}`}
+                                  disabled={deleting}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setPendingDelete({
+                                      booking,
+                                      cartName: cart.name,
+                                    })
+                                  }}
+                                  className={cn(
+                                    "flex size-8 items-center justify-center rounded-full sm:size-9",
+                                    "bg-white/95 text-red-600 shadow-sm ring-1 ring-black/10",
+                                    "transition-transform hover:scale-105 hover:bg-red-50 active:scale-95",
+                                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/25",
+                                    "disabled:opacity-50",
+                                  )}
+                                >
+                                  <Trash2
+                                    className="size-3.5 sm:size-4"
+                                    strokeWidth={1.75}
+                                  />
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                        </div>
+                      )
+                    }
+
+                    if (isRestricted && session.role !== "admin") {
+                      return (
+                        <div key={period} className={cellBase}>
+                          <div
+                            title={restrictionTitle}
+                            className={cn(
+                              slotFace,
+                              "flex-col gap-1 bg-[repeating-linear-gradient(-45deg,transparent,transparent_3px,rgba(0,0,0,0.03)_3px,rgba(0,0,0,0.03)_4px)] text-neutral-400",
+                            )}
+                          >
+                            <Lock className="size-3" strokeWidth={1.25} />
+                            <span className="text-[9px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+                              {restriction?.category === "ap_exam"
+                                ? "AP"
+                                : restriction?.category === "other" &&
+                                    (restriction.reason ?? "")
+                                      .toLowerCase()
+                                      .includes("holiday")
+                                  ? "Off"
+                                  : "Locked"}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    if (isRestricted && session.role === "admin") {
+                      return (
+                        <div key={period} className={cellBase}>
+                          <button
+                            type="button"
+                            onClick={() => onCellClick(cart, period)}
+                            title={`${restrictionTitle} — admins can still book`}
+                            className={cn(
+                              slotFace,
+                              "flex-col gap-1",
+                              "bg-[repeating-linear-gradient(-45deg,transparent,transparent_3px,rgba(0,0,0,0.03)_3px,rgba(0,0,0,0.03)_4px)]",
+                              "text-neutral-500",
+                              "hover:bg-neutral-100 hover:text-neutral-950",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-900/10",
+                            )}
+                          >
+                            <Lock className="size-3" strokeWidth={1.25} />
+                            <span className="text-[9px] font-medium uppercase tracking-[0.14em]">
+                              Admin
+                            </span>
+                          </button>
+                        </div>
+                      )
+                    }
+
+                    if (!canBookOpenSlots) {
+                      return (
+                        <div key={period} className={cellBase}>
+                          <div
+                            title={
+                              isPastDate
+                                ? "Past date — cannot book"
+                                : "Outside booking window"
+                            }
+                            className={cn(
+                              slotFace,
+                              "bg-neutral-50/80 text-neutral-200",
+                            )}
+                          >
+                            <span className="text-[11px] font-light">—</span>
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <div key={period} className={cellBase}>
+                        <button
+                          type="button"
+                          onClick={() => onCellClick(cart, period)}
+                          title={
+                            multiMode && isAdmin
+                              ? `Book as “${multiTag.trim() || DEFAULT_ADMIN_MULTI_TAG}”`
+                              : "Book this slot"
+                          }
+                          className={cn(
+                            slotFace,
+                            "group/cell bg-neutral-50/50",
+                            "hover:bg-neutral-950",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-900/15",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "text-[10px] font-medium uppercase tracking-[0.16em]",
+                              "text-neutral-300 transition-colors duration-150",
+                              "group-hover/cell:text-white",
+                            )}
+                          >
+                            Book
+                          </span>
+                        </button>
+                      </div>
+                    )
+                  })}
+                  </div>
+                )
+              })
+            )}
+          </div>
           </div>
       </div>
 
@@ -1389,5 +2115,177 @@ export function DailyBoard({
         </DialogContent>
       </Dialog>
     </section>
+  )
+}
+
+
+/**
+ * Floating preview = exact snapshot of the schedule row (cart + real P1–P5 UI).
+ * HTML is cloned from the live row at drag start (before placeholder dimming).
+ */
+function BoardCartRowDragOverlay({
+  snapshot,
+}: {
+  snapshot: { html: string; width: number; height: number }
+}) {
+  return (
+    <div
+      className={cn(
+        // Square corners — match the board grid, no soft rounding while dragging
+        "pointer-events-none overflow-hidden rounded-none bg-white",
+        "border border-black/[0.08]",
+        "shadow-[0_16px_40px_rgba(0,0,0,0.12),0_1px_3px_rgba(0,0,0,0.06)]",
+        "cursor-grabbing",
+      )}
+      style={{
+        width: snapshot.width,
+        height: snapshot.height,
+        borderRadius: 0,
+      }}
+    >
+      <div
+        className="h-full w-full origin-top-left [&>*]:rounded-none"
+        // Exact board row markup (bookings, tags, maintenance faces, etc.)
+        dangerouslySetInnerHTML={{ __html: snapshot.html }}
+      />
+    </div>
+  )
+}
+
+/**
+ * Admin schedule row — dnd-kit sortable.
+ * Drag only via grip handle; vertical-only via modifiers on DndContext.
+ */
+function SortableBoardCartRow({
+  cart,
+  disabled,
+  isMaintenanceRow,
+  onReportIssue,
+  children,
+}: {
+  cart: Cart
+  disabled?: boolean
+  isMaintenanceRow: boolean
+  onReportIssue: () => void
+  children: ReactNode
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: cart.id,
+    disabled: Boolean(disabled),
+    animateLayoutChanges: () => false,
+  })
+
+  const style: CSSProperties = {
+    // Y translate only (modifiers also strip X); no scale warp on the grid
+    transform: CSS.Translate.toString(
+      transform
+        ? { ...transform, x: 0, scaleX: 1, scaleY: 1 }
+        : null,
+    ),
+    transition: isDragging
+      ? undefined
+      : (transition ?? "transform 200ms cubic-bezier(0.2, 0, 0, 1)"),
+    position: "relative",
+    zIndex: isDragging ? 4 : undefined,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      data-cart-row={cart.id}
+      className={cn(
+        "board-cols group/row relative grid border-b border-[var(--hairline)] last:border-b-0",
+        "bg-white outline-none",
+        isMaintenanceRow && "bg-neutral-50/80",
+        // Empty-slot placeholder while the overlay carries the lifted card
+        isDragging &&
+          "z-[4] bg-neutral-50/90 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)]",
+      )}
+    >
+      <div
+        className={cn(
+          "board-sticky-label flex items-center justify-between gap-1.5 border-r border-[var(--hairline)] px-2 py-2.5 sm:gap-2 sm:px-3 sm:py-3",
+          isMaintenanceRow ? "bg-neutral-50/95 opacity-70" : "bg-white",
+          isDragging && "bg-transparent opacity-40",
+        )}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-1.5">
+          <button
+            type="button"
+            ref={setActivatorNodeRef}
+            data-drag-handle
+            aria-label={`Drag to reorder ${cart.name}`}
+            title="Drag to reorder"
+            disabled={disabled}
+            className={cn(
+              "flex size-7 shrink-0 cursor-grab items-center justify-center rounded-md",
+              "text-neutral-300 transition-[color,background-color,transform,box-shadow] duration-150",
+              "hover:bg-neutral-100 hover:text-neutral-600",
+              "active:cursor-grabbing active:scale-95",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+              "touch-none select-none",
+              isDragging &&
+                "cursor-grabbing bg-neutral-900 text-white shadow-sm hover:bg-neutral-900 hover:text-white",
+              disabled && "pointer-events-none opacity-40",
+            )}
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="size-3.5" strokeWidth={1.75} />
+          </button>
+          <div
+            className={cn(
+              "min-w-0 transition-opacity duration-150",
+              isDragging && "opacity-30",
+            )}
+          >
+            <span className="block truncate text-[13px] font-medium tracking-[-0.02em] text-neutral-950">
+              {cart.name}
+            </span>
+            {isMaintenanceRow ? (
+              <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+                Maintenance
+              </span>
+            ) : cart.location ? (
+              <span className="mt-0.5 block truncate text-[11px] tracking-[-0.01em] text-neutral-400">
+                {cart.location}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <button
+          type="button"
+          aria-label={`Report issue on ${cart.name}`}
+          title="Report issue"
+          onClick={onReportIssue}
+          className={cn(
+            "flex size-8 shrink-0 items-center justify-center rounded-md",
+            "text-red-600 transition-colors duration-150",
+            "hover:bg-red-50 hover:text-red-700",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/25",
+            isDragging && "opacity-30",
+          )}
+        >
+          <AlertTriangle className="size-3.5" strokeWidth={1.75} />
+        </button>
+      </div>
+      <div
+        className={cn(
+          "contents",
+          isDragging && "[&>*]:opacity-30",
+        )}
+      >
+        {children}
+      </div>
+    </div>
   )
 }

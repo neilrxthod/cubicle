@@ -70,7 +70,19 @@ export type Cart = {
   status: CartStatus;
   laptopCount?: number;
   location?: string;
+  /** Board / inventory row order (admin drag-and-drop). Lower = higher. */
+  sortOrder?: number;
 };
+
+/** Stable cart list order for the schedule board and inventory. */
+export function sortCarts(carts: readonly Cart[]): Cart[] {
+  return [...carts].sort((a, b) => {
+    const ao = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+    const bo = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+    if (ao !== bo) return ao - bo;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  });
+}
 
 export type Booking = {
   id: string;

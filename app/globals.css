@@ -382,6 +382,24 @@ body[data-scroll-locked] [data-radix-portal] {
     left: 0;
     z-index: 1;
   }
+
+  /*
+    During admin row reorder, transforms break position:sticky.
+    Flatten sticky labels and block accidental slot clicks while dragging.
+  */
+  .board-track[data-reordering="true"] .board-sticky-label {
+    position: relative;
+    left: auto;
+    z-index: auto;
+  }
+
+  .board-track[data-reordering="true"] [data-cart-row] {
+    touch-action: none;
+  }
+
+  .board-track[data-reordering="true"] [data-cart-row] button:not([data-drag-handle]) {
+    pointer-events: none;
+  }
 }
 
 ::selection {

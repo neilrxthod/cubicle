@@ -82,20 +82,24 @@ function SelectContent({
   className,
   children,
   position = 'popper',
+  sideOffset = 6,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         data-slot="select-content"
+        sideOffset={sideOffset}
         className={cn(
-          'bg-popover text-popover-foreground relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border shadow-md motion-layer',
+          'bg-popover text-popover-foreground relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-xl border shadow-md motion-layer',
+          // Soft open/close — fade + slight scale + micro slide (corporate, not bouncy)
           'data-[state=open]:animate-in data-[state=closed]:animate-out',
           'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-          'data-[state=closed]:zoom-out-[0.98] data-[state=open]:zoom-in-[0.98]',
+          'data-[state=closed]:zoom-out-[0.97] data-[state=open]:zoom-in-[0.97]',
           'data-[side=bottom]:slide-in-from-top-1 data-[side=left]:slide-in-from-right-1',
           'data-[side=right]:slide-in-from-left-1 data-[side=top]:slide-in-from-bottom-1',
           'duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]',
+          'will-change-[opacity,transform]',
           position === 'popper' &&
             'data-[side=bottom]:translate-y-0.5 data-[side=left]:-translate-x-0.5 data-[side=right]:translate-x-0.5 data-[side=top]:-translate-y-0.5',
           className,
@@ -108,7 +112,7 @@ function SelectContent({
           className={cn(
             'p-1',
             position === 'popper' &&
-              'h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)] scroll-my-1',
+              'w-full min-w-[var(--radix-select-trigger-width)] scroll-my-1',
           )}
         >
           {children}

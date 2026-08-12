@@ -36,6 +36,7 @@ import {
   dbRequestSwap,
   dbCreateCart,
   dbDeleteCart,
+  dbReorderCarts,
   dbWipeOperationalData,
   dbClearPlatformData,
   dbSetCartStatus,
@@ -56,14 +57,15 @@ import {
   parseEmploymentType,
 } from "@/lib/staff/employment";
 import { splitDisplayName } from "@/lib/profile/display-name";
-import type {
-  Booking,
-  CartStatus,
-  EmploymentType,
-  Period,
-  ProfileUpdate,
-  RestrictionCategory,
-  SessionUser,
+import {
+  sortCarts,
+  type Booking,
+  type CartStatus,
+  type EmploymentType,
+  type Period,
+  type ProfileUpdate,
+  type RestrictionCategory,
+  type SessionUser,
 } from "@/lib/types";
 type Ok<T = undefined> = { ok: true; data?: T; error?: undefined };
 type Fail = { ok: false; error: string };
@@ -959,6 +961,11 @@ export async function createCart(input: {
   }
 
   const id = makeId("cart");
+  const nextOrder =
+    getState().carts.reduce(
+      (max, c) => Math.max(max, c.sortOrder ?? -1),
+      -1,
+    ) + 1;
 
   if (isRemoteEnabled()) {
     const { error } = await dbCreateCart({
@@ -967,6 +974,7 @@ export async function createCart(input: {
       location,
       laptopCount,
       status: "active",
+      sortOrder: nextOrder,
     });
     if (error) return { ok: false, error };
     const refreshed = await refreshRemote();
@@ -983,11 +991,52 @@ export async function createCart(input: {
       status: "active",
       location,
       laptopCount,
+      sortOrder: nextOrder,
     });
-    draft.carts.sort((a, b) => a.name.localeCompare(b.name));
+    draft.carts = sortCarts(draft.carts);
   });
 
   return { ok: true, data: { cartId: id } };
+}
+
+/**
+ * Admin: reorder carts on the schedule board (full row order).
+ * `orderedIds` is the complete cart id list from top to bottom.
+ */
+export async function reorderCarts(orderedIds: string[]): Promise<Result> {
+  const session = requireSession();
+  if (!session || session.role !== "admin") {
+    return { ok: false, error: "Admin only." };
+  }
+
+  const ids = orderedIds.map((id) => String(id ?? "").trim()).filter(Boolean);
+  if (ids.length === 0) return { ok: false, error: "Nothing to reorder." };
+
+  const current = getState().carts;
+  if (ids.length !== current.length) {
+    return { ok: false, error: "Cart list is out of date. Refresh and try again." };
+  }
+  const known = new Set(current.map((c) => c.id));
+  if (ids.some((id) => !known.has(id))) {
+    return { ok: false, error: "Unknown cart in order. Refresh and try again." };
+  }
+
+  if (isRemoteEnabled()) {
+    const { error } = await dbReorderCarts(ids);
+    if (error) return { ok: false, error };
+    return refreshRemote();
+  }
+
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
+  mutate((draft) => {
+    const byId = new Map(draft.carts.map((c) => [c.id, c]));
+    draft.carts = ids.map((id, index) => {
+      const cart = byId.get(id)!;
+      return { ...cart, sortOrder: index };
+    });
+  });
+  return { ok: true };
 }
 
 /** Admin: rename / update cart details. */

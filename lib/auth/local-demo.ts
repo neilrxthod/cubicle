@@ -91,6 +91,7 @@ const SEED_CARTS: Cart[] = [
     status: "active",
     laptopCount: 30,
     location: "Library",
+    sortOrder: 0,
   },
   {
     id: "local-demo-cart-b",
@@ -98,6 +99,7 @@ const SEED_CARTS: Cart[] = [
     status: "active",
     laptopCount: 28,
     location: "Room 204",
+    sortOrder: 1,
   },
   {
     id: "local-demo-cart-c",
@@ -105,6 +107,7 @@ const SEED_CARTS: Cart[] = [
     status: "active",
     laptopCount: 32,
     location: "Science wing",
+    sortOrder: 2,
   },
   {
     id: "local-demo-cart-d",
@@ -112,6 +115,7 @@ const SEED_CARTS: Cart[] = [
     status: "maintenance",
     laptopCount: 24,
     location: "IT office",
+    sortOrder: 3,
   },
 ];
 

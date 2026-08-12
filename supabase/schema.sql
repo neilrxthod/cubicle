@@ -44,8 +44,12 @@ create table if not exists public.carts (
   status text not null default 'active' check (status in ('active', 'maintenance')),
   laptop_count integer,
   location text,
+  sort_order integer,
   created_at timestamptz not null default now()
 );
+
+alter table public.carts
+  add column if not exists sort_order integer;
 
 -- ---------------------------------------------------------------------------
 -- Bookings

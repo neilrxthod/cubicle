@@ -146,7 +146,12 @@ export async function fetchPlatformState(): Promise<PlatformState> {
     swapsRes,
     profilesRes,
   ] = await Promise.all([
-    supabase.from("carts").select("*").order("name"),
+    // Prefer admin sort order; fall back to name if migration not applied.
+    supabase
+      .from("carts")
+      .select("*")
+      .order("sort_order", { ascending: true, nullsFirst: false })
+      .order("name", { ascending: true }),
     supabase.from("bookings").select("*").order("created_at", { ascending: false }),
     supabase.from("issues").select("*").order("created_at", { ascending: false }),
     supabase.from("slot_restrictions").select("*"),
@@ -156,8 +161,19 @@ export async function fetchPlatformState(): Promise<PlatformState> {
 
   const policyLoad = await fetchBookingPolicyRow(supabase);
 
+  let cartsData = cartsRes.data as DbCart[] | null;
+  let cartsError = cartsRes.error;
+  if (
+    cartsError &&
+    cartsError.message.toLowerCase().includes("sort_order")
+  ) {
+    const legacy = await supabase.from("carts").select("*").order("name");
+    cartsData = legacy.data as DbCart[] | null;
+    cartsError = legacy.error;
+  }
+
   const firstError =
-    cartsRes.error ||
+    cartsError ||
     bookingsRes.error ||
     issuesRes.error ||
     restrictionsRes.error ||
@@ -224,7 +240,7 @@ export async function fetchPlatformState(): Promise<PlatformState> {
     : [];
 
   return {
-    carts: ((cartsRes.data as DbCart[] | null) ?? []).map(mapCart),
+    carts: (cartsData ?? []).map(mapCart),
     bookings: ((bookingsRes.data as DbBooking[] | null) ?? []).map(mapBooking),
     issues: ((issuesRes.data as DbIssue[] | null) ?? []).map(mapIssue),
     users: [...profileUsers, ...pendingUsers],
@@ -554,16 +570,54 @@ export async function dbCreateCart(input: {
   location?: string;
   laptopCount?: number;
   status?: CartStatus;
+  sortOrder?: number;
 }): Promise<{ error?: string }> {
   const supabase = client();
-  const { error } = await supabase.from("carts").insert({
+  const payload: Record<string, unknown> = {
     id: input.id,
     name: input.name,
     status: input.status ?? "active",
     location: input.location ?? null,
     laptop_count: input.laptopCount ?? null,
-  });
+  };
+  if (typeof input.sortOrder === "number") {
+    payload.sort_order = input.sortOrder;
+  }
+  const { error } = await supabase.from("carts").insert(payload);
+  if (
+    error &&
+    error.message.toLowerCase().includes("sort_order") &&
+    "sort_order" in payload
+  ) {
+    delete payload.sort_order;
+    const retry = await supabase.from("carts").insert(payload);
+    return { error: retry.error?.message };
+  }
   return { error: error?.message };
+}
+
+/** Admin: write board order for many carts (0…n-1). */
+export async function dbReorderCarts(
+  orderedIds: string[],
+): Promise<{ error?: string }> {
+  const supabase = client();
+  const updates = orderedIds.map((id, index) =>
+    supabase.from("carts").update({ sort_order: index }).eq("id", id),
+  );
+  const results = await Promise.all(updates);
+  for (const res of results) {
+    if (res.error) {
+      const msg = res.error.message.toLowerCase();
+      if (msg.includes("sort_order")) {
+        return {
+          error:
+            "Cart order column missing. Run supabase/cart-sort-order.sql in the SQL editor.",
+        };
+      }
+      return { error: res.error.message };
+    }
+  }
+  return {};
 }
 
 export async function dbUpdateCart(
