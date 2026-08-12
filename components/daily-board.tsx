@@ -8,6 +8,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react"
+import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
@@ -128,14 +129,14 @@ import { usePlatformStore } from "@/lib/data/platform-store"
 
 const PERIODS: Period[] = ["P1", "P2", "P3", "P4", "P5"]
 
-/** Linear / Notion style drop settle. */
+/** Apple-like settle: short, soft deceleration into place. */
 const CART_DROP_ANIMATION: DropAnimation = {
-  duration: 220,
-  easing: "cubic-bezier(0.2, 0, 0, 1)",
+  duration: 280,
+  easing: "cubic-bezier(0.22, 1, 0.36, 1)",
   sideEffects: defaultDropAnimationSideEffects({
     styles: {
       active: {
-        opacity: "0.35",
+        opacity: "0.2",
       },
     },
   }),
@@ -463,6 +464,17 @@ export function DailyBoard({
       clone.querySelectorAll<HTMLElement>("*").forEach((el) => {
         if (el.style.opacity) el.style.opacity = "1"
       })
+      // Grip must not flash black in the floating clone
+      const grip = clone.querySelector(
+        "[data-drag-handle]",
+      ) as HTMLElement | null
+      if (grip) {
+        grip.style.background = "transparent"
+        grip.style.color = "#737373"
+        grip.style.boxShadow = "none"
+        grip.style.transform = "none"
+        grip.style.transition = "none"
+      }
       setOverlaySnapshot({
         html: clone.outerHTML,
         width: Math.round(rect.width),
@@ -479,11 +491,13 @@ export function DailyBoard({
     const { active, over } = event
     setActiveCartId(null)
     setOverlaySnapshot(null)
+
     if (!over || active.id === over.id) {
       orderAtDragStart.current = ""
       cartsAtDragStart.current = []
       return
     }
+
     const oldIndex = boardCartsRef.current.findIndex((c) => c.id === active.id)
     const newIndex = boardCartsRef.current.findIndex((c) => c.id === over.id)
     if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) {
@@ -491,9 +505,10 @@ export function DailyBoard({
       cartsAtDragStart.current = []
       return
     }
+
     const next = arrayMove(boardCartsRef.current, oldIndex, newIndex)
-    setBoardCarts(next)
     boardCartsRef.current = next
+    setBoardCarts(next)
     void persistCartOrder(next)
   }
 
@@ -981,8 +996,14 @@ export function DailyBoard({
       </div>
 
       {/* ── Period grid ── */}
-      <div className="board-scroll">
-        <div className="board-track">
+      <div
+        className="board-scroll"
+        data-reordering={isReordering ? "true" : undefined}
+      >
+        <div
+          className="board-track"
+          data-reordering={isReordering ? "true" : undefined}
+        >
           <div className="board-cols grid bg-black">
             <div className="board-sticky-label flex items-center bg-black px-3 py-2.5 text-[10px] font-normal uppercase tracking-[0.18em] text-white/40 sm:px-5 sm:py-3">
               Cart
@@ -1023,23 +1044,17 @@ export function DailyBoard({
             </div>
           ) : null}
 
-          <div
-            className="relative"
-            data-reordering={isReordering ? "true" : undefined}
-          >
+          <div className="relative">
             {isAdmin ? (
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
                 modifiers={cartDndModifiers}
                 measuring={{
-                  droppable: { strategy: MeasuringStrategy.Always },
+                  // Avoid continuous remeasure thrash during rapid pointer moves
+                  droppable: { strategy: MeasuringStrategy.BeforeDragging },
                 }}
-                autoScroll={{
-                  threshold: { x: 0, y: 0.12 },
-                  acceleration: 10,
-                  interval: 5,
-                }}
+                autoScroll={false}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
                 onDragCancel={handleDragCancel}
@@ -1517,11 +1532,25 @@ export function DailyBoard({
                 })}
                   </div>
                 </SortableContext>
-                <DragOverlay dropAnimation={CART_DROP_ANIMATION}>
-                  {overlaySnapshot ? (
-                    <BoardCartRowDragOverlay snapshot={overlaySnapshot} />
-                  ) : null}
-                </DragOverlay>
+                {/*
+                  Portal outside the board card so overflow-hidden + rounded-2xl
+                  (and board-scroll) cannot clip the floating row into soft
+                  bottom corners when it hits the last-card vertical limit.
+                */}
+                {typeof document !== "undefined"
+                  ? createPortal(
+                      <DragOverlay
+                        dropAnimation={CART_DROP_ANIMATION}
+                        zIndex={1000}
+                        style={{ overflow: "visible" }}
+                      >
+                        {overlaySnapshot ? (
+                          <BoardCartRowDragOverlay snapshot={overlaySnapshot} />
+                        ) : null}
+                      </DragOverlay>,
+                      document.body,
+                    )
+                  : null}
               </DndContext>
             ) : (
               boardCarts.map((cart) => {
@@ -2120,8 +2149,8 @@ export function DailyBoard({
 
 
 /**
- * Floating preview = exact snapshot of the schedule row (cart + real P1–P5 UI).
- * HTML is cloned from the live row at drag start (before placeholder dimming).
+ * Floating preview — Apple list lift: soft multi-layer shadow, no hard chrome.
+ * Portaled to body so board overflow/radius never soft-clips the corners.
  */
 function BoardCartRowDragOverlay({
   snapshot,
@@ -2131,21 +2160,23 @@ function BoardCartRowDragOverlay({
   return (
     <div
       className={cn(
-        // Square corners — match the board grid, no soft rounding while dragging
-        "pointer-events-none overflow-hidden rounded-none bg-white",
-        "border border-black/[0.08]",
-        "shadow-[0_16px_40px_rgba(0,0,0,0.12),0_1px_3px_rgba(0,0,0,0.06)]",
-        "cursor-grabbing",
+        "pointer-events-none cursor-grabbing overflow-hidden bg-white",
+        // Hairline edge + depth — no scale (scale wider than track flickers scroll)
+        "rounded-[2px]",
+        "shadow-[0_0_0_0.5px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.10),0_20px_40px_rgba(0,0,0,0.06)]",
       )}
       style={{
         width: snapshot.width,
         height: snapshot.height,
-        borderRadius: 0,
       }}
     >
       <div
-        className="h-full w-full origin-top-left [&>*]:rounded-none"
-        // Exact board row markup (bookings, tags, maintenance faces, etc.)
+        className={cn(
+          "h-full w-full origin-top-left",
+          "[&_[data-drag-handle]]:bg-transparent [&_[data-drag-handle]]:text-neutral-500",
+          "[&_[data-drag-handle]]:opacity-100 [&_[data-drag-handle]]:shadow-none",
+          "[&_[data-drag-handle]]:scale-100 [&_[data-drag-handle]]:transition-none",
+        )}
         dangerouslySetInnerHTML={{ __html: snapshot.html }}
       />
     </div>
@@ -2154,7 +2185,7 @@ function BoardCartRowDragOverlay({
 
 /**
  * Admin schedule row — dnd-kit sortable.
- * Drag only via grip handle; vertical-only via modifiers on DndContext.
+ * Drag only via grip; vertical-only via modifiers. Order commits on drop.
  */
 function SortableBoardCartRow({
   cart,
@@ -2180,6 +2211,7 @@ function SortableBoardCartRow({
   } = useSortable({
     id: cart.id,
     disabled: Boolean(disabled),
+    // Prevent layout animation thrash when the pointer moves quickly
     animateLayoutChanges: () => false,
   })
 
@@ -2190,11 +2222,9 @@ function SortableBoardCartRow({
         ? { ...transform, x: 0, scaleX: 1, scaleY: 1 }
         : null,
     ),
-    transition: isDragging
-      ? undefined
-      : (transition ?? "transform 200ms cubic-bezier(0.2, 0, 0, 1)"),
+    transition: isDragging ? undefined : transition,
     position: "relative",
-    zIndex: isDragging ? 4 : undefined,
+    zIndex: isDragging ? 1 : undefined,
   }
 
   return (
@@ -2202,20 +2232,21 @@ function SortableBoardCartRow({
       ref={setNodeRef}
       style={style}
       data-cart-row={cart.id}
+      data-dragging={isDragging ? "true" : undefined}
       className={cn(
         "board-cols group/row relative grid border-b border-[var(--hairline)] last:border-b-0",
         "bg-white outline-none",
         isMaintenanceRow && "bg-neutral-50/80",
-        // Empty-slot placeholder while the overlay carries the lifted card
+        // Placeholder “hole” under the lifted row — quiet, no rails
         isDragging &&
-          "z-[4] bg-neutral-50/90 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)]",
+          "z-[1] bg-neutral-100/50 opacity-[0.22] shadow-none",
       )}
     >
       <div
         className={cn(
           "board-sticky-label flex items-center justify-between gap-1.5 border-r border-[var(--hairline)] px-2 py-2.5 sm:gap-2 sm:px-3 sm:py-3",
           isMaintenanceRow ? "bg-neutral-50/95 opacity-70" : "bg-white",
-          isDragging && "bg-transparent opacity-40",
+          isDragging && "bg-transparent border-transparent",
         )}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-1.5">
@@ -2228,26 +2259,28 @@ function SortableBoardCartRow({
             disabled={disabled}
             className={cn(
               "flex size-7 shrink-0 cursor-grab items-center justify-center rounded-md",
-              "text-neutral-300 transition-[color,background-color,transform,box-shadow] duration-150",
-              "hover:bg-neutral-100 hover:text-neutral-600",
-              "active:cursor-grabbing active:scale-95",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+              // Quiet grip — present, not loud (Apple list reorder)
+              "text-neutral-300/80",
+              "opacity-50 transition-[opacity,color,background-color] duration-150",
+              "group-hover/row:opacity-100",
+              "hover:bg-neutral-100/80 hover:text-neutral-500",
+              "active:cursor-grabbing",
+              "focus-visible:opacity-100 focus-visible:outline-none",
+              "focus-visible:ring-2 focus-visible:ring-black/10",
               "touch-none select-none",
               isDragging &&
-                "cursor-grabbing bg-neutral-900 text-white shadow-sm hover:bg-neutral-900 hover:text-white",
-              disabled && "pointer-events-none opacity-40",
+                "cursor-grabbing opacity-0 hover:bg-transparent",
+              disabled && "pointer-events-none opacity-30",
             )}
             {...attributes}
             {...listeners}
           >
-            <GripVertical className="size-3.5" strokeWidth={1.75} />
+            <GripVertical
+              className="pointer-events-none size-3.5"
+              strokeWidth={1.5}
+            />
           </button>
-          <div
-            className={cn(
-              "min-w-0 transition-opacity duration-150",
-              isDragging && "opacity-30",
-            )}
-          >
+          <div className="min-w-0">
             <span className="block truncate text-[13px] font-medium tracking-[-0.02em] text-neutral-950">
               {cart.name}
             </span>
@@ -2269,21 +2302,16 @@ function SortableBoardCartRow({
           onClick={onReportIssue}
           className={cn(
             "flex size-8 shrink-0 items-center justify-center rounded-md",
-            "text-red-600 transition-colors duration-150",
+            "text-red-600/90 transition-colors duration-150",
             "hover:bg-red-50 hover:text-red-700",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/25",
-            isDragging && "opacity-30",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/20",
+            isDragging && "opacity-0",
           )}
         >
           <AlertTriangle className="size-3.5" strokeWidth={1.75} />
         </button>
       </div>
-      <div
-        className={cn(
-          "contents",
-          isDragging && "[&>*]:opacity-30",
-        )}
-      >
+      <div className={cn("contents", isDragging && "[&>*]:opacity-30")}>
         {children}
       </div>
     </div>
