@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import {
   getLocalEmailPrefs,
   isValidLocalTestEmail,
@@ -8,20 +8,16 @@ import {
   showLocalEmailTestingUi,
   type LocalEmailPrefs,
 } from "@/lib/email/local-dev";
-import { sendLocalTestEmail } from "@/lib/email/queue";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import {
-  SettingsDivider,
-  SettingsField,
   SettingsSection,
   SettingsToggleRow,
   settingsInputClass,
 } from "@/components/settings/settings-section";
 
 /**
- * Local-only engineer controls for Brevo.
- * Hidden on production hosts. Defaults: no sends until toggle is on.
+ * Local-only email sink controls. Hidden on production.
  */
 export function LocalEmailTestingSection() {
   const [visible, setVisible] = useState(false);
@@ -29,11 +25,8 @@ export function LocalEmailTestingSection() {
     enabled: false,
     testEmail: "",
   });
-  const [pending, startTransition] = useTransition();
-  const [status, setStatus] = useState<{
-    type: "ok" | "error";
-    message: string;
-  } | null>(null);
+  const [draftEmail, setDraftEmail] = useState("");
+  const [savedFlash, setSavedFlash] = useState(false);
 
   useEffect(() => {
     if (!showLocalEmailTestingUi()) {
@@ -41,134 +34,89 @@ export function LocalEmailTestingSection() {
       return;
     }
     setVisible(true);
-    setPrefs(getLocalEmailPrefs());
+    const next = getLocalEmailPrefs();
+    setPrefs(next);
+    setDraftEmail(next.testEmail);
   }, []);
 
   if (!visible) return null;
 
-  const emailValid = isValidLocalTestEmail(prefs.testEmail);
-  const canSendTest = prefs.enabled && emailValid && !pending;
+  const emailValid =
+    draftEmail.trim() === "" || isValidLocalTestEmail(draftEmail);
+  const dirty = draftEmail.trim() !== prefs.testEmail;
+  const canSave =
+    dirty && emailValid && (draftEmail.trim() === "" || isValidLocalTestEmail(draftEmail));
 
-  function persist(partial: Partial<LocalEmailPrefs>) {
-    const next = setLocalEmailPrefs(partial);
+  function onSave() {
+    const email = draftEmail.trim();
+    if (email && !isValidLocalTestEmail(email)) return;
+    const next = setLocalEmailPrefs({ testEmail: email });
     setPrefs(next);
-    setStatus(null);
-  }
-
-  function onSendTest() {
-    setStatus(null);
-    startTransition(async () => {
-      const result = await sendLocalTestEmail();
-      if (!result.ok) {
-        setStatus({
-          type: "error",
-          message: result.error ?? "Could not send test email.",
-        });
-        return;
-      }
-      if (result.skipped) {
-        setStatus({
-          type: "error",
-          message:
-            result.reason ??
-            "Brevo skipped the send. Check BREVO_API_KEY and BREVO_SENDER_EMAIL in .env.local.",
-        });
-        return;
-      }
-      setStatus({
-        type: "ok",
-        message: `Test email sent to ${prefs.testEmail.trim()}.`,
-      });
-    });
+    setDraftEmail(next.testEmail);
+    setSavedFlash(true);
+    window.setTimeout(() => setSavedFlash(false), 1500);
   }
 
   return (
     <SettingsSection
       id="local-email"
-      title="Email (local testing)"
-      titleClassName="text-amber-800/70"
-      cardClassName="border-amber-200/70"
+      title="Email notifications (local testing)"
+      titleClassName="text-amber-800/75"
+      cardClassName="border-amber-200/80 bg-amber-50/40"
     >
-      <div className="border-b border-amber-100 bg-amber-50/50 px-4 py-2.5 sm:px-5">
-        <p className="text-[12px] leading-snug text-amber-900/70">
-          Local development only. Off by default — nothing is sent via Brevo
-          until you enable this and set a sink address. Production never uses
-          these settings.
-        </p>
-      </div>
-
       <SettingsToggleRow
-        title="Send test emails"
-        description="When on, notification mail goes only to your sink address"
+        title="Enable"
+        description="Route local mail to the address below"
         control={
           <Switch
             checked={prefs.enabled}
-            onCheckedChange={(checked) => persist({ enabled: checked })}
-            aria-label="Send test emails in local development"
+            onCheckedChange={(checked) => {
+              const next = setLocalEmailPrefs({ enabled: checked });
+              setPrefs(next);
+            }}
+            aria-label="Enable local email notifications"
           />
         }
       />
 
-      <SettingsDivider />
+      <div className="mx-4 h-px bg-amber-200/70 sm:mx-5" role="separator" aria-hidden />
 
-      <div className="space-y-3 px-4 py-4 sm:px-5">
-        <SettingsField label="Sink email" htmlFor="local-email-sink">
-          <input
-            id="local-email-sink"
-            type="email"
-            autoComplete="email"
-            spellCheck={false}
-            placeholder="you@example.com"
-            value={prefs.testEmail}
-            onChange={(e) => {
-              setPrefs((p) => ({ ...p, testEmail: e.target.value }));
-            }}
-            onBlur={() => persist({ testEmail: prefs.testEmail })}
-            className={cn(
-              settingsInputClass,
-              prefs.testEmail &&
-                !emailValid &&
-                "border-red-300 focus:border-red-400",
-            )}
-          />
-        </SettingsField>
-        <p className="text-[11.5px] leading-snug text-neutral-400">
-          All local notifications (issues, share invites) are rewritten to this
-          inbox. School staff never receive them from this machine.
-        </p>
-
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <button
-            type="button"
-            disabled={!canSendTest}
-            onClick={onSendTest}
-            className={cn(
-              "h-8 rounded-md px-3 text-[12.5px] font-medium transition-colors",
-              canSendTest
-                ? "bg-neutral-950 text-white hover:bg-neutral-800"
-                : "cursor-not-allowed bg-neutral-100 text-neutral-400",
-            )}
-          >
-            {pending ? "Sending…" : "Send test email"}
-          </button>
-          {prefs.enabled && !emailValid ? (
-            <span className="text-[12px] text-neutral-400">
-              Enter a valid email to enable sending
-            </span>
-          ) : null}
-        </div>
-
-        {status ? (
-          <p
-            role="status"
-            className={cn(
-              "text-[12.5px]",
-              status.type === "ok" ? "text-emerald-700" : "text-red-600",
-            )}
-          >
-            {status.message}
-          </p>
-        ) : null}
+      <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:gap-3 sm:px-5">
+        <input
+          id="local-email-sink"
+          type="email"
+          autoComplete="email"
+          spellCheck={false}
+          placeholder="you@example.com"
+          value={draftEmail}
+          onChange={(e) => setDraftEmail(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onSave();
+            }
+          }}
+          aria-label="Notification email"
+          className={cn(
+            settingsInputClass,
+            "border-amber-200/90 bg-white sm:flex-1",
+            "hover:border-amber-300 focus:border-amber-400 focus:shadow-[0_0_0_3px_rgba(251,191,36,0.15)]",
+            draftEmail && !emailValid && "border-red-300 focus:border-red-400",
+          )}
+        />
+        <button
+          type="button"
+          disabled={!canSave}
+          onClick={onSave}
+          className={cn(
+            "h-9 shrink-0 rounded-[10px] px-4 text-[13px] font-medium tracking-[-0.01em] transition-colors",
+            canSave
+              ? "bg-amber-500 text-white hover:bg-amber-600"
+              : "cursor-not-allowed bg-amber-100 text-amber-400",
+          )}
+        >
+          {savedFlash ? "Saved" : "Save"}
+        </button>
       </div>
     </SettingsSection>
   );
