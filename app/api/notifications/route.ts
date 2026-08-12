@@ -9,12 +9,10 @@ import {
   type LocalEmailSink,
 } from "@/lib/email/delivery";
 import {
-  emailShell,
-  escapeHtml,
-  plainTextFromLines,
+  buildDevTestEmail,
+  buildIssueReportEmail,
+  buildShareInviteEmail,
 } from "@/lib/email/templates";
-import { SITE_ORIGIN } from "@/lib/site";
-import { isLocalDevRuntime } from "@/lib/data/durability";
 import type { NotificationPayload } from "@/lib/email/queue";
 
 type ProfileMailRow = {
@@ -160,30 +158,12 @@ export async function POST(request: Request) {
 }
 
 async function sendDevTest(email: string) {
-  const title = localSubject("Test notification");
-  const bodyHtml = `
-    <p style="margin:0 0 12px;">
-      Local email testing is working. This message was sent only to your sink address.
-    </p>
-    <p style="margin:0;color:#737373;font-size:13px;">
-      Runtime: <code>local</code> · Host: <code>${escapeHtml(isLocalDevRuntime() ? "local" : "unknown")}</code>
-    </p>
-  `;
-  const html = emailShell({
-    title: "Test notification",
-    bodyHtml,
-    cta: { label: "Open settings", href: `${SITE_ORIGIN}/settings` },
-  });
+  const built = buildDevTestEmail({ sinkEmail: email });
   const result = await sendEmail({
     to: { email, name: "Local sink" },
-    subject: title,
-    html,
-    text: plainTextFromLines([
-      "Cubicle local test",
-      "",
-      "Local email testing is working.",
-      `Sink: ${email}`,
-    ]),
+    subject: built.subject,
+    html: built.html,
+    text: built.text,
     tags: ["local-dev", "dev-test"],
   });
   if (!result.ok) return { ok: false, error: result.error };
@@ -207,51 +187,24 @@ async function sendIssueEmail(opts: {
     return { ok: true, sent: 0 };
   }
 
-  const baseTitle =
-    severity === "high"
-      ? `High severity issue · ${cartName}`
-      : `Issue reported · ${cartName}`;
-  const title = opts.subjectPrefix ? localSubject(baseTitle) : baseTitle;
-
-  const bodyHtml = `
-    <p style="margin:0 0 12px;">
-      <strong>${escapeHtml(reporterName)}</strong> reported an issue on
-      <strong>${escapeHtml(cartName)}</strong>.
-    </p>
-    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 12px;font-size:13px;">
-      <tr>
-        <td style="padding:6px 0;color:#737373;width:88px;">Severity</td>
-        <td style="padding:6px 0;color:#0a0a0a;text-transform:capitalize;">${escapeHtml(severity)}</td>
-      </tr>
-      <tr>
-        <td style="padding:6px 0;color:#737373;vertical-align:top;">Details</td>
-        <td style="padding:6px 0;color:#0a0a0a;white-space:pre-wrap;">${escapeHtml(description)}</td>
-      </tr>
-    </table>
-  `;
-
-  const html = emailShell({
-    title: baseTitle,
-    bodyHtml,
-    cta: { label: "Open issues", href: `${SITE_ORIGIN}/issues` },
+  const built = buildIssueReportEmail({
+    reporterName,
+    cartName,
+    severity,
+    description,
+    localTesting: Boolean(opts.subjectPrefix),
   });
-  const text = plainTextFromLines([
-    title,
-    "",
-    `${reporterName} reported an issue on ${cartName}.`,
-    `Severity: ${severity}`,
-    `Details: ${description}`,
-    "",
-    `Open: ${SITE_ORIGIN}/issues`,
-  ]);
+  const subject = opts.subjectPrefix
+    ? localSubject(built.subject)
+    : built.subject;
 
   let sent = 0;
   for (const row of opts.recipients) {
     const result = await sendEmail({
       to: row,
-      subject: title,
-      html,
-      text,
+      subject,
+      html: built.html,
+      text: built.text,
       tags: [
         "issue-report",
         `severity-${severity}`,
@@ -281,42 +234,22 @@ async function sendShareEmail(opts: {
     /* keep raw */
   }
 
-  const baseTitle = `${inviterName} invited you to share a cart`;
-  const title = opts.subjectPrefix ? localSubject(baseTitle) : baseTitle;
-
-  const bodyHtml = `
-    <p style="margin:0 0 12px;">
-      <strong>${escapeHtml(inviterName)}</strong> wants to share
-      <strong>${escapeHtml(cartName)}</strong> with you.
-    </p>
-    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 12px;font-size:13px;">
-      <tr>
-        <td style="padding:6px 0;color:#737373;width:88px;">When</td>
-        <td style="padding:6px 0;color:#0a0a0a;">${escapeHtml(dateLabel)}${period ? ` · ${escapeHtml(period)}` : ""}</td>
-      </tr>
-    </table>
-    <p style="margin:0;color:#525252;">Accept or decline the invite in Cubicle.</p>
-  `;
-
-  const html = emailShell({
-    title: baseTitle,
-    bodyHtml,
-    cta: { label: "Open Cubicle", href: SITE_ORIGIN },
+  const built = buildShareInviteEmail({
+    inviterName,
+    cartName,
+    dateLabel,
+    period,
+    localTesting: Boolean(opts.subjectPrefix),
   });
-  const text = plainTextFromLines([
-    title,
-    "",
-    `${inviterName} invited you to share ${cartName}.`,
-    `When: ${dateLabel}${period ? ` · ${period}` : ""}`,
-    "",
-    `Open: ${SITE_ORIGIN}`,
-  ]);
+  const subject = opts.subjectPrefix
+    ? localSubject(built.subject)
+    : built.subject;
 
   const result = await sendEmail({
     to: opts.to,
-    subject: title,
-    html,
-    text,
+    subject,
+    html: built.html,
+    text: built.text,
     tags: ["share-invite", ...(opts.subjectPrefix ? ["local-dev"] : [])],
   });
 
