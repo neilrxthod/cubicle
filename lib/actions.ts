@@ -37,6 +37,7 @@ import {
   dbCreateCart,
   dbDeleteCart,
   dbWipeOperationalData,
+  dbClearPlatformData,
   dbSetCartStatus,
   dbSyncBookingTeacherName,
   dbSyncLastEditorAvatar,
@@ -105,28 +106,122 @@ export async function hydratePlatformFromSupabase(): Promise<Result> {
   return refreshRemote();
 }
 
+/** Admin can clear specific operational tables (or everything operational). */
+export type ClearDataTarget =
+  | "bookings"
+  | "issues"
+  | "restrictions"
+  | "swaps"
+  | "carts"
+  | "all";
+
+export const CLEAR_DATA_OPTIONS: ReadonlyArray<{
+  id: ClearDataTarget;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "bookings",
+    label: "Bookings",
+    description: "All cart reservations. Swap requests tied to them may also clear.",
+  },
+  {
+    id: "issues",
+    label: "Issues",
+    description: "All reported cart issues.",
+  },
+  {
+    id: "restrictions",
+    label: "Locks",
+    description: "All day/slot restrictions (locks).",
+  },
+  {
+    id: "swaps",
+    label: "Swap requests",
+    description: "All pending and past swap requests.",
+  },
+  {
+    id: "carts",
+    label: "Inventory",
+    description: "All carts (and cascading bookings / issues / locks).",
+  },
+  {
+    id: "all",
+    label: "Everything operational",
+    description:
+      "Carts, bookings, issues, locks, and swaps. Staff accounts stay.",
+  },
+];
+
 /**
  * Explicit admin reset: wipe carts, bookings, issues, restrictions, swaps.
  * Keeps staff profiles / allowlist. Never auto-called on page load.
  */
 export async function wipeOperationalData(): Promise<Result> {
+  return clearPlatformData("all");
+}
+
+/**
+ * Targeted admin clear. Keeps staff profiles / allowlist.
+ */
+export async function clearPlatformData(
+  target: ClearDataTarget,
+): Promise<Result> {
   const session = requireSession();
   if (!session || session.role !== "admin") {
     return { ok: false, error: "Admin only." };
   }
 
   if (isRemoteEnabled()) {
-    const { error } = await dbWipeOperationalData();
+    const { error } = await dbClearPlatformData(target);
     if (error) return { ok: false, error };
-    // Refresh from Postgres — do not force-empty first (would drop client profiles mid-session).
     return refreshRemote();
   }
 
   const __demo = assertLocalDemoAllowed();
   if (!__demo.ok) return __demo;
-  forceEmptyPlatformState();
-  // Local sandbox: restore demo personas + starter carts after an inventory wipe.
-  if (isLocalDemoMode()) {
+
+  if (target === "all") {
+    forceEmptyPlatformState();
+    if (isLocalDemoMode()) {
+      try {
+        localStorage.removeItem("cubicle_local_demo_seed_revision");
+      } catch {
+        // ignore
+      }
+      ensureLocalDemoSandbox();
+    }
+    return { ok: true };
+  }
+
+  mutate((draft) => {
+    if (target === "bookings") {
+      draft.bookings = [];
+      draft.swapRequests = [];
+      return;
+    }
+    if (target === "issues") {
+      draft.issues = [];
+      return;
+    }
+    if (target === "restrictions") {
+      draft.slotRestrictions = [];
+      return;
+    }
+    if (target === "swaps") {
+      draft.swapRequests = [];
+      return;
+    }
+    if (target === "carts") {
+      draft.carts = [];
+      draft.bookings = [];
+      draft.issues = [];
+      draft.slotRestrictions = [];
+      draft.swapRequests = [];
+    }
+  });
+
+  if (target === "carts" && isLocalDemoMode()) {
     try {
       localStorage.removeItem("cubicle_local_demo_seed_revision");
     } catch {
@@ -134,6 +229,7 @@ export async function wipeOperationalData(): Promise<Result> {
     }
     ensureLocalDemoSandbox();
   }
+
   return { ok: true };
 }
 
@@ -2128,8 +2224,19 @@ export async function signOutAction() {
   if (isRemoteEnabled()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
+      const { clearBrowserAuthCookies } = await import(
+        "@/lib/supabase/clear-browser-auth"
+      );
       const supabase = createClient();
-      await supabase.auth.signOut();
+      // Local scope avoids a global revoke that needs a valid JWT. When the
+      // refresh token is already gone, signOut can still error — always clear
+      // sb-* cookies so middleware stops retrying refresh_token_not_found.
+      try {
+        await supabase.auth.signOut({ scope: "local" });
+      } catch {
+        // ignore
+      }
+      clearBrowserAuthCookies();
     } catch {
       // ignore — local session already cleared
     }

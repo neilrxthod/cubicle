@@ -54,16 +54,40 @@ export function RequirePlatformAuth({
     void (async () => {
       try {
         const { createClient } = await import("@/lib/supabase/client");
+        const { clearBrowserAuthCookies } = await import(
+          "@/lib/supabase/clear-browser-auth"
+        );
+        const { isUnrecoverableAuthError } = await import(
+          "@/lib/supabase/auth-errors"
+        );
         const supabase = createClient();
         const {
           data: { user },
+          error: userError,
         } = await supabase.auth.getUser();
 
         if (cancelled) return;
 
+        if (userError && isUnrecoverableAuthError(userError)) {
+          try {
+            await supabase.auth.signOut({ scope: "local" });
+          } catch {
+            // ignore
+          }
+          clearBrowserAuthCookies();
+          clearSession();
+          setRestoring(false);
+          return;
+        }
+
         if (!user?.email || !isSchoolEmail(user.email)) {
           if (user && !isSchoolEmail(user.email ?? "")) {
-            await supabase.auth.signOut();
+            try {
+              await supabase.auth.signOut({ scope: "local" });
+            } catch {
+              // ignore
+            }
+            clearBrowserAuthCookies();
           }
           setRestoring(false);
           return;
@@ -110,6 +134,7 @@ export function RequirePlatformAuth({
   }, [needsSessionRestore]);
 
   // Live: when Google token refreshes or user metadata changes, re-sync name.
+  // Also clear local app session when Supabase signs the user out (bad refresh).
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
 
@@ -118,6 +143,9 @@ export function RequirePlatformAuth({
 
     void (async () => {
       const { createClient } = await import("@/lib/supabase/client");
+      const { clearBrowserAuthCookies } = await import(
+        "@/lib/supabase/clear-browser-auth"
+      );
       const supabase = createClient();
       const {
         data: { subscription },
@@ -126,6 +154,13 @@ export function RequirePlatformAuth({
         setTimeout(() => {
           void (async () => {
             if (cancelled) return;
+
+            if (event === "SIGNED_OUT") {
+              clearBrowserAuthCookies();
+              clearSession();
+              return;
+            }
+
             if (
               event !== "TOKEN_REFRESHED" &&
               event !== "USER_UPDATED" &&

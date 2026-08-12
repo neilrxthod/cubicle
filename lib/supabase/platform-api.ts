@@ -612,11 +612,59 @@ export async function dbDeleteCart(
  * Keeps profiles + allowlist. Requires admin RLS policies.
  */
 export async function dbWipeOperationalData(): Promise<{ error?: string }> {
+  return dbClearPlatformData("all");
+}
+
+/** Targeted operational clear (admin). Keeps profiles + allowlist. */
+export async function dbClearPlatformData(
+  target:
+    | "bookings"
+    | "issues"
+    | "restrictions"
+    | "swaps"
+    | "carts"
+    | "all",
+): Promise<{ error?: string }> {
   const supabase = client();
-  // PostgREST requires a filter — match every cart id.
-  const { error } = await supabase.from("carts").delete().neq("id", "");
-  if (error) return { error: error.message };
-  return {};
+  // PostgREST requires a filter — neq id "" matches every row with an id.
+  const wipe = async (table: string) => {
+    const { error } = await supabase.from(table).delete().neq("id", "");
+    return error?.message;
+  };
+
+  if (target === "all" || target === "carts") {
+    // Carts cascade bookings / issues / restrictions; swaps often cascade from bookings.
+    const err = await wipe("carts");
+    if (err) return { error: err };
+    // Best-effort leftover swaps / restrictions if cascade incomplete.
+    await wipe("swap_requests");
+    await wipe("slot_restrictions");
+    if (target === "all") {
+      await wipe("issues");
+      await wipe("bookings");
+    }
+    return {};
+  }
+
+  if (target === "bookings") {
+    const err = await wipe("bookings");
+    if (err) return { error: err };
+    await wipe("swap_requests");
+    return {};
+  }
+  if (target === "issues") {
+    const err = await wipe("issues");
+    return err ? { error: err } : {};
+  }
+  if (target === "restrictions") {
+    const err = await wipe("slot_restrictions");
+    return err ? { error: err } : {};
+  }
+  if (target === "swaps") {
+    const err = await wipe("swap_requests");
+    return err ? { error: err } : {};
+  }
+  return { error: "Unknown clear target." };
 }
 
 export async function dbRequestSwap(input: {

@@ -85,8 +85,16 @@ export function subscribePlatformRealtime(onChange: () => void): () => void {
 
     try {
       // Ensure Realtime has a JWT so RLS-filtered postgres_changes fire.
-      await supabase.auth.getSession();
+      // Prefer getSession (no network) — a dead refresh token would only spam
+      // AuthApiError if we forced a refresh here.
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (disposed) return;
+      if (!session) {
+        // No usable auth — skip channel until SIGNED_IN reconnects.
+        return;
+      }
 
       const name = `cubicle-platform-${
         typeof crypto !== "undefined" && "randomUUID" in crypto

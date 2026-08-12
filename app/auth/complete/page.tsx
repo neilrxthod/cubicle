@@ -37,12 +37,29 @@ function CompleteInner() {
         if (cancelled) return;
 
         if (userError || !user?.email) {
+          try {
+            const { clearBrowserAuthCookies } = await import(
+              "@/lib/supabase/clear-browser-auth"
+            );
+            await supabase.auth.signOut({ scope: "local" });
+            clearBrowserAuthCookies();
+          } catch {
+            // ignore
+          }
           router.replace("/login?error=session_bridge");
           return;
         }
 
         if (!isSchoolEmail(user.email)) {
-          await supabase.auth.signOut();
+          try {
+            const { clearBrowserAuthCookies } = await import(
+              "@/lib/supabase/clear-browser-auth"
+            );
+            await supabase.auth.signOut({ scope: "local" });
+            clearBrowserAuthCookies();
+          } catch {
+            // ignore
+          }
           router.replace("/login?error=invalid_domain");
           return;
         }

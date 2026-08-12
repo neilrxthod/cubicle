@@ -11,7 +11,9 @@ import {
   deleteBookings,
   reassignBooking,
   updateCart,
-  wipeOperationalData,
+  clearPlatformData,
+  CLEAR_DATA_OPTIONS,
+  type ClearDataTarget,
 } from "@/lib/actions"
 import { toast } from "@/hooks/use-toast"
 import { Input } from "@/components/ui/input"
@@ -132,6 +134,7 @@ export function AdminConsole({
   bookings,
   users,
   issues,
+  slotRestrictions = [],
   swapRequests = [],
 }: {
   carts: Cart[]
@@ -142,8 +145,10 @@ export function AdminConsole({
   bookingPolicy?: BookingPolicy
   swapRequests?: SwapRequest[]
 }) {
+  const router = useRouter()
   const [tab, setTab] = useState<Tab>("carts")
   const [range] = useState<DateRange | undefined>()
+  const [clearTarget, setClearTarget] = useState<ClearDataTarget | null>(null)
   // Reports / booking filters: teachers (include revoked so history still labels).
   const teachers = users.filter((user) => user.role === "teacher")
 
@@ -157,34 +162,97 @@ export function AdminConsole({
     { id: "staff", label: "Staff" },
   ]
 
+  const clearCounts: Record<ClearDataTarget, number> = {
+    bookings: bookings.length,
+    issues: issues.length,
+    restrictions: slotRestrictions.length,
+    swaps: swapRequests.length,
+    carts: carts.length,
+    all:
+      carts.length +
+      bookings.length +
+      issues.length +
+      slotRestrictions.length +
+      swapRequests.length,
+  }
+
   return (
     <div className="flex min-w-0 w-full flex-col gap-4">
-      <nav
-        className="board-scroll inline-flex h-9 w-full max-w-full items-center gap-0.5 overflow-y-hidden rounded-lg border border-[var(--hairline-strong)] bg-white p-0.5 shadow-[var(--shadow-surface)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:w-fit"
-        role="tablist"
-        aria-label="Admin sections"
-      >
-        {tabs.map((item) => {
-          const active = tab === item.id
-          return (
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <nav
+          className="board-scroll inline-flex h-9 w-full max-w-full items-center gap-0.5 overflow-y-hidden rounded-lg border border-[var(--hairline-strong)] bg-white p-0.5 shadow-[var(--shadow-surface)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:w-fit"
+          role="tablist"
+          aria-label="Admin sections"
+        >
+          {tabs.map((item) => {
+            const active = tab === item.id
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(item.id)}
+                className={cn(
+                  "inline-flex h-8 shrink-0 items-center justify-center rounded-md px-3 text-[12.5px] font-medium transition-colors",
+                  active
+                    ? "bg-neutral-950 text-white"
+                    : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800",
+                )}
+              >
+                {item.label}
+              </button>
+            )
+          })}
+        </nav>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <button
-              key={item.id}
               type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => setTab(item.id)}
               className={cn(
-                "inline-flex h-8 shrink-0 items-center justify-center rounded-md px-3 text-[12.5px] font-medium transition-colors",
-                active
-                  ? "bg-neutral-950 text-white"
-                  : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800",
+                "inline-flex h-8 shrink-0 items-center gap-1.5 self-start rounded-md border border-[var(--hairline-strong)] bg-white px-2.5 sm:self-auto",
+                "text-[12.5px] font-medium tracking-[-0.01em] text-neutral-600",
+                "transition-colors hover:bg-neutral-50 hover:text-neutral-950",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
               )}
             >
-              {item.label}
+              Clear data
+              <ChevronRight className="size-3.5 rotate-90 text-neutral-400" strokeWidth={1.75} />
             </button>
-          )
-        })}
-      </nav>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64 rounded-xl p-1.5">
+            <DropdownMenuLabel className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-neutral-400">
+              Remove from platform
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {CLEAR_DATA_OPTIONS.map((opt) => {
+              const count = clearCounts[opt.id]
+              return (
+                <DropdownMenuItem
+                  key={opt.id}
+                  disabled={opt.id !== "all" && count === 0}
+                  className={cn(
+                    "cursor-pointer flex-col items-start gap-0.5 rounded-lg px-2 py-2",
+                    opt.id === "all" && "text-red-700 focus:text-red-800",
+                  )}
+                  onSelect={() => setClearTarget(opt.id)}
+                >
+                  <span className="flex w-full items-center justify-between gap-2">
+                    <span className="text-[13px] font-medium">{opt.label}</span>
+                    <span className="text-[11px] tabular-nums text-neutral-400">
+                      {count}
+                    </span>
+                  </span>
+                  <span className="text-[11.5px] leading-snug text-neutral-400">
+                    {opt.description}
+                  </span>
+                </DropdownMenuItem>
+              )
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       {tab === "carts" ? (
         <CartsGrid carts={carts} bookings={bookings} users={users} />
@@ -208,6 +276,16 @@ export function AdminConsole({
           swapRequests={swapRequests}
         />
       )}
+
+      <ClearDataDialog
+        target={clearTarget}
+        counts={clearCounts}
+        onClose={() => setClearTarget(null)}
+        onCleared={() => {
+          setClearTarget(null)
+          router.refresh()
+        }}
+      />
     </div>
   )
 }
@@ -233,7 +311,6 @@ function CartsGrid({
     | null
   >(null)
   const [deletingCart, setDeletingCart] = useState<Cart | null>(null)
-  const [resetOpen, setResetOpen] = useState(false)
   const [exitingIds, setExitingIds] = useState<Set<string>>(new Set())
   const [, startTransition] = useTransition()
 
@@ -363,20 +440,6 @@ function CartsGrid({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
-          {carts.length > 0 || bookings.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => setResetOpen(true)}
-              className={cn(
-                "inline-flex h-8 items-center justify-center rounded-md px-2.5",
-                "text-[12px] font-medium tracking-[-0.01em] text-neutral-400",
-                "transition-colors hover:bg-neutral-100 hover:text-neutral-700",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
-              )}
-            >
-              Reset data
-            </button>
-          ) : null}
           <button
             type="button"
             onClick={() => setEditor({ mode: "create" })}
@@ -577,18 +640,6 @@ function CartsGrid({
         }}
       />
 
-      <InventoryResetDialog
-        open={resetOpen}
-        cartCount={carts.length}
-        bookingCount={bookings.length}
-        onClose={() => setResetOpen(false)}
-        onReset={() => {
-          setResetOpen(false)
-          setExitingIds(new Set())
-          router.refresh()
-        }}
-      />
-
       {pauseConflictCart ? (
         <CartPauseConflictDialog
           cart={pauseConflictCart}
@@ -603,71 +654,78 @@ function CartsGrid({
   )
 }
 
-/** Explicit full ops wipe — never runs automatically. */
-function InventoryResetDialog({
-  open,
-  cartCount,
-  bookingCount,
+/** Confirm targeted platform clear — never runs automatically. */
+function ClearDataDialog({
+  target,
+  counts,
   onClose,
-  onReset,
+  onCleared,
 }: {
-  open: boolean
-  cartCount: number
-  bookingCount: number
+  target: ClearDataTarget | null
+  counts: Record<ClearDataTarget, number>
   onClose: () => void
-  onReset: () => void
+  onCleared: () => void
 }) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
+  const option = target
+    ? CLEAR_DATA_OPTIONS.find((o) => o.id === target)
+    : null
+  const count = target ? counts[target] : 0
+
   useEffect(() => {
-    if (open) setError(null)
-  }, [open])
+    if (target) setError(null)
+  }, [target])
 
   function confirm() {
+    if (!target) return
     setError(null)
     startTransition(async () => {
-      const res = await wipeOperationalData()
+      const res = await clearPlatformData(target)
       if (!res.ok) {
         setError(res.error)
         toast({
-          title: "Could not reset data",
+          title: "Could not clear data",
           description: res.error,
           variant: "destructive",
         })
         return
       }
       toast({
-        title: "Operational data cleared",
-        description: "Inventory and schedule are empty. Staff accounts kept.",
+        title: "Data cleared",
+        description:
+          target === "all"
+            ? "Operational data removed. Staff accounts kept."
+            : `${option?.label ?? "Selected data"} removed.`,
       })
-      onReset()
+      onCleared()
     })
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && !pending && onClose()}>
+    <Dialog
+      open={target !== null}
+      onOpenChange={(o) => !o && !pending && onClose()}
+    >
       <DialogContent className="gap-0 overflow-hidden rounded-2xl border-border/60 bg-white p-0 shadow-xl sm:max-w-sm">
         <DialogHeader className="space-y-0 border-b border-[var(--hairline)] px-5 pb-4 pt-5 text-left">
           <DialogTitle className="text-[15px] font-light tracking-[-0.02em] text-neutral-950">
-            Reset operational data?
+            Clear {option?.label.toLowerCase() ?? "data"}?
           </DialogTitle>
           <DialogDescription className="mt-1 text-[12.5px] leading-relaxed text-neutral-400">
-            Permanently removes all carts, bookings, issues, and locks. Staff
-            accounts and the allowlist are kept.
+            {option?.description ?? "This permanently removes selected data."}{" "}
+            Staff accounts and the allowlist are kept.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4 px-5 py-5">
           <div className="rounded-xl border border-neutral-200/80 bg-neutral-50/80 px-3.5 py-3 text-[12.5px] text-neutral-600">
             <p className="tabular-nums">
-              <span className="font-medium text-neutral-950">{cartCount}</span>{" "}
-              carts
-              <span className="mx-1.5 text-neutral-300">·</span>
-              <span className="font-medium text-neutral-950">{bookingCount}</span>{" "}
-              bookings
+              <span className="font-medium text-neutral-950">{count}</span>{" "}
+              {count === 1 ? "record" : "records"} will be removed
             </p>
             <p className="mt-1.5 text-[11.5px] text-neutral-400">
-              This cannot be undone. Use only for a clean school start.
+              This cannot be undone.
             </p>
           </div>
           {error ? (
@@ -691,7 +749,7 @@ function InventoryResetDialog({
               {pending ? (
                 <Loader2 className="size-3.5 animate-spin" />
               ) : (
-                "Reset all"
+                "Clear"
               )}
             </button>
           </div>
