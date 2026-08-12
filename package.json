@@ -1,6 +1,6 @@
 {
   "name": "cubicle",
-  "version": "1.0.83",
+  "version": "1.0.84",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -84,6 +84,8 @@
     "fast-uri": "3.1.5",
     "ip-address": "10.4.0",
     "undici": "7.29.0",
-    "hono": "4.13.0"
+    "hono": "4.13.0",
+    "js-yaml": "4.3.1",
+    "nanoid": "3.3.18"
   }
 }
