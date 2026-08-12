@@ -37,6 +37,7 @@ import {
   SettingsToggleRow,
 } from "@/components/settings/settings-section";
 import { SetupPreferences } from "@/components/settings/setup-preferences";
+import { LocalEmailTestingSection } from "@/components/settings/local-email-testing";
 
 const NAME_MAX = 80;
 
@@ -576,6 +577,8 @@ export function SettingsForm({
           }
         />
       </SettingsSection>
+
+      <LocalEmailTestingSection />
 
       <SettingsSection id="issues" title="Issues">
         <SettingsToggleRow
