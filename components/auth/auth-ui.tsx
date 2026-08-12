@@ -213,6 +213,8 @@ type AccountOption = {
   email: string;
   roleLabel: string;
   accent: string;
+  /** Optional sample / real profile photo for local demo accounts. */
+  avatarUrl?: string;
   onSelect: () => void;
   isLoading?: boolean;
 };
@@ -264,12 +266,21 @@ export function SocialAccountPicker({
             >
               <span
                 className={cn(
-                  "flex size-10 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold text-white",
-                  account.accent,
+                  "relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-semibold text-white",
+                  !account.avatarUrl && account.accent,
+                  account.avatarUrl && "bg-neutral-100 ring-1 ring-black/[0.06]",
                 )}
               >
                 {account.isLoading ? (
                   <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                ) : account.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={account.avatarUrl}
+                    alt=""
+                    className="size-full object-cover"
+                    decoding="async"
+                  />
                 ) : (
                   account.name.charAt(0)
                 )}

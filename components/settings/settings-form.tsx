@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/avatar";
 import {
   Dialog,
+  DialogCancel,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -811,20 +812,12 @@ export function SettingsForm({
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-black/[0.05] pt-4">
-              <button
-                type="button"
+              <DialogCancel
                 disabled={deleting}
                 onClick={() => setDeleteOpen(false)}
-                className={cn(
-                  "inline-flex h-9 items-center justify-center rounded-md px-3",
-                  "text-[13px] font-medium text-neutral-500",
-                  "transition-colors duration-150 hover:bg-neutral-50 hover:text-neutral-900",
-                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-300",
-                  "disabled:opacity-50",
-                )}
               >
                 Cancel
-              </button>
+              </DialogCancel>
               <button
                 type="button"
                 disabled={deleting || !canConfirmDelete}

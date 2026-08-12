@@ -172,6 +172,7 @@ export default function LoginForm() {
       firstName: user.firstName,
       lastName: user.lastName,
       role: user.role,
+      avatarUrl: user.avatarUrl ?? account.avatarUrl,
       title: user.title,
       department: user.department,
       employmentType: user.employmentType,
@@ -208,6 +209,7 @@ export default function LoginForm() {
     email: account.email,
     roleLabel: account.label,
     accent: roleAccent[account.role],
+    avatarUrl: account.avatarUrl,
     isLoading: loadingRole === account.role,
     onSelect: () => signInWithAccount(account),
   }));

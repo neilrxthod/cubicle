@@ -13,6 +13,10 @@ import {
 import { usePlatformStore } from "@/lib/data/platform-store"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import {
+  inviteAcceptEmphasizedClassName,
+  inviteDeclineClassName,
+} from "@/lib/ui/invite-actions"
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -191,12 +195,8 @@ export function ShareInvitesList({
                 type="button"
                 disabled={blocked}
                 onClick={() => void run(booking.id, "decline")}
-                className={cn(
-                  "h-9 rounded-lg border border-neutral-200 bg-white px-3",
-                  "text-[12.5px] font-medium text-neutral-600",
-                  "transition-colors hover:bg-neutral-50 hover:text-neutral-950",
-                  "disabled:opacity-50",
-                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-900/15",
+                className={inviteDeclineClassName(
+                  "h-9 rounded-lg px-3 text-[12.5px]",
                 )}
               >
                 {busy ? "…" : "Decline"}
@@ -205,12 +205,8 @@ export function ShareInvitesList({
                 type="button"
                 disabled={blocked}
                 onClick={() => void run(booking.id, "accept")}
-                className={cn(
-                  "h-9 rounded-lg bg-red-600 px-3",
-                  "text-[12.5px] font-medium text-white",
-                  "transition-colors hover:bg-red-700",
-                  "disabled:opacity-50",
-                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-600/30",
+                className={inviteAcceptEmphasizedClassName(
+                  "h-9 rounded-lg px-3 text-[12.5px]",
                 )}
               >
                 {busy ? "…" : "Accept"}

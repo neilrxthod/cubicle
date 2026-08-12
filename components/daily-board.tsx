@@ -57,9 +57,13 @@ import {
   declineShareInvite,
   updateBookingLabel,
 } from "@/lib/actions"
-import { Calendar } from "@/components/ui/calendar"
+import {
+  Calendar,
+  calendarPopoverClassName,
+} from "@/components/ui/calendar"
 import {
   Dialog,
+  DialogCancel,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -82,6 +86,10 @@ import {
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import {
+  inviteChipAcceptClassName,
+  inviteChipDeclineClassName,
+} from "@/lib/ui/invite-actions"
 import { usePlatformStore } from "@/lib/data/platform-store"
 
 const PERIODS: Period[] = ["P1", "P2", "P3", "P4", "P5"]
@@ -664,11 +672,7 @@ export function DailyBoard({
               </button>
             </PopoverTrigger>
             <PopoverContent
-              className={cn(
-                "z-[60] w-auto max-w-[calc(100vw-1.25rem)] overflow-hidden p-0",
-                "rounded-2xl border border-black/[0.08] bg-white",
-                "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_40px_rgba(0,0,0,0.1)]",
-              )}
+              className={calendarPopoverClassName}
               align="end"
               side="bottom"
               sideOffset={8}
@@ -1047,10 +1051,8 @@ export function DailyBoard({
                                     e.stopPropagation()
                                     void respondShareInvite(booking, "decline")
                                   }}
-                                  className={cn(
-                                    "h-7 rounded-full px-2.5 text-[10.5px] font-medium",
-                                    "bg-white/95 text-neutral-700 shadow-sm ring-1 ring-black/10",
-                                    "hover:bg-neutral-100 disabled:opacity-50",
+                                  className={inviteChipDeclineClassName(
+                                    "h-7 rounded-full px-2.5 text-[10.5px]",
                                   )}
                                 >
                                   Decline
@@ -1064,10 +1066,8 @@ export function DailyBoard({
                                     e.stopPropagation()
                                     void respondShareInvite(booking, "accept")
                                   }}
-                                  className={cn(
-                                    "h-7 rounded-full px-2.5 text-[10.5px] font-medium",
-                                    "bg-white text-neutral-950 shadow-sm ring-1 ring-black/10",
-                                    "hover:bg-neutral-100 disabled:opacity-50",
+                                  className={inviteChipAcceptClassName(
+                                    "h-7 min-w-[3.25rem] rounded-full px-2.5 text-[10.5px]",
                                   )}
                                 >
                                   {inviteBusy ? (
@@ -1359,14 +1359,12 @@ export function DailyBoard({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex flex-row items-center justify-end gap-3 px-5 py-5 sm:space-x-0">
-            <button
-              type="button"
+            <DialogCancel
               disabled={Boolean(deletingBookingId)}
               onClick={() => setPendingDelete(null)}
-              className="h-9 px-1 text-[13px] font-medium text-neutral-400 transition-colors hover:text-neutral-900 disabled:opacity-40"
             >
               Keep booking
-            </button>
+            </DialogCancel>
             <button
               type="button"
               disabled={Boolean(deletingBookingId) || !pendingDelete}

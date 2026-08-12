@@ -11,6 +11,7 @@ import { format, parseISO } from "date-fns";
 import { User } from "lucide-react";
 import {
   Dialog,
+  DialogCancel,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -282,13 +283,7 @@ export function BookDialog({
           ) : null}
 
           <div className="flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="h-9 px-1 text-[13px] font-medium text-neutral-400 transition-colors hover:text-neutral-900"
-            >
-              Cancel
-            </button>
+            <DialogCancel onClick={onClose}>Cancel</DialogCancel>
             <button
               type="button"
               disabled={pending}

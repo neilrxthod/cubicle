@@ -6,6 +6,45 @@ import { XIcon } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
+/**
+ * Corner X close control.
+ * Soft grey circle fades + scales in on hover (icon stays put).
+ */
+export const dialogCloseButtonClassName = cn(
+  'relative inline-flex size-8 shrink-0 items-center justify-center rounded-full',
+  'text-neutral-400 outline-none',
+  // Circle wash: invisible at rest, eases in on hover / focus.
+  "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:content-['']",
+  'before:bg-neutral-500/[0.08] before:opacity-0 before:scale-90',
+  'before:transition-[opacity,transform] before:duration-150 before:ease-[cubic-bezier(0.16,1,0.3,1)]',
+  'hover:before:opacity-100 hover:before:scale-100',
+  'active:before:scale-95 active:before:bg-neutral-500/[0.12]',
+  'hover:text-neutral-700 active:text-neutral-900',
+  'focus-visible:before:opacity-100 focus-visible:before:scale-100',
+  'focus-visible:ring-2 focus-visible:ring-neutral-900/10 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+  'disabled:pointer-events-none disabled:opacity-40',
+  '[&_svg]:relative [&_svg]:z-[1] [&_svg]:pointer-events-none [&_svg]:size-[15px] [&_svg]:shrink-0',
+)
+
+/**
+ * Secondary dismiss action (“Cancel”, “Keep booking”, …).
+ * Soft pill wash (not a circle) — text darkens as the chip appears.
+ */
+export const dialogCancelButtonClassName = cn(
+  'relative inline-flex h-9 shrink-0 items-center justify-center rounded-full px-3.5',
+  'text-[13px] font-medium tracking-[-0.01em] text-neutral-400 outline-none',
+  // Pill wash: fades + gently expands on the horizontal axis.
+  "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:content-['']",
+  'before:bg-neutral-500/[0.07] before:opacity-0 before:scale-x-[0.92] before:scale-y-90',
+  'before:transition-[opacity,transform] before:duration-150 before:ease-[cubic-bezier(0.16,1,0.3,1)]',
+  'hover:before:opacity-100 hover:before:scale-x-100 hover:before:scale-y-100',
+  'active:before:scale-[0.97] active:before:bg-neutral-500/[0.11]',
+  'hover:text-neutral-800 active:text-neutral-950',
+  'focus-visible:before:opacity-100 focus-visible:before:scale-100',
+  'focus-visible:ring-2 focus-visible:ring-neutral-900/10 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+  'disabled:pointer-events-none disabled:opacity-40',
+)
+
 function Dialog({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -25,9 +64,32 @@ function DialogPortal({
 }
 
 function DialogClose({
+  className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Close>) {
-  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
+  return (
+    <DialogPrimitive.Close
+      data-slot="dialog-close"
+      className={cn(dialogCloseButtonClassName, className)}
+      {...props}
+    />
+  )
+}
+
+/** Text dismiss control for dialog footers (Cancel / Keep / etc.). */
+function DialogCancel({
+  className,
+  type = 'button',
+  ...props
+}: React.ComponentProps<'button'>) {
+  return (
+    <button
+      type={type}
+      data-slot="dialog-cancel"
+      className={cn(dialogCancelButtonClassName, className)}
+      {...props}
+    />
+  )
 }
 
 function DialogOverlay({
@@ -83,9 +145,12 @@ function DialogContent({
           {showCloseButton && (
             <DialogPrimitive.Close
               data-slot="dialog-close"
-              className="absolute top-4 right-4 rounded-xs opacity-70 transition-opacity duration-100 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+              className={cn(
+                dialogCloseButtonClassName,
+                'absolute top-3.5 right-3.5',
+              )}
             >
-              <XIcon />
+              <XIcon strokeWidth={1.75} />
               <span className="sr-only">Close</span>
             </DialogPrimitive.Close>
           )}
@@ -150,6 +215,7 @@ function DialogDescription({
 
 export {
   Dialog,
+  DialogCancel,
   DialogClose,
   DialogContent,
   DialogDescription,

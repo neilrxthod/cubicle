@@ -28,7 +28,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
+import {
+  Calendar,
+  calendarPopoverClassName,
+} from "@/components/ui/calendar"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -75,6 +78,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
+  DialogCancel,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -732,14 +736,9 @@ function ClearDataDialog({
             <p className="text-[12.5px] text-red-600">{error}</p>
           ) : null}
           <div className="flex items-center justify-end gap-3">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={onClose}
-              className="h-9 px-1 text-[13px] font-medium text-neutral-400 transition-colors hover:text-neutral-900 disabled:opacity-50"
-            >
+            <DialogCancel disabled={pending} onClick={onClose}>
               Cancel
-            </button>
+            </DialogCancel>
             <button
               type="button"
               disabled={pending}
@@ -850,14 +849,9 @@ function CartDeleteDialog({
           ) : null}
 
           <div className="flex items-center justify-end gap-3 pt-0.5">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={onClose}
-              className="h-9 px-1 text-[13px] font-medium text-neutral-400 transition-colors duration-200 hover:text-neutral-900 disabled:opacity-50"
-            >
+            <DialogCancel disabled={pending} onClick={onClose}>
               Keep cart
-            </button>
+            </DialogCancel>
             <button
               type="button"
               disabled={pending}
@@ -1026,14 +1020,9 @@ function CartEditorDialog({
           ) : null}
 
           <div className="flex items-center justify-end gap-3 pt-1">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={onClose}
-              className="h-9 px-1 text-[13px] font-medium text-neutral-400 transition-colors hover:text-neutral-900 disabled:opacity-50"
-            >
+            <DialogCancel disabled={pending} onClick={onClose}>
               Cancel
-            </button>
+            </DialogCancel>
             <button
               type="button"
               disabled={pending || !canSubmit}
@@ -1871,8 +1860,12 @@ function BookingsTable({
                 </button>
               </PopoverTrigger>
               <PopoverContent
-                className="w-auto overflow-hidden rounded-xl border border-black/[0.08] bg-white p-0 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_rgba(0,0,0,0.08)]"
+                className={calendarPopoverClassName}
                 align="start"
+                side="bottom"
+                sideOffset={8}
+                collisionPadding={12}
+                avoidCollisions
               >
                 <Calendar
                   mode="range"
@@ -3200,8 +3193,12 @@ function DailyBoardLite({ bookings, carts }: { bookings: Booking[]; carts: Cart[
             </button>
           </PopoverTrigger>
           <PopoverContent
-            className="w-auto overflow-hidden rounded-xl border border-black/[0.08] bg-white p-0 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_rgba(0,0,0,0.08)]"
+            className={calendarPopoverClassName}
             align="start"
+            side="bottom"
+            sideOffset={8}
+            collisionPadding={12}
+            avoidCollisions
           >
             <Calendar
               mode="single"

@@ -142,6 +142,7 @@ export function SignupForm() {
     email: account.email,
     roleLabel: account.label,
     accent: roleAccent[account.role],
+    avatarUrl: account.avatarUrl,
     isLoading: loadingRole === account.role,
     onSelect: () => signInWithAccount(account),
   }));

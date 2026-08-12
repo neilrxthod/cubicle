@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
 import {
   Dialog,
+  DialogCancel,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -135,13 +136,7 @@ export function ManageBookingDialog({
           <div className="mt-5 flex items-center justify-end gap-3">
             {isOwner ? (
               <>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="h-9 px-1 text-[13px] font-medium text-neutral-400 transition-colors hover:text-neutral-900"
-                >
-                  Keep booking
-                </button>
+                <DialogCancel onClick={onClose}>Keep booking</DialogCancel>
                 <AnimatedCancelButton
                   idleLabel="Cancel booking"
                   successLabel="Canceled"

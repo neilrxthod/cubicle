@@ -34,6 +34,7 @@ export function authenticate(
     firstName: account.firstName,
     lastName: account.lastName,
     role: account.role,
+    avatarUrl: account.avatarUrl,
     title: account.title,
     department: account.department,
     employmentType: account.employmentType,

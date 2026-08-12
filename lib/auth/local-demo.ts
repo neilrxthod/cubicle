@@ -23,8 +23,18 @@ export const LOCAL_DEMO_TEACHER_ID = "local-demo-teacher";
 export const LOCAL_DEMO_TEACHER_B_ID = "local-demo-teacher-b";
 
 /** Bump when seed shape changes so local browsers re-apply missing pieces. */
-const LOCAL_DEMO_SEED_REVISION = 2;
+const LOCAL_DEMO_SEED_REVISION = 3;
 const SEED_REVISION_KEY = "cubicle_local_demo_seed_revision";
+
+/**
+ * Sample portrait photos for local sandbox personas (served from /public/demo).
+ * Distinct faces so Admin vs Teacher perspectives are obvious in the UI.
+ */
+const DEMO_AVATAR = {
+  admin: "/demo/alex-admin.jpg",
+  teacher: "/demo/taylor-teacher.jpg",
+  teacherB: "/demo/jordan-lee.jpg",
+} as const;
 
 /** Fixed admin identity for the local sandbox. */
 export const LOCAL_DEMO_ADMIN: SessionUser = {
@@ -34,6 +44,7 @@ export const LOCAL_DEMO_ADMIN: SessionUser = {
   firstName: "Alex",
   lastName: "Admin",
   role: "admin",
+  avatarUrl: DEMO_AVATAR.admin,
   title: "IT Administrator",
   department: "Technology",
   employmentType: "permanent",
@@ -49,6 +60,7 @@ export const LOCAL_DEMO_TEACHER: SessionUser = {
   firstName: "Taylor",
   lastName: "Teacher",
   role: "teacher",
+  avatarUrl: DEMO_AVATAR.teacher,
   title: "Science Teacher",
   department: "Science",
   employmentType: "permanent",
@@ -64,6 +76,7 @@ export const LOCAL_DEMO_TEACHER_B: SessionUser = {
   firstName: "Jordan",
   lastName: "Lee",
   role: "teacher",
+  avatarUrl: DEMO_AVATAR.teacherB,
   title: "English Teacher",
   department: "English",
   employmentType: "permanent",
@@ -128,6 +141,7 @@ function toDemoAccount(
     firstName: persona.firstName,
     lastName: persona.lastName,
     role: persona.role,
+    avatarUrl: persona.avatarUrl,
     title: persona.title,
     department: persona.department,
     employmentType: persona.employmentType,
@@ -298,9 +312,23 @@ export function completeLocalDemoOnboarding(user?: SessionUser): void {
   }
 }
 
-function upsertSeedUsers(draft: {
-  users: User[];
-}): void {
+function isDemoSampleAvatar(url: string | undefined): boolean {
+  if (!url) return true;
+  // Treat missing, legacy empty, or our bundled sample paths as replaceable.
+  return (
+    url.startsWith("/demo/") ||
+    url.includes("/demo/") ||
+    url.trim() === ""
+  );
+}
+
+function upsertSeedUsers(
+  draft: {
+    users: User[];
+  },
+  options?: { forceDemoAvatars?: boolean },
+): void {
+  const forceAvatars = options?.forceDemoAvatars === true;
   for (const { persona, password } of SEED_USERS) {
     const email = persona.email.toLowerCase();
     const idx = draft.users.findIndex(
@@ -308,11 +336,17 @@ function upsertSeedUsers(draft: {
     );
     const next = toUser(persona, password);
     if (idx >= 0) {
-      // Keep any avatar/custom fields the dev set; refresh core identity.
+      const prev = draft.users[idx];
+      // Keep a custom photo the dev uploaded; always re-apply sample pfps when
+      // missing or when this seed revision upgrades demo faces.
+      const keepCustom =
+        !forceAvatars &&
+        Boolean(prev.avatarUrl) &&
+        !isDemoSampleAvatar(prev.avatarUrl);
       draft.users[idx] = {
-        ...draft.users[idx],
+        ...prev,
         ...next,
-        avatarUrl: draft.users[idx].avatarUrl ?? next.avatarUrl,
+        avatarUrl: keepCustom ? prev.avatarUrl : next.avatarUrl,
         password: next.password,
         allowlisted: true,
       };
@@ -401,13 +435,31 @@ export function ensureLocalDemoSandbox(): void {
     new Date().toISOString(),
   ).some((sample) => !before.bookings.some((b) => b.id === sample.id));
 
-  if (!needsUpgrade && !missingUser && !missingCart && !missingSampleBooking) {
+  const missingAvatar = SEED_USERS.some(({ persona }) => {
+    const u = before.users.find(
+      (row) =>
+        row.id === persona.id ||
+        row.email.toLowerCase() === persona.email.toLowerCase(),
+    );
+    return !u?.avatarUrl;
+  });
+
+  if (
+    !needsUpgrade &&
+    !missingUser &&
+    !missingCart &&
+    !missingSampleBooking &&
+    !missingAvatar
+  ) {
     completeLocalDemoOnboarding();
     return;
   }
 
   mutate((draft) => {
-    upsertSeedUsers(draft);
+    // Seed rev 3+: force bundled sample faces onto demo personas.
+    upsertSeedUsers(draft, {
+      forceDemoAvatars: needsUpgrade || missingAvatar,
+    });
     upsertSeedCarts(draft);
     // Policy defaults for local testing.
     if (!draft.bookingPolicy) {

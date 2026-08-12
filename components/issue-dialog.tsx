@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
+  DialogCancel,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -158,13 +159,7 @@ export function IssueDialog({
           ) : null}
 
           <div className="flex items-center justify-end gap-3 pt-1">
-            <button
-              type="button"
-              onClick={requestClose}
-              className="h-9 px-1 text-[13px] font-medium text-neutral-400 transition-colors hover:text-neutral-900"
-            >
-              Cancel
-            </button>
+            <DialogCancel onClick={requestClose}>Cancel</DialogCancel>
             <button
               type="submit"
               disabled={pending || !(cart?.id ?? cartId)}

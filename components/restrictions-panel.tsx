@@ -39,7 +39,10 @@ import type {
 import { cn } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
+import {
+  Calendar,
+  calendarPopoverClassName,
+} from "@/components/ui/calendar"
 import {
   Dialog,
   DialogContent,
@@ -283,8 +286,12 @@ export function RestrictionsPanel({
               </button>
             </PopoverTrigger>
             <PopoverContent
-              className="w-auto overflow-hidden rounded-xl border border-black/[0.08] bg-white p-0 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_rgba(0,0,0,0.08)]"
+              className={calendarPopoverClassName}
               align="end"
+              side="bottom"
+              sideOffset={8}
+              collisionPadding={12}
+              avoidCollisions
             >
               <Calendar
                 mode="single"
@@ -1072,8 +1079,12 @@ function BatchToolsDialog({
                         </button>
                       </PopoverTrigger>
                       <PopoverContent
-                        className="w-auto overflow-hidden rounded-xl border border-black/[0.08] bg-white p-0 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_rgba(0,0,0,0.08)]"
+                        className={calendarPopoverClassName}
                         align="start"
+                        side="bottom"
+                        sideOffset={8}
+                        collisionPadding={12}
+                        avoidCollisions
                       >
                         <Calendar
                           mode="range"

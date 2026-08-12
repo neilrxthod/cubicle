@@ -9,6 +9,10 @@ import { toast } from "@/hooks/use-toast"
 import { resolveOfferedBooking } from "@/lib/booking/swap-rules"
 import { SwapCartRoute } from "@/components/swap-cart-route"
 import { cn } from "@/lib/utils"
+import {
+  inviteAcceptClassName,
+  inviteDeclineClassName,
+} from "@/lib/ui/invite-actions"
 
 export function SwapRequestsList({
   requests,
@@ -234,7 +238,9 @@ export function SwapRequestsList({
                         "Request cancelled",
                       )
                     }
-                    className="h-8 rounded-lg border border-neutral-200 bg-white px-3 text-[12px] font-medium text-neutral-600 transition-colors hover:bg-neutral-50 hover:text-neutral-950 disabled:opacity-50"
+                    className={inviteDeclineClassName(
+                      "h-8 rounded-lg px-3 text-[12px]",
+                    )}
                   >
                     {busy ? "…" : "Cancel request"}
                   </button>
@@ -250,7 +256,9 @@ export function SwapRequestsList({
                           isExchange ? "Carts exchanged" : "Slot handed off",
                         )
                       }
-                      className="h-8 rounded-lg bg-neutral-950 px-3 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                      className={inviteAcceptClassName(
+                        "h-8 rounded-lg px-3 text-[12px]",
+                      )}
                     >
                       {busy
                         ? "…"
@@ -268,7 +276,9 @@ export function SwapRequestsList({
                           "Swap declined",
                         )
                       }
-                      className="h-8 rounded-lg border border-neutral-200 bg-white px-3 text-[12px] font-medium text-neutral-600 transition-colors hover:bg-neutral-50 hover:text-neutral-950 disabled:opacity-50"
+                      className={inviteDeclineClassName(
+                        "h-8 rounded-lg px-3 text-[12px]",
+                      )}
                     >
                       {busy ? "…" : "Decline"}
                     </button>

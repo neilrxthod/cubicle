@@ -57,6 +57,7 @@ import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
+  DialogCancel,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -824,15 +825,12 @@ export function StaffPanel({
             ) : null}
 
             <div className="flex justify-end gap-2 pt-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 rounded-md"
+              <DialogCancel
+                className="h-8"
                 onClick={() => setAccessDialog(null)}
               >
                 Cancel
-              </Button>
+              </DialogCancel>
               <Button
                 type="submit"
                 size="sm"
@@ -907,15 +905,12 @@ export function StaffPanel({
               <p className="text-[12.5px] text-red-600">{deleteError}</p>
             ) : null}
             <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 rounded-md"
+              <DialogCancel
+                className="h-8"
                 onClick={() => setDeleteTarget(null)}
               >
                 Cancel
-              </Button>
+              </DialogCancel>
               <Button
                 type="button"
                 variant="destructive"

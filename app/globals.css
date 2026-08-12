@@ -456,43 +456,104 @@ body[data-scroll-locked] [data-radix-portal] {
 }
 
 /*
-  react-day-picker v8 — force a real month grid.
-  DayPicker renders a <table>; default table CSS + flex can stack cells.
-  We force flex weeks with fixed cell size so it always looks like a calendar.
+  react-day-picker v8 — horizontal month grid (7 equal fluid columns).
+  Days share row width via CSS grid so the calendar never collapses into a
+  vertical stack, and still fits narrow / short viewports.
 */
-.rdp table {
-  width: 100% !important;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-
-.rdp thead tr,
-.rdp tbody tr {
-  display: flex !important;
-  width: 100%;
-}
-
-.rdp th,
-.rdp td {
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-  width: 2.5rem !important;
-  min-width: 2.5rem !important;
-  max-width: 2.5rem !important;
-  height: 2.5rem !important;
-  padding: 0 !important;
+.cubicle-calendar.rdp,
+.rdp.cubicle-calendar {
   box-sizing: border-box;
 }
 
-.rdp thead th {
-  height: 2rem !important;
+.cubicle-calendar table {
+  width: 100% !important;
+  min-width: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
 }
 
-.rdp td button {
-  width: 2.5rem !important;
-  height: 2.5rem !important;
+/* One week = one horizontal track of 7 equal columns */
+.cubicle-calendar thead tr,
+.cubicle-calendar tbody tr {
+  display: grid !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  width: 100%;
+  gap: 0;
+}
+
+.cubicle-calendar th,
+.cubicle-calendar td {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0;
+  padding: 0.125rem !important;
+  box-sizing: border-box;
+}
+
+.cubicle-calendar thead th {
+  height: 1.75rem !important;
+  min-height: 1.75rem;
+  aspect-ratio: auto;
+}
+
+.cubicle-calendar tbody td {
+  aspect-ratio: 1;
+  max-height: 2.625rem;
+}
+
+.cubicle-calendar td button {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 2.5rem;
+  max-height: 2.5rem;
   margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* Short viewports (laptop with docked UI / landscape phones): compact cells */
+@media (max-height: 700px) {
+  .cubicle-calendar.rdp {
+    padding-block: 0.625rem !important;
+  }
+
+  .cubicle-calendar thead th {
+    height: 1.5rem !important;
+    min-height: 1.5rem;
+  }
+
+  .cubicle-calendar tbody td {
+    max-height: 2rem;
+    padding: 0.0625rem !important;
+  }
+
+  .cubicle-calendar td button {
+    max-width: 1.875rem;
+    max-height: 1.875rem;
+    font-size: 0.75rem;
+  }
+}
+
+/* Very narrow phones: keep full 7-col grid, tighter type */
+@media (max-width: 360px) {
+  .cubicle-calendar tbody td {
+    max-height: 2.125rem;
+    padding: 0.05rem !important;
+  }
+
+  .cubicle-calendar td button {
+    max-width: 1.75rem;
+    max-height: 1.75rem;
+    font-size: 0.6875rem;
+  }
 }
 
 @layer base {

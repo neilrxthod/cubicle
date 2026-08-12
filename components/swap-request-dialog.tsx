@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import {
   Dialog,
+  DialogCancel,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -300,14 +301,9 @@ export function SwapRequestDialog({
               )}
             />
             <div className="flex shrink-0 items-center justify-end gap-1.5">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={pending}
-                className="h-9 rounded-lg px-3 text-[13px] font-medium text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-50"
-              >
+              <DialogCancel onClick={onClose} disabled={pending}>
                 Cancel
-              </button>
+              </DialogCancel>
               <button
                 type="button"
                 disabled={pending || !reason.trim()}

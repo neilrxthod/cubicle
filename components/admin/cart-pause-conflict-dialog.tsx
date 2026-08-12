@@ -11,6 +11,10 @@ import {
 import { toast } from "@/hooks/use-toast";
 import type { Booking, Cart, User } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import {
+  DialogCancel,
+  dialogCloseButtonClassName,
+} from "@/components/ui/dialog";
 
 type Plan =
   | { kind: "reassign"; cartId: string }
@@ -226,10 +230,10 @@ export function CartPauseConflictDialog({
               type="button"
               onClick={onClose}
               disabled={busy}
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-40"
+              className={dialogCloseButtonClassName}
               aria-label="Close"
             >
-              <X className="size-4" strokeWidth={1.75} />
+              <X strokeWidth={1.75} />
             </button>
           </div>
         </header>
@@ -410,14 +414,13 @@ export function CartPauseConflictDialog({
 
         <footer className="shrink-0 border-t border-[var(--hairline)] px-5 py-3.5 sm:px-6">
           <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
+            <DialogCancel
               disabled={busy}
               onClick={onClose}
-              className="h-8 rounded-md px-3 text-[12.5px] font-medium text-neutral-400 transition-colors hover:text-neutral-900 disabled:opacity-40"
+              className="h-8 text-[12.5px]"
             >
               Don&apos;t pause
-            </button>
+            </DialogCancel>
             <button
               type="button"
               disabled={!allPlanned || busy}
