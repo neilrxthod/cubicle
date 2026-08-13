@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import { escapePdfHtml, type OpenCorporatePdfResult } from "@/lib/export/corporate-pdf";
 import { cartQrPayload, laptopQrPayload } from "@/lib/labels/codes";
-import { qrDataUrl } from "@/lib/labels/qr";
+import { qrPrintSvg } from "@/lib/labels/qr";
 import { laptopBrandLabel, type Cart } from "@/lib/types";
 
 export type QrLabelKind = "cart" | "laptop";
@@ -11,22 +11,21 @@ export type QrLabel = {
   title: string;
   subtitle: string;
   payload: string;
-  src: string;
+  mark: string;
 };
 
 export function collectQrLabelSpecs(
   carts: Cart[],
   kind: "all" | "carts" | "laptops" = "all",
-): Array<Omit<QrLabel, "src">> {
-  const specs: Array<Omit<QrLabel, "src">> = [];
+): Array<Omit<QrLabel, "mark">> {
+  const specs: Array<Omit<QrLabel, "mark">> = [];
   for (const cart of carts) {
     const brand = cart.laptopBrand ? laptopBrandLabel(cart.laptopBrand) : "";
-    const place = [cart.location, brand].filter(Boolean).join(" · ");
     if (kind !== "laptops") {
       specs.push({
         kind: "cart",
         title: cart.name,
-        subtitle: place || "Laptop cart",
+        subtitle: brand || "Cart",
         payload: cartQrPayload(cart.id),
       });
     }
@@ -34,8 +33,8 @@ export function collectQrLabelSpecs(
       for (const code of cart.laptopCodes ?? []) {
         specs.push({
           kind: "laptop",
-          title: code,
-          subtitle: place ? `${cart.name} · ${place}` : cart.name,
+          title: `#${code}`,
+          subtitle: brand ? `${cart.name} · ${brand}` : cart.name,
           payload: laptopQrPayload(code),
         });
       }
@@ -44,17 +43,14 @@ export function collectQrLabelSpecs(
   return specs;
 }
 
-export async function buildQrLabels(
+export function buildQrLabels(
   carts: Cart[],
   kind: "all" | "carts" | "laptops" = "all",
-): Promise<QrLabel[]> {
-  const specs = collectQrLabelSpecs(carts, kind);
-  return Promise.all(
-    specs.map(async (spec) => ({
-      ...spec,
-      src: await qrDataUrl(spec.payload),
-    })),
-  );
+): QrLabel[] {
+  return collectQrLabelSpecs(carts, kind).map((spec) => ({
+    ...spec,
+    mark: qrPrintSvg(spec.payload),
+  }));
 }
 
 export function openQrLabelsPdf(input: {
@@ -67,12 +63,20 @@ export function openQrLabelsPdf(input: {
 
   const cards = input.labels
     .map((label) => {
-      return `<article class="label">
-        <img src="${escapePdfHtml(label.src)}" alt="" />
-        <p class="kind">${label.kind === "cart" ? "Cart" : "Laptop"}</p>
-        <p class="title">${escapePdfHtml(label.title)}</p>
-        <p class="sub">${escapePdfHtml(label.subtitle)}</p>
-      </article>`;
+      const kind =
+        label.kind === "cart" ? `<p class="kind">Cart</p>` : "";
+      return `<div class="cell">
+        <span class="mark tl" aria-hidden="true"></span>
+        <span class="mark tr" aria-hidden="true"></span>
+        <span class="mark bl" aria-hidden="true"></span>
+        <span class="mark br" aria-hidden="true"></span>
+        <article class="label">
+          <div class="qr">${label.mark}</div>
+          ${kind}
+          <p class="title">${escapePdfHtml(label.title)}</p>
+          <p class="sub">${escapePdfHtml(label.subtitle)}</p>
+        </article>
+      </div>`;
     })
     .join("");
 
@@ -138,25 +142,50 @@ export function openQrLabelsPdf(input: {
       color: #0a0a0a;
       font-variant-numeric: tabular-nums;
     }
+    .cut-note {
+      margin: 0 0 14px;
+      font-size: 11px;
+      letter-spacing: 0.01em;
+      color: #737373;
+    }
     .grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
+      gap: 18px 16px;
     }
-    .label {
-      border: 1px solid #e7e7e7;
-      border-radius: 8px;
-      padding: 14px 10px 12px;
-      text-align: center;
+    .cell {
+      position: relative;
+      padding: 7px;
       break-inside: avoid;
       page-break-inside: avoid;
     }
-    .label img {
-      display: block;
-      width: 92px;
-      height: 92px;
+    .label {
+      border: 0.6pt dashed #737373;
+      border-radius: 0;
+      padding: 12px 10px 10px;
+      text-align: center;
+    }
+    .qr {
+      width: 96px;
+      height: 96px;
       margin: 0 auto 8px;
     }
+    .qr svg {
+      display: block;
+      width: 96px;
+      height: 96px;
+      shape-rendering: crispEdges;
+    }
+    .mark {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      box-sizing: border-box;
+    }
+    .mark.tl { top: 0; left: 0; border-top: 0.7pt solid #111; border-left: 0.7pt solid #111; }
+    .mark.tr { top: 0; right: 0; border-top: 0.7pt solid #111; border-right: 0.7pt solid #111; }
+    .mark.bl { bottom: 0; left: 0; border-bottom: 0.7pt solid #111; border-left: 0.7pt solid #111; }
+    .mark.br { bottom: 0; right: 0; border-bottom: 0.7pt solid #111; border-right: 0.7pt solid #111; }
     .kind {
       margin: 0;
       font-size: 9px;
@@ -246,6 +275,7 @@ export function openQrLabelsPdf(input: {
       <span><b>${laptopCount}</b> laptop${laptopCount === 1 ? "" : "s"}</span>
       <span><b>${input.labels.length}</b> label${input.labels.length === 1 ? "" : "s"}</span>
     </div>
+    <p class="cut-note">Cut on the dashed square. Corner marks show the trim edge.</p>
     <div class="grid">${cards}</div>
     <footer class="footer">
       <span>Internal use · authorized staff only</span>
@@ -253,16 +283,20 @@ export function openQrLabelsPdf(input: {
     </footer>
   </div>
   <script>
-    window.onload = function () {
-      setTimeout(function () { window.print(); }, 280);
-    };
+    window.addEventListener("load", function () {
+      window.setTimeout(function () { window.print(); }, 80);
+    });
   </script>
 </body>
 </html>`;
 
-  const popup = window.open("", "_blank");
-  if (!popup) return "blocked";
-  popup.document.write(html);
-  popup.document.close();
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const popup = window.open(url, "_blank");
+  if (!popup) {
+    URL.revokeObjectURL(url);
+    return "blocked";
+  }
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   return "opened";
 }
