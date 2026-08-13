@@ -367,6 +367,16 @@ export function QrLabelsPanel({ carts }: { carts: Cart[] }) {
 
               <div className="px-5 pb-5">
                 <div className="overflow-hidden rounded-[14px] bg-[#f5f5f7]">
+                  {codes.length === 0 ? (
+                    <div className="px-5 py-8 text-center">
+                      <p className="text-[15px] font-semibold tracking-[-0.02em] text-neutral-950">
+                        No codes
+                      </p>
+                      <p className="mt-1 text-[13px] leading-relaxed text-neutral-400">
+                        Add a laptop case code like SCI-01.
+                      </p>
+                    </div>
+                  ) : null}
                   {codes.length > 0 ? (
                     <div className="px-3 pb-2 pt-2.5">
                       <div className="relative w-44">
@@ -456,10 +466,7 @@ export function QrLabelsPanel({ carts }: { carts: Cart[] }) {
                     </ul>
                   ) : null}
                   <form
-                    className={cn(
-                      "flex items-center px-3 py-1.5",
-                      codes.length > 0 && "border-t border-black/[0.06]",
-                    )}
+                    className="flex items-center border-t border-black/[0.06] px-3 py-1.5"
                     onSubmit={(event) => {
                       event.preventDefault()
                       addCodes()
