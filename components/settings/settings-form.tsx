@@ -539,6 +539,8 @@ export function SettingsForm({
 
         <input
           ref={fileRef}
+          id="settings-photo"
+          name="photo"
           type="file"
           accept="image/png,image/jpeg,image/webp,image/gif"
           className="hidden"

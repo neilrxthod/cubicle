@@ -147,9 +147,9 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-sans);
-  --font-heading: var(--font-sans);
-  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -218,6 +218,15 @@ body {
   font-weight: var(--font-weight-body);
   letter-spacing: var(--tracking-body);
   font-feature-settings: "kern" 1, "liga" 1;
+}
+
+/* Installed PWA (iOS Add to Home Screen + Android Chrome install) */
+html.pwa-standalone {
+  -webkit-tap-highlight-color: transparent;
+}
+html.pwa-standalone,
+html.pwa-standalone body {
+  overscroll-behavior: none;
 }
 
 /* Flex children default to min-content width — force shrink for fluid layouts */

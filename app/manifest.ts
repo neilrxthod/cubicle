@@ -1,0 +1,52 @@
+import type { MetadataRoute } from "next";
+
+export default function manifest(): MetadataRoute.Manifest {
+  return {
+    id: "/",
+    name: "Cubicle",
+    short_name: "Cubicle",
+    description: "Scan labels and book laptop carts.",
+    start_url: "/",
+    scope: "/",
+    display: "standalone",
+    display_override: ["standalone", "minimal-ui"],
+    orientation: "any",
+    background_color: "#f2f2f7",
+    theme_color: "#f2f2f7",
+    lang: "en",
+    categories: ["education", "productivity"],
+    prefer_related_applications: false,
+    icons: [
+      {
+        src: "/icons/icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/icons/icon-512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/icons/icon-192-maskable.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "maskable",
+      },
+      {
+        src: "/icons/icon-512-maskable.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable",
+      },
+      {
+        src: "/apple-touch-icon.png",
+        sizes: "180x180",
+        type: "image/png",
+        purpose: "any",
+      },
+    ],
+  };
+}

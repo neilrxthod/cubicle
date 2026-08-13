@@ -678,6 +678,8 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
     <div className="flex h-svh max-h-svh items-center justify-center overflow-hidden bg-[#ececef] p-3 sm:p-5 md:p-6">
       <input
         ref={fileRef}
+        id="onboarding-photo"
+        name="photo"
         type="file"
         accept="image/png,image/jpeg,image/webp"
         className="hidden"

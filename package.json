@@ -1,6 +1,6 @@
 {
   "name": "cubicle",
-  "version": "1.0.102",
+  "version": "1.0.103",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -51,6 +51,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
+    "jsqr": "^1.4.0",
     "lucide-react": "^1.25.0",
     "motion": "^12.42.2",
     "next": "16.2.12",

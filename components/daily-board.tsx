@@ -306,6 +306,7 @@ export function DailyBoard({
   slotRestrictions,
   bookingPolicy,
   date,
+  compact = false,
 }: {
   session: SessionUser
   carts: Cart[]
@@ -313,6 +314,8 @@ export function DailyBoard({
   slotRestrictions: SlotRestriction[]
   bookingPolicy: BookingPolicy
   date: string
+  /** Phone landscape — one-line chrome, no legend. */
+  compact?: boolean
 }) {
   const router = useRouter()
   const platform = usePlatformStore()
@@ -781,9 +784,19 @@ export function DailyBoard({
     "inline-flex items-center gap-1.5 text-[11px] font-normal tracking-[-0.01em] text-neutral-400"
 
   return (
-    <section className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white shadow-[var(--shadow-surface)]">
+    <section
+      className={cn(
+        "overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white shadow-[var(--shadow-surface)]",
+        compact && "flex h-full min-h-0 flex-col",
+      )}
+    >
       {/* ── Toolbar ── */}
-      <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-5">
+      <div
+        className={cn(
+          "flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-5",
+          compact && "flex-row items-center justify-between gap-3 px-3 py-2",
+        )}
+      >
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
             <h2 className="truncate text-[15px] font-light tracking-[-0.03em] text-neutral-950 sm:text-[16px]">
@@ -795,7 +808,7 @@ export function DailyBoard({
               </span>
             ) : null}
           </div>
-          {session.role !== "admin" && date >= today ? (
+          {session.role !== "admin" && date >= today && !compact ? (
             <p className="mt-1 text-[12px] font-normal tracking-[-0.01em] text-neutral-400">
               Booking through {format(parseISO(lastBookableDate), "MMM d")}
             </p>
@@ -973,7 +986,12 @@ export function DailyBoard({
       </div>
 
       {/* ── Legend ── */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--hairline)] px-4 pb-3 sm:px-5">
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--hairline)] px-4 pb-3 sm:px-5",
+          compact && "hidden",
+        )}
+      >
         <span className={legendItem}>
           <span className="size-1.5 shrink-0 rounded-full border border-neutral-300 bg-white" />
           Open
@@ -998,7 +1016,7 @@ export function DailyBoard({
 
       {/* ── Period grid ── */}
       <div
-        className="board-scroll"
+        className={cn("board-scroll", compact && "min-h-0 flex-1 overflow-y-auto")}
         data-reordering={isReordering ? "true" : undefined}
       >
         <div

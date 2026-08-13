@@ -46,7 +46,7 @@ function QrMark({ value, className }: { value: string; className?: string }) {
     )
   }
 
-  const dim = matrix.size + 2
+  const dim = matrix.size
 
   return (
     <div
@@ -59,13 +59,9 @@ function QrMark({ value, className }: { value: string; className?: string }) {
       }}
     >
       {Array.from({ length: dim * dim }, (_, index) => {
-        const row = Math.floor(index / dim) - 1
-        const col = (index % dim) - 1
-        const on =
-          row >= 0 &&
-          col >= 0 &&
-          row < matrix.size &&
-          Boolean(matrix.dark[row]?.[col])
+        const row = Math.floor(index / dim)
+        const col = index % dim
+        const on = Boolean(matrix.dark[row]?.[col])
         return (
           <span
             key={index}
@@ -291,7 +287,7 @@ export function QrLabelsPanel({ carts }: { carts: Cart[] }) {
           {selected ? (
             <div className="flex min-w-0 flex-col">
               <div className="flex flex-1 flex-col items-center px-6 pb-6 pt-8 sm:pt-10">
-                <div className="flex size-[9.5rem] items-center justify-center overflow-hidden rounded-[6px] bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.04]">
+                <div className="flex size-[9.5rem] items-center justify-center overflow-hidden rounded-[6px] border border-neutral-950 bg-white p-[6px] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]">
                   {payload ? (
                     <QrMark value={payload} className="size-full" />
                   ) : null}

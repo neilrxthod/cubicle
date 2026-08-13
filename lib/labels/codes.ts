@@ -36,3 +36,25 @@ export function cartQrPayload(cartId: string): string {
 export function laptopQrPayload(code: string): string {
   return `CUBICLE:LAPTOP:${normalizeLaptopCode(code)}`;
 }
+
+export type CubicleQrTarget =
+  | { type: "cart"; cartId: string }
+  | { type: "laptop"; code: string };
+
+/** Read a printed Cubicle label. Anything else returns null. */
+export function parseCubicleQrPayload(raw: string): CubicleQrTarget | null {
+  const text = raw.trim();
+  const cart = /^CUBICLE:CART:(.+)$/i.exec(text);
+  if (cart?.[1]) {
+    const cartId = cart[1].trim();
+    if (!cartId) return null;
+    return { type: "cart", cartId };
+  }
+  const laptop = /^CUBICLE:LAPTOP:(.+)$/i.exec(text);
+  if (laptop?.[1]) {
+    const code = normalizeLaptopCode(laptop[1]);
+    if (!isValidLaptopCode(code)) return null;
+    return { type: "laptop", code };
+  }
+  return null;
+}

@@ -11,10 +11,24 @@ import {
 import { isSchoolEmail } from "@/lib/auth/school-domain";
 import { toPlatformSession } from "@/lib/auth/map-session";
 import { PlatformBootstrap } from "@/components/app/platform-bootstrap";
+import { TeacherQrScanner } from "@/components/app/teacher-qr-scanner";
+import { isIosOrAndroidDevice } from "@/lib/device/ios-android";
 import { needsOnboarding } from "@/lib/onboarding/storage";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { Role, SessionUser } from "@/lib/types";
 import type { UserRole } from "@/lib/auth/types";
+
+function subscribeDevice() {
+  return () => {};
+}
+
+function getMobileDeviceSnapshot() {
+  return isIosOrAndroidDevice();
+}
+
+function getMobileDeviceServerSnapshot() {
+  return false;
+}
 
 function LoadingScreen() {
   return (
@@ -40,6 +54,11 @@ export function RequirePlatformAuth({
     subscribeToSession,
     getSessionSnapshot,
     () => null,
+  );
+  const isIosOrAndroid = useSyncExternalStore(
+    subscribeDevice,
+    getMobileDeviceSnapshot,
+    getMobileDeviceServerSnapshot,
   );
   const needsSessionRestore =
     isSupabaseConfigured() && !getSessionSnapshot();
@@ -235,6 +254,10 @@ export function RequirePlatformAuth({
       return;
     }
 
+    if (session.role === "teacher" && isIosOrAndroid) {
+      return;
+    }
+
     // First-run teaching setup (subject / grades / periods) after sign-in.
     if (!skipOnboarding) {
       const mustSetup = needsOnboarding(
@@ -246,7 +269,7 @@ export function RequirePlatformAuth({
         router.replace("/onboarding");
       }
     }
-  }, [session, role, router, restoring, skipOnboarding, pathname]);
+  }, [session, role, router, restoring, skipOnboarding, pathname, isIosOrAndroid]);
 
   if (restoring || !session) {
     return <LoadingScreen />;
@@ -258,6 +281,14 @@ export function RequirePlatformAuth({
 
   if (role && session.role !== role) {
     return <LoadingScreen />;
+  }
+
+  if (session.role === "teacher" && isIosOrAndroid) {
+    return (
+      <PlatformBootstrap>
+        <TeacherQrScanner user={toPlatformSession(session)} />
+      </PlatformBootstrap>
+    );
   }
 
   if (
