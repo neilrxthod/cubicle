@@ -44,12 +44,23 @@ create table if not exists public.carts (
   status text not null default 'active' check (status in ('active', 'maintenance')),
   laptop_count integer,
   location text,
+  laptop_brand text,
   sort_order integer,
   created_at timestamptz not null default now()
 );
 
 alter table public.carts
   add column if not exists sort_order integer;
+
+alter table public.carts
+  add column if not exists laptop_brand text;
+
+alter table public.carts
+  drop constraint if exists carts_laptop_brand_check;
+
+alter table public.carts
+  add constraint carts_laptop_brand_check
+  check (laptop_brand is null or laptop_brand in ('dell', 'chromebook'));
 
 -- ---------------------------------------------------------------------------
 -- Bookings

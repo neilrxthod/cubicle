@@ -59,10 +59,12 @@ import {
 } from "@/lib/staff/employment";
 import { splitDisplayName } from "@/lib/profile/display-name";
 import {
+  parseLaptopBrand,
   sortCarts,
   type Booking,
   type CartStatus,
   type EmploymentType,
+  type LaptopBrand,
   type Period,
   type ProfileUpdate,
   type RestrictionCategory,
@@ -977,7 +979,13 @@ function normalizeCartFields(input: {
   name: string;
   location?: string;
   laptopCount?: number | string | null;
-}): Result<{ name: string; location: string; laptopCount?: number }> {
+  laptopBrand?: string | null;
+}): Result<{
+  name: string;
+  location: string;
+  laptopCount?: number;
+  laptopBrand: LaptopBrand;
+}> {
   const name = input.name.trim().replace(/\s+/g, " ");
   if (!name) return { ok: false, error: "Cart name is required." };
   if (name.length > 48) {
@@ -988,6 +996,11 @@ function normalizeCartFields(input: {
   if (!location) return { ok: false, error: "Location is required." };
   if (location.length > 80) {
     return { ok: false, error: "Location must be 80 characters or fewer." };
+  }
+
+  const laptopBrand = parseLaptopBrand(input.laptopBrand);
+  if (!laptopBrand) {
+    return { ok: false, error: "Choose Dell or Chromebook." };
   }
 
   let laptopCount: number | undefined;
@@ -1012,6 +1025,7 @@ function normalizeCartFields(input: {
       name,
       location,
       laptopCount,
+      laptopBrand,
     },
   };
 }
@@ -1021,6 +1035,7 @@ export async function createCart(input: {
   name: string;
   location?: string;
   laptopCount?: number | string | null;
+  laptopBrand?: string | null;
 }): Promise<Result<{ cartId: string }>> {
   const session = requireSession();
   if (!session || session.role !== "admin") {
@@ -1034,7 +1049,7 @@ export async function createCart(input: {
   if (!fields.data) {
     return { ok: false, error: "Invalid cart details." };
   }
-  const { name, location, laptopCount } = fields.data;
+  const { name, location, laptopCount, laptopBrand } = fields.data;
 
   const duplicate = getState().carts.some(
     (c) => c.name.toLowerCase() === name.toLowerCase(),
@@ -1056,6 +1071,7 @@ export async function createCart(input: {
       name,
       location,
       laptopCount,
+      laptopBrand,
       status: "active",
       sortOrder: nextOrder,
     });
@@ -1074,6 +1090,7 @@ export async function createCart(input: {
       status: "active",
       location,
       laptopCount,
+      laptopBrand,
       sortOrder: nextOrder,
     });
     draft.carts = sortCarts(draft.carts);
@@ -1129,6 +1146,7 @@ export async function updateCart(
     name: string;
     location?: string;
     laptopCount?: number | string | null;
+    laptopBrand?: string | null;
   },
 ): Promise<Result> {
   const session = requireSession();
@@ -1144,7 +1162,7 @@ export async function updateCart(
   if (!fields.data) {
     return { ok: false, error: "Invalid cart details." };
   }
-  const { name, location, laptopCount } = fields.data;
+  const { name, location, laptopCount, laptopBrand } = fields.data;
   const existing = getState().carts.find((c) => c.id === cartId);
   if (!existing) return { ok: false, error: "Cart not found." };
 
@@ -1160,6 +1178,7 @@ export async function updateCart(
       name,
       location,
       laptopCount,
+      laptopBrand,
     });
     if (error) return { ok: false, error };
     return refreshRemote();
@@ -1173,6 +1192,7 @@ export async function updateCart(
     cart.name = name;
     cart.location = location;
     cart.laptopCount = laptopCount;
+    cart.laptopBrand = laptopBrand;
     draft.carts.sort((a, b) => a.name.localeCompare(b.name));
   });
 

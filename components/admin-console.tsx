@@ -1,9 +1,20 @@
 "use client"
 
-import { useState, useTransition, useMemo, useEffect } from "react"
+import { useState, useTransition, useMemo, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import type { Booking, BookingPolicy, Cart, Issue, User, Period, SlotRestriction, SwapRequest } from "@/lib/types"
+import {
+  laptopBrandLabel,
+  type Booking,
+  type BookingPolicy,
+  type Cart,
+  type Issue,
+  type LaptopBrand,
+  type User,
+  type Period,
+  type SlotRestriction,
+  type SwapRequest,
+} from "@/lib/types"
 import {
   createCart,
   deleteCart,
@@ -67,6 +78,10 @@ import { cn } from "@/lib/utils"
 import { StaffPanel } from "@/components/staff-panel"
 import { ManageBookingDialog } from "@/components/manage-booking-dialog"
 import { CartPauseConflictDialog } from "@/components/admin/cart-pause-conflict-dialog"
+import {
+  CartBrandMark,
+  LaptopBrandToggle,
+} from "@/components/admin/laptop-brand-toggle"
 import {
   ActivityAreaChart,
   CartUsageBarChart,
@@ -295,6 +310,138 @@ export function AdminConsole({
   )
 }
 
+function InventoryRenameField({
+  value,
+  emptyLabel,
+  field,
+  paused,
+  disabled,
+  maxLength,
+  onSave,
+}: {
+  value: string
+  emptyLabel?: string
+  field: "name" | "location"
+  paused?: boolean
+  disabled?: boolean
+  maxLength: number
+  onSave: (next: string) => Promise<boolean>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const [pending, startTransition] = useTransition()
+  const skipBlur = useRef(false)
+  const committed = useRef(false)
+
+  function startEdit() {
+    if (disabled || pending) return
+    skipBlur.current = false
+    committed.current = false
+    setDraft(value)
+    setEditing(true)
+  }
+
+  function cancel() {
+    skipBlur.current = true
+    setDraft(value)
+    setEditing(false)
+  }
+
+  function commit() {
+    if (skipBlur.current) {
+      skipBlur.current = false
+      return
+    }
+    if (committed.current || pending) return
+    const next = draft.trim().replace(/\s+/g, " ")
+    if (!next) {
+      toast({
+        title: field === "name" ? "Name is required" : "Location is required",
+        variant: "destructive",
+      })
+      return
+    }
+    if (next === value.trim()) {
+      committed.current = true
+      setEditing(false)
+      return
+    }
+    committed.current = true
+    startTransition(async () => {
+      const ok = await onSave(next)
+      if (ok) {
+        setEditing(false)
+        return
+      }
+      committed.current = false
+    })
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        disabled={pending}
+        maxLength={maxLength}
+        aria-label={field === "name" ? "Cart name" : "Cart location"}
+        onFocus={(event) => event.currentTarget.select()}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault()
+            commit()
+          }
+          if (event.key === "Escape") {
+            event.preventDefault()
+            cancel()
+          }
+        }}
+        className={cn(
+          "w-full min-w-0 rounded-md border border-neutral-200 bg-white px-1.5",
+          "outline-none focus-visible:border-neutral-400",
+          "disabled:opacity-60",
+          field === "name"
+            ? "h-7 text-[13.5px] font-medium tracking-[-0.02em] text-neutral-950"
+            : "h-6 text-[12px] tracking-[-0.01em] text-neutral-700",
+        )}
+      />
+    )
+  }
+
+  const display = value.trim() || emptyLabel || ""
+
+  return (
+    <button
+      type="button"
+      title="Double-click to rename"
+      disabled={disabled}
+      onDoubleClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        startEdit()
+      }}
+      className={cn(
+        "block max-w-full truncate rounded-sm text-left",
+        "cursor-text outline-none",
+        "hover:bg-neutral-50",
+        "focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+        "disabled:cursor-default disabled:hover:bg-transparent",
+        field === "name"
+          ? cn(
+              "text-[13.5px] font-medium tracking-[-0.02em]",
+              paused ? "text-neutral-500" : "text-neutral-950",
+            )
+          : "text-[12px] tracking-[-0.01em] text-neutral-400",
+      )}
+    >
+      {display}
+    </button>
+  )
+}
+
 function CartsGrid({
   carts,
   bookings,
@@ -395,6 +542,34 @@ function CartsGrid({
       })
       router.refresh()
     })
+  }
+
+  async function saveCartField(
+    cart: Cart,
+    field: "name" | "location",
+    next: string,
+  ): Promise<boolean> {
+    const res = await updateCart(cart.id, {
+      name: field === "name" ? next : cart.name,
+      location: field === "location" ? next : (cart.location ?? ""),
+      laptopBrand: cart.laptopBrand ?? "dell",
+      laptopCount:
+        typeof cart.laptopCount === "number" ? cart.laptopCount : null,
+    })
+    if (!res.ok) {
+      toast({
+        title: "Could not update cart",
+        description: res.error,
+        variant: "destructive",
+      })
+      return false
+    }
+    toast({
+      title: field === "name" ? "Name updated" : "Location updated",
+      description: next,
+    })
+    router.refresh()
+    return true
   }
 
   function toggle(cart: Cart) {
@@ -528,18 +703,42 @@ function CartsGrid({
                     />
 
                     <div className="flex min-w-0 items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h3
-                          className={cn(
-                            "truncate text-[13.5px] font-medium tracking-[-0.02em]",
-                            paused ? "text-neutral-500" : "text-neutral-950",
-                          )}
-                        >
-                          {cart.name}
-                        </h3>
-                        <p className="mt-1 truncate text-[12px] tracking-[-0.01em] text-neutral-400">
-                          {cart.location || "Location not set"}
-                        </p>
+                      <div className="flex min-w-0 items-start gap-2.5">
+                        <CartBrandMark
+                          brand={cart.laptopBrand}
+                          className="mt-0.5 size-7 rounded-md border border-neutral-200/80 bg-white"
+                          logoClassName="size-4"
+                        />
+                        <div className="min-w-0">
+                          <InventoryRenameField
+                            field="name"
+                            value={cart.name}
+                            paused={paused}
+                            disabled={isPending}
+                            maxLength={48}
+                            onSave={(next) =>
+                              saveCartField(cart, "name", next)
+                            }
+                          />
+                          <div className="mt-1 flex min-w-0 items-baseline gap-1">
+                            <InventoryRenameField
+                              field="location"
+                              value={cart.location ?? ""}
+                              emptyLabel="Location not set"
+                              paused={paused}
+                              disabled={isPending}
+                              maxLength={80}
+                              onSave={(next) =>
+                                saveCartField(cart, "location", next)
+                              }
+                            />
+                            {cart.laptopBrand ? (
+                              <span className="shrink-0 text-[12px] tracking-[-0.01em] text-neutral-400">
+                                · {laptopBrandLabel(cart.laptopBrand)}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
                       </div>
                       <div
                         className={cn(
@@ -893,6 +1092,7 @@ function CartEditorDialog({
 }) {
   const [name, setName] = useState("")
   const [location, setLocation] = useState("")
+  const [laptopBrand, setLaptopBrand] = useState<LaptopBrand>("dell")
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -902,9 +1102,11 @@ function CartEditorDialog({
     if (mode === "edit" && cart) {
       setName(cart.name)
       setLocation(cart.location ?? "")
+      setLaptopBrand(cart.laptopBrand ?? "dell")
     } else {
       setName("")
       setLocation("")
+      setLaptopBrand("dell")
     }
     setError(null)
   }, [open, mode, cart])
@@ -915,6 +1117,7 @@ function CartEditorDialog({
       const payload = {
         name,
         location,
+        laptopBrand,
         // Preserve existing laptop count on edit; never prompt for it in the UI.
         laptopCount:
           mode === "edit" && cart && typeof cart.laptopCount === "number"
@@ -938,7 +1141,7 @@ function CartEditorDialog({
 
       toast({
         title: mode === "edit" ? "Cart updated" : "Cart added",
-        description: name.trim(),
+        description: `${name.trim()} · ${laptopBrandLabel(laptopBrand)}`,
       })
       onSaved()
     })
@@ -947,8 +1150,8 @@ function CartEditorDialog({
   const title = mode === "edit" ? "Edit cart" : "Add cart"
   const description =
     mode === "edit"
-      ? "Update the display name and location for this cart."
-      : "Create a cart for the schedule. Name and location are required."
+      ? "Update the display name, location, and laptop type for this cart."
+      : "Create a cart for the schedule. Name, location, and laptop type are required."
   const canSubmit = Boolean(name.trim() && location.trim())
 
   return (
@@ -964,6 +1167,12 @@ function CartEditorDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-4 px-5 py-5">
+          <LaptopBrandToggle
+            value={laptopBrand}
+            onChange={setLaptopBrand}
+            disabled={pending}
+          />
+
           <div className="space-y-1.5">
             <Label
               htmlFor="cart-name"

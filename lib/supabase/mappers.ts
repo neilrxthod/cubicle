@@ -1,15 +1,16 @@
-import type {
-  Booking,
-  BookingPolicy,
-  Cart,
-  EmploymentType,
-  Issue,
-  Period,
-  PlatformState,
-  Role,
-  SlotRestriction,
-  SwapRequest,
-  User,
+import {
+  parseLaptopBrand,
+  type Booking,
+  type BookingPolicy,
+  type Cart,
+  type EmploymentType,
+  type Issue,
+  type Period,
+  type PlatformState,
+  type Role,
+  type SlotRestriction,
+  type SwapRequest,
+  type User,
 } from "@/lib/types";
 
 export type DbCart = {
@@ -18,6 +19,7 @@ export type DbCart = {
   status: string;
   laptop_count: number | null;
   location: string | null;
+  laptop_brand?: string | null;
   sort_order?: number | null;
 };
 
@@ -125,6 +127,7 @@ export function mapCart(row: DbCart): Cart {
     status: row.status as Cart["status"],
     laptopCount: row.laptop_count ?? undefined,
     location: row.location ?? undefined,
+    laptopBrand: parseLaptopBrand(row.laptop_brand),
     sortOrder:
       typeof row.sort_order === "number" && Number.isFinite(row.sort_order)
         ? row.sort_order

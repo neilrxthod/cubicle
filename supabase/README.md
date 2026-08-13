@@ -44,6 +44,7 @@ Run each file fully in the Supabase **SQL Editor** and wait for **Success** befo
 | 9 | `swap-accept.sql` | Atomic two-way cart swap accept, offered cart column, owner RLS |
 | 10 | `booking-policy-max-slots.sql` | Admin max cart slots per teacher per day (`max_slots_per_teacher_per_day`) |
 | 11 | `booking-share.sql` | Share / borrow co-teacher on a booking (dual PFPs on board) |
+| 12 | `cart-laptop-brand.sql` | Dell / Chromebook fleet on inventory carts (`laptop_brand`) |
 
 **Never** run ad-hoc `drop table` / `truncate` against a live school project without an approved backup and change window.
 

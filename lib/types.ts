@@ -10,6 +10,23 @@ export type Period = "P1" | "P2" | "P3" | "P4" | "P5";
 
 export type CartStatus = "active" | "maintenance";
 
+/** Laptop fleet on an inventory cart. Admin-set when adding / editing. */
+export type LaptopBrand = "dell" | "chromebook";
+
+export const LAPTOP_BRANDS = ["dell", "chromebook"] as const;
+
+export function isLaptopBrand(value: unknown): value is LaptopBrand {
+  return value === "dell" || value === "chromebook";
+}
+
+export function parseLaptopBrand(value: unknown): LaptopBrand | undefined {
+  return isLaptopBrand(value) ? value : undefined;
+}
+
+export function laptopBrandLabel(brand: LaptopBrand): string {
+  return brand === "dell" ? "Dell" : "Chromebook";
+}
+
 export type IssueSeverity = "low" | "medium" | "high";
 
 export type IssueStatus = "open" | "resolved";
@@ -70,6 +87,8 @@ export type Cart = {
   status: CartStatus;
   laptopCount?: number;
   location?: string;
+  /** Dell or Chromebook fleet. Optional on legacy carts. */
+  laptopBrand?: LaptopBrand;
   /** Board / inventory row order (admin drag-and-drop). Lower = higher. */
   sortOrder?: number;
 };

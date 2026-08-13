@@ -69,7 +69,7 @@
   --shell-max: 96rem;
   --shell-px: clamp(0.875rem, 2.4vw, 2rem);
   --shell-py: clamp(1rem, 2.2vh, 2.25rem);
-  --board-label-col: minmax(6.5rem, 12rem);
+  --board-label-col: minmax(7.75rem, 14rem);
   /* P1–P5 share equal width */
   --board-period-col: minmax(0, 1fr);
   --board-track-min: 34rem;
@@ -361,7 +361,7 @@ body[data-scroll-locked] [data-radix-portal] {
     overflow-y: hidden;
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
-    /* Avoid a reserved gutter strip past P5 in the dark header */
+    /* Avoid a reserved gutter strip past P5 in the period header */
     scrollbar-gutter: auto;
   }
 

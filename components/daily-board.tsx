@@ -126,6 +126,7 @@ import {
   inviteChipDeclineClassName,
 } from "@/lib/ui/invite-actions"
 import { usePlatformStore } from "@/lib/data/platform-store"
+import { CartBrandMark } from "@/components/admin/laptop-brand-toggle"
 
 const PERIODS: Period[] = ["P1", "P2", "P3", "P4", "P5"]
 
@@ -144,7 +145,7 @@ const CART_DROP_ANIMATION: DropAnimation = {
 
 /**
  * Clamp drag so the row stays inside the cart list only —
- * never over the black Cart / P1–P5 header above.
+ * never over the period header above.
  */
 function createRestrictToElement(
   elementRef: { current: HTMLElement | null },
@@ -156,7 +157,7 @@ function createRestrictToElement(
     }
 
     let { y } = transform
-    // Top of dragged row must stay ≥ list top (below black header)
+    // Top of dragged row must stay ≥ list top (below period header)
     const minY = bounds.top - draggingNodeRect.top
     // Bottom of dragged row must stay ≤ list bottom
     const maxY = bounds.bottom - draggingNodeRect.bottom
@@ -187,11 +188,11 @@ function parseLocalYmd(ymd: string): Date {
  * Fill sits in the inner face.
  */
 const cellBase =
-  "box-border flex min-h-14 min-w-0 border-l border-[var(--hairline)] bg-white p-px motion-micro sm:min-h-16"
+  "box-border flex min-h-[3.25rem] min-w-0 border-l border-[var(--hairline)] bg-white p-[3px] motion-micro sm:min-h-[3.75rem]"
 
 /** Slot fill inside the white strip. */
 const slotFace =
-  "relative flex h-full w-full min-h-0 flex-1 items-center justify-center overflow-hidden"
+  "relative flex h-full w-full min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[5px]"
 
 /** Dominant face in the slot; cell height tracks so neighbors stay clear. */
 const SLOT_AVATAR =
@@ -367,7 +368,7 @@ export function DailyBoard({
   /** Admin board order — dnd-kit sortable (handle-only). */
   const [boardCarts, setBoardCarts] = useState(() => sortCarts(carts))
   const boardCartsRef = useRef(boardCarts)
-  /** Cart rows only (excludes black period header). */
+  /** Cart rows only (excludes period header). */
   const cartListRef = useRef<HTMLDivElement | null>(null)
   const orderAtDragStart = useRef<string>("")
   const cartsAtDragStart = useRef<Cart[]>([])
@@ -777,19 +778,19 @@ export function DailyBoard({
   )
 
   const legendItem =
-    "inline-flex items-center gap-1.5 text-[10.5px] font-normal tracking-[-0.01em] text-neutral-400"
+    "inline-flex items-center gap-1.5 text-[11px] font-normal tracking-[-0.01em] text-neutral-400"
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-[0_1px_0_rgba(0,0,0,0.03),0_8px_32px_rgba(0,0,0,0.04)]">
+    <section className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white shadow-[var(--shadow-surface)]">
       {/* ── Toolbar ── */}
-      <div className="flex flex-col gap-3 border-b border-black/[0.06] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-5">
+      <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-5">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-            <h2 className="truncate text-[17px] font-normal tracking-[-0.035em] text-black sm:text-[18px]">
+            <h2 className="truncate text-[15px] font-light tracking-[-0.03em] text-neutral-950 sm:text-[16px]">
               {heading}
             </h2>
             {isViewingToday ? (
-              <span className="text-[11px] font-normal uppercase tracking-[0.14em] text-neutral-400">
+              <span className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-neutral-400">
                 Today
               </span>
             ) : null}
@@ -864,7 +865,7 @@ export function DailyBoard({
           {isAdmin ? (
             <span
               aria-hidden
-              className="hidden h-4 w-px shrink-0 bg-black/10 sm:block"
+              className="hidden h-4 w-px shrink-0 bg-[var(--hairline-strong)] sm:block"
             />
           ) : null}
 
@@ -890,7 +891,7 @@ export function DailyBoard({
                 aria-expanded={datePickerOpen}
                 className={cn(
                   "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5",
-                  "border border-black/[0.08] bg-white",
+                  "border border-[var(--hairline-strong)] bg-white",
                   "text-[12px] font-medium tabular-nums tracking-[-0.02em] text-neutral-900",
                   "transition-colors duration-150",
                   "hover:bg-neutral-50",
@@ -952,7 +953,7 @@ export function DailyBoard({
             <>
               <span
                 aria-hidden
-                className="mx-1.5 h-3.5 w-px shrink-0 bg-black/10"
+                className="mx-1.5 h-3.5 w-px shrink-0 bg-[var(--hairline-strong)]"
               />
               <button
                 type="button"
@@ -972,17 +973,17 @@ export function DailyBoard({
       </div>
 
       {/* ── Legend ── */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 border-b border-black/[0.05] bg-[#fafafa] px-4 py-2.5 sm:px-5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--hairline)] px-4 pb-3 sm:px-5">
         <span className={legendItem}>
-          <span className="size-1.5 shrink-0 rounded-full border border-black/15 bg-white" />
+          <span className="size-1.5 shrink-0 rounded-full border border-neutral-300 bg-white" />
           Open
         </span>
         <span className={legendItem}>
-          <span className="size-1.5 shrink-0 rounded-full bg-black" />
+          <span className="size-1.5 shrink-0 rounded-full bg-neutral-950" />
           Yours
         </span>
         <span className={legendItem}>
-          <span className="size-1.5 shrink-0 rounded-full bg-black/20" />
+          <span className="size-1.5 shrink-0 rounded-full bg-neutral-300" />
           Booked
         </span>
         <span className={legendItem}>
@@ -991,7 +992,7 @@ export function DailyBoard({
         </span>
         <span className={legendItem}>
           <Wrench className="size-2.5 shrink-0 text-neutral-400" strokeWidth={1.5} />
-          Maintenance
+          Paused
         </span>
       </div>
 
@@ -1004,14 +1005,14 @@ export function DailyBoard({
           className="board-track"
           data-reordering={isReordering ? "true" : undefined}
         >
-          <div className="board-cols grid bg-black">
-            <div className="board-sticky-label flex items-center bg-black px-3 py-2.5 text-[10px] font-normal uppercase tracking-[0.18em] text-white/40 sm:px-5 sm:py-3">
+          <div className="board-cols grid border-b border-[var(--hairline)] bg-neutral-50/80">
+            <div className="board-sticky-label flex items-center bg-neutral-50/80 px-3 py-2 text-[11px] font-medium tracking-[-0.01em] text-neutral-400 sm:px-4">
               Cart
             </div>
             {PERIODS.map((p) => (
               <div
                 key={p}
-                className="flex items-center justify-center border-l border-white/[0.08] px-1.5 py-2.5 text-[10px] font-normal uppercase tracking-[0.18em] text-white/40 sm:px-2 sm:py-3"
+                className="flex items-center justify-center border-l border-[var(--hairline)] px-1.5 py-2 text-[11px] font-medium tabular-nums tracking-[-0.01em] text-neutral-400 sm:px-2"
               >
                 {p}
               </div>
@@ -1020,10 +1021,10 @@ export function DailyBoard({
 
           {carts.length === 0 ? (
             <div className="flex flex-col items-center px-6 py-16 text-center sm:py-20">
-              <p className="text-[13px] font-medium tracking-[-0.02em] text-neutral-900">
+              <p className="text-[13.5px] font-medium tracking-[-0.02em] text-neutral-950">
                 No carts configured
               </p>
-              <p className="mt-1.5 max-w-[18rem] text-[12px] leading-relaxed tracking-[-0.01em] text-neutral-500">
+              <p className="mt-1.5 max-w-[18rem] text-[12.5px] leading-relaxed tracking-[-0.01em] text-neutral-400">
                 {session.role === "admin"
                   ? "Add laptop carts in Inventory to open the schedule for booking."
                   : "The schedule opens once an administrator adds laptop carts."}
@@ -1188,8 +1189,8 @@ export function DailyBoard({
                             slotFace,
                             "group/slot",
                             isInvolved || inviteForMe
-                              ? "bg-[#211d1d] hover:bg-[#2a2525]"
-                              : "bg-[#211d1d]/10 hover:bg-[#211d1d]/15",
+                              ? "bg-neutral-950 hover:bg-neutral-900"
+                              : "bg-neutral-950/[0.07] hover:bg-neutral-950/[0.11]",
                           )}
                         >
                           {boardTag ? (
@@ -1339,7 +1340,7 @@ export function DailyBoard({
                               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset",
                               isInvolved
                                 ? "focus-visible:ring-white/20"
-                                : "focus-visible:ring-[#211d1d]/20",
+                                : "focus-visible:ring-neutral-900/20",
                               "disabled:pointer-events-none",
                               inviteForMe && "opacity-40",
                             )}
@@ -1561,41 +1562,31 @@ export function DailyBoard({
                     data-cart-row={cart.id}
                     className={cn(
                       "board-cols group/row grid border-b border-[var(--hairline)] last:border-b-0",
-                      isMaintenanceRow ? "bg-neutral-50/80" : "bg-white",
+                      isMaintenanceRow ? "bg-neutral-50/70" : "bg-white",
                     )}
                   >
                     <div
                       className={cn(
-                        "board-sticky-label flex items-center justify-between gap-1.5 border-r border-[var(--hairline)] px-3 py-2.5 sm:gap-2 sm:px-5 sm:py-3",
+                        "board-sticky-label flex items-center justify-between gap-2 border-r border-[var(--hairline)] px-3 py-2.5 sm:px-4 sm:py-3",
                         isMaintenanceRow
-                          ? "bg-neutral-50/95 opacity-70"
+                          ? "bg-neutral-50/90 opacity-70"
                           : "bg-white",
                       )}
                     >
-                      <div className="min-w-0">
-                        <span className="block truncate text-[13px] font-medium tracking-[-0.02em] text-neutral-950">
-                          {cart.name}
-                        </span>
-                        {isMaintenanceRow ? (
-                          <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
-                            Maintenance
-                          </span>
-                        ) : cart.location ? (
-                          <span className="mt-0.5 block truncate text-[11px] tracking-[-0.01em] text-neutral-400">
-                            {cart.location}
-                          </span>
-                        ) : null}
-                      </div>
+                      <BoardCartIdentity
+                        cart={cart}
+                        isMaintenanceRow={isMaintenanceRow}
+                      />
                       <button
                         type="button"
                         aria-label={`Report issue on ${cart.name}`}
                         title="Report issue"
                         onClick={() => setIssueDialog(cart)}
                         className={cn(
-                          "flex size-8 shrink-0 items-center justify-center rounded-md",
-                          "text-red-600 transition-colors duration-150",
+                          "flex size-7 shrink-0 items-center justify-center rounded-md",
+                          "text-red-600 motion-micro",
                           "hover:bg-red-50 hover:text-red-700",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/25",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/20",
                         )}
                       >
                         <AlertTriangle className="size-3.5" strokeWidth={1.75} />
@@ -1712,8 +1703,8 @@ export function DailyBoard({
                             slotFace,
                             "group/slot",
                             isInvolved || inviteForMe
-                              ? "bg-[#211d1d] hover:bg-[#2a2525]"
-                              : "bg-[#211d1d]/10 hover:bg-[#211d1d]/15",
+                              ? "bg-neutral-950 hover:bg-neutral-900"
+                              : "bg-neutral-950/[0.07] hover:bg-neutral-950/[0.11]",
                           )}
                         >
                           {boardTag ? (
@@ -1863,7 +1854,7 @@ export function DailyBoard({
                               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset",
                               isInvolved
                                 ? "focus-visible:ring-white/20"
-                                : "focus-visible:ring-[#211d1d]/20",
+                                : "focus-visible:ring-neutral-900/20",
                               "disabled:pointer-events-none",
                               inviteForMe && "opacity-40",
                             )}
@@ -2148,6 +2139,47 @@ export function DailyBoard({
 }
 
 
+function BoardCartIdentity({
+  cart,
+  isMaintenanceRow,
+}: {
+  cart: Cart
+  isMaintenanceRow: boolean
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      {cart.laptopBrand ? (
+        <CartBrandMark
+          brand={cart.laptopBrand}
+          className="size-6"
+          logoClassName="size-[18px]"
+        />
+      ) : (
+        <span
+          aria-hidden
+          className="flex size-6 shrink-0 items-center justify-center rounded-[5px] bg-neutral-100 text-[10px] font-medium tracking-[-0.02em] text-neutral-400"
+        >
+          {cart.name.trim().slice(0, 1).toUpperCase() || "C"}
+        </span>
+      )}
+      <div className="min-w-0">
+        <span className="block truncate text-[13px] font-medium tracking-[-0.02em] text-neutral-950">
+          {cart.name}
+        </span>
+        {isMaintenanceRow ? (
+          <span className="mt-0.5 block text-[11px] tracking-[-0.01em] text-neutral-400">
+            Paused
+          </span>
+        ) : cart.location ? (
+          <span className="mt-0.5 block truncate text-[11px] tracking-[-0.01em] text-neutral-400">
+            {cart.location}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 /**
  * Floating preview — Apple list lift: soft multi-layer shadow, no hard chrome.
  * Portaled to body so board overflow/radius never soft-clips the corners.
@@ -2236,7 +2268,7 @@ function SortableBoardCartRow({
       className={cn(
         "board-cols group/row relative grid border-b border-[var(--hairline)] last:border-b-0",
         "bg-white outline-none",
-        isMaintenanceRow && "bg-neutral-50/80",
+        isMaintenanceRow && "bg-neutral-50/70",
         // Placeholder “hole” under the lifted row — quiet, no rails
         isDragging &&
           "z-[1] bg-neutral-100/50 opacity-[0.22] shadow-none",
@@ -2245,7 +2277,7 @@ function SortableBoardCartRow({
       <div
         className={cn(
           "board-sticky-label flex items-center justify-between gap-1.5 border-r border-[var(--hairline)] px-2 py-2.5 sm:gap-2 sm:px-3 sm:py-3",
-          isMaintenanceRow ? "bg-neutral-50/95 opacity-70" : "bg-white",
+          isMaintenanceRow ? "bg-neutral-50/90 opacity-70" : "bg-white",
           isDragging && "bg-transparent border-transparent",
         )}
       >
@@ -2280,20 +2312,10 @@ function SortableBoardCartRow({
               strokeWidth={1.5}
             />
           </button>
-          <div className="min-w-0">
-            <span className="block truncate text-[13px] font-medium tracking-[-0.02em] text-neutral-950">
-              {cart.name}
-            </span>
-            {isMaintenanceRow ? (
-              <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
-                Maintenance
-              </span>
-            ) : cart.location ? (
-              <span className="mt-0.5 block truncate text-[11px] tracking-[-0.01em] text-neutral-400">
-                {cart.location}
-              </span>
-            ) : null}
-          </div>
+          <BoardCartIdentity
+            cart={cart}
+            isMaintenanceRow={isMaintenanceRow}
+          />
         </div>
         <button
           type="button"
@@ -2301,8 +2323,8 @@ function SortableBoardCartRow({
           title="Report issue"
           onClick={onReportIssue}
           className={cn(
-            "flex size-8 shrink-0 items-center justify-center rounded-md",
-            "text-red-600/90 transition-colors duration-150",
+            "flex size-7 shrink-0 items-center justify-center rounded-md",
+            "text-red-600 motion-micro",
             "hover:bg-red-50 hover:text-red-700",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/20",
             isDragging && "opacity-0",

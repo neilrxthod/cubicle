@@ -21,6 +21,7 @@ import type {
   CartStatus,
   EmploymentType,
   Issue,
+  LaptopBrand,
   Period,
   PlatformState,
   ProfileUpdate,
@@ -569,10 +570,10 @@ export async function dbCreateCart(input: {
   name: string;
   location?: string;
   laptopCount?: number;
+  laptopBrand?: LaptopBrand;
   status?: CartStatus;
   sortOrder?: number;
 }): Promise<{ error?: string }> {
-  const supabase = client();
   const payload: Record<string, unknown> = {
     id: input.id,
     name: input.name,
@@ -583,17 +584,28 @@ export async function dbCreateCart(input: {
   if (typeof input.sortOrder === "number") {
     payload.sort_order = input.sortOrder;
   }
-  const { error } = await supabase.from("carts").insert(payload);
-  if (
-    error &&
-    error.message.toLowerCase().includes("sort_order") &&
-    "sort_order" in payload
-  ) {
-    delete payload.sort_order;
-    const retry = await supabase.from("carts").insert(payload);
-    return { error: retry.error?.message };
+  if (input.laptopBrand) {
+    payload.laptop_brand = input.laptopBrand;
   }
-  return { error: error?.message };
+  return insertCartPayload(payload);
+}
+
+async function insertCartPayload(
+  payload: Record<string, unknown>,
+): Promise<{ error?: string }> {
+  const supabase = client();
+  const { error } = await supabase.from("carts").insert(payload);
+  if (!error) return {};
+  const msg = error.message.toLowerCase();
+  if (msg.includes("sort_order") && "sort_order" in payload) {
+    delete payload.sort_order;
+    return insertCartPayload(payload);
+  }
+  if (msg.includes("laptop_brand") && "laptop_brand" in payload) {
+    delete payload.laptop_brand;
+    return insertCartPayload(payload);
+  }
+  return { error: error.message };
 }
 
 /** Admin: write board order for many carts (0…n-1). */
@@ -626,17 +638,31 @@ export async function dbUpdateCart(
     name: string;
     location?: string;
     laptopCount?: number;
+    laptopBrand?: LaptopBrand;
   },
 ): Promise<{ error?: string }> {
   const supabase = client();
-  const { error } = await supabase
-    .from("carts")
-    .update({
-      name: input.name,
-      location: input.location ?? null,
-      laptop_count: input.laptopCount ?? null,
-    })
-    .eq("id", cartId);
+  const payload: Record<string, unknown> = {
+    name: input.name,
+    location: input.location ?? null,
+    laptop_count: input.laptopCount ?? null,
+  };
+  if (input.laptopBrand) {
+    payload.laptop_brand = input.laptopBrand;
+  }
+  const { error } = await supabase.from("carts").update(payload).eq("id", cartId);
+  if (
+    error &&
+    error.message.toLowerCase().includes("laptop_brand") &&
+    "laptop_brand" in payload
+  ) {
+    delete payload.laptop_brand;
+    const retry = await supabase
+      .from("carts")
+      .update(payload)
+      .eq("id", cartId);
+    return { error: retry.error?.message };
+  }
   return { error: error?.message };
 }
 
