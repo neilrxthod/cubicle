@@ -423,8 +423,10 @@ export function QrLabelsPanel({ carts }: { carts: Cart[] }) {
                           <li
                             key={code}
                             className={cn(
-                              "flex items-center",
+                              "group flex items-center",
+                              "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
                               index > 0 && "border-t border-black/[0.06]",
+                              !active && "hover:bg-black/[0.04]",
                             )}
                           >
                             <button
@@ -434,9 +436,10 @@ export function QrLabelsPanel({ carts }: { carts: Cart[] }) {
                               }
                               className={cn(
                                 "flex min-w-0 flex-1 items-center px-4 py-2.5 text-left text-[15px] tracking-[-0.015em]",
+                                "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
                                 active
                                   ? "font-medium text-neutral-950"
-                                  : "text-neutral-800",
+                                  : "text-neutral-800 group-hover:text-neutral-950",
                               )}
                             >
                               {code}
