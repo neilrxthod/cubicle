@@ -176,9 +176,9 @@ export function AdminConsole({
   const filteredBookings = useMemo(() => bookings.filter((b) => isDateInRange(parseISO(b.date), range)), [bookings, range])
   const filteredIssues = useMemo(() => issues.filter((issue) => isDateInRange(parseISO(issue.createdAt), range)), [issues, range])
 
-  const tabs: Array<{ id: Tab; label: string }> = [
+  const tabs: Array<{ id: Tab; label: string; beta?: boolean }> = [
     { id: "carts", label: "Inventory" },
-    { id: "labels", label: "QR codes" },
+    { id: "labels", label: "QR codes", beta: true },
     { id: "bookings", label: "Reservations" },
     { id: "reports", label: "Reports" },
     { id: "staff", label: "Staff" },
@@ -216,13 +216,18 @@ export function AdminConsole({
                 aria-selected={active}
                 onClick={() => setTab(item.id)}
                 className={cn(
-                  "inline-flex h-8 shrink-0 items-center justify-center rounded-md px-3 text-[12.5px] font-medium transition-colors",
+                  "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 text-[12.5px] font-medium transition-colors",
                   active
                     ? "bg-neutral-950 text-white"
                     : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800",
                 )}
               >
                 {item.label}
+                {item.beta ? (
+                  <span className="rounded bg-red-600 px-1 py-px text-[9px] font-medium uppercase tracking-[0.06em] text-white">
+                    Beta
+                  </span>
+                ) : null}
               </button>
             )
           })}

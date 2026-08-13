@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, Plus, Printer, Search, X } from "lucide-react"
+import { ChevronDown, Loader2, Plus, Printer, Search, X } from "lucide-react"
 import { setCartLaptopCodes } from "@/lib/actions"
 import { openQrLabelsPdf, buildQrLabels } from "@/lib/export/qr-labels-pdf"
 import {
@@ -11,16 +11,19 @@ import {
   parseLaptopCodeList,
 } from "@/lib/labels/codes"
 import { qrDataUrl } from "@/lib/labels/qr"
-import {
-  laptopBrandLabel,
-  sortCarts,
-  type Cart,
-} from "@/lib/types"
+import { sortCarts, type Cart } from "@/lib/types"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { CartBrandMark } from "@/components/admin/laptop-brand-toggle"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 type PrintKind = "all" | "carts" | "laptops"
+type Preview = { type: "cart" } | { type: "laptop"; code: string }
 
 function QrMark({ value, className }: { value: string; className?: string }) {
   const [src, setSrc] = useState("")
@@ -53,11 +56,11 @@ function QrMark({ value, className }: { value: string; className?: string }) {
 export function QrLabelsPanel({ carts }: { carts: Cart[] }) {
   const router = useRouter()
   const [query, setQuery] = useState("")
-  const [kind, setKind] = useState<PrintKind>("all")
-  const [draftByCart, setDraftByCart] = useState<Record<string, string>>({})
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [preview, setPreview] = useState<Preview>({ type: "cart" })
+  const [draft, setDraft] = useState("")
   const [printing, setPrinting] = useState(false)
-  const [pendingId, setPendingId] = useState<string | null>(null)
-  const [, startTransition] = useTransition()
+  const [pending, startTransition] = useTransition()
 
   const ordered = useMemo(() => sortCarts(carts), [carts])
   const q = query.trim().toLowerCase()
@@ -76,14 +79,37 @@ export function QrLabelsPanel({ carts }: { carts: Cart[] }) {
     })
   }, [ordered, q])
 
-  const laptopTotal = visible.reduce(
+  const selected =
+    visible.find((cart) => cart.id === selectedId) ?? visible[0] ?? null
+  const codes = selected?.laptopCodes ?? []
+
+  const showing: Preview =
+    preview.type === "laptop" && codes.includes(preview.code)
+      ? preview
+      : { type: "cart" }
+
+  const payload = selected
+    ? showing.type === "laptop"
+      ? laptopQrPayload(showing.code)
+      : cartQrPayload(selected.id)
+    : ""
+
+  const laptopTotal = ordered.reduce(
     (sum, cart) => sum + (cart.laptopCodes?.length ?? 0),
     0,
   )
-  const showCartQr = kind !== "laptops"
-  const showLaptops = kind !== "carts"
 
-  async function printLabels(source: Cart[], printKind: PrintKind, heading: string) {
+  function selectCart(cart: Cart) {
+    setSelectedId(cart.id)
+    setDraft("")
+    setPreview({ type: "cart" })
+  }
+
+  async function printLabels(
+    source: Cart[],
+    printKind: PrintKind,
+    heading: string,
+  ) {
     if (source.length === 0) {
       toast({ title: "Nothing to print", description: "Add a cart first." })
       return
@@ -97,7 +123,7 @@ export function QrLabelsPanel({ carts }: { carts: Cart[] }) {
           description:
             printKind === "laptops"
               ? "Add laptop case codes first."
-              : "No labels match this filter.",
+              : "No labels to print.",
         })
         return
       }
@@ -121,10 +147,8 @@ export function QrLabelsPanel({ carts }: { carts: Cart[] }) {
   }
 
   function saveCodes(cart: Cart, next: string[]) {
-    setPendingId(cart.id)
     startTransition(async () => {
       const res = await setCartLaptopCodes(cart.id, next)
-      setPendingId(null)
       if (!res.ok) {
         toast({
           title: "Could not update codes",
@@ -137,9 +161,9 @@ export function QrLabelsPanel({ carts }: { carts: Cart[] }) {
     })
   }
 
-  function addCodes(cart: Cart) {
-    const raw = draftByCart[cart.id] ?? ""
-    const incoming = parseLaptopCodeList(raw)
+  function addCodes() {
+    if (!selected) return
+    const incoming = parseLaptopCodeList(draft)
     if (incoming.length === 0) {
       toast({
         title: "Enter a code",
@@ -147,309 +171,308 @@ export function QrLabelsPanel({ carts }: { carts: Cart[] }) {
       })
       return
     }
-    const existing = cart.laptopCodes ?? []
-    const merged = parseLaptopCodeList([...existing, ...incoming])
-    if (merged.length === existing.length) {
+    const merged = parseLaptopCodeList([...codes, ...incoming])
+    if (merged.length === codes.length) {
       toast({
         title: "Already added",
         description: "Those codes are already on this cart.",
       })
       return
     }
-    setDraftByCart((prev) => ({ ...prev, [cart.id]: "" }))
-    saveCodes(cart, merged)
+    setDraft("")
+    saveCodes(selected, merged)
+    setPreview({ type: "laptop", code: incoming[0]! })
   }
 
-  function removeCode(cart: Cart, code: string) {
-    saveCodes(
-      cart,
-      (cart.laptopCodes ?? []).filter((entry) => entry !== code),
-    )
+  function removeCode(code: string) {
+    if (!selected) return
+    const next = codes.filter((entry) => entry !== code)
+    saveCodes(selected, next)
+    if (showing.type === "laptop" && showing.code === code) {
+      setPreview(next[0] ? { type: "laptop", code: next[0] } : { type: "cart" })
+    }
   }
 
   return (
-    <section className="flex min-w-0 flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-[15px] font-light tracking-[-0.03em] text-neutral-950">
-            QR codes
-          </h2>
-          <p className="mt-1 text-[12.5px] tracking-[-0.01em] text-neutral-400">
-            One label per cart, one per laptop case. Print a letter sheet as PDF.
-          </p>
-        </div>
-        <button
-          type="button"
-          disabled={printing || visible.length === 0}
-          onClick={() =>
-            printLabels(visible, kind, kind === "carts"
-              ? "Cart labels"
-              : kind === "laptops"
-                ? "Laptop labels"
-                : "Cart and laptop labels")
-          }
-          className={cn(
-            "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-neutral-950 px-3",
-            "text-[12.5px] font-medium tracking-[-0.01em] text-white",
-            "transition-opacity hover:opacity-90 disabled:opacity-40",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/15",
-          )}
-        >
-          {printing ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <Printer className="size-3.5" strokeWidth={1.75} />
-          )}
-          Print PDF
-        </button>
-      </div>
-
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative min-w-0 flex-1 sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search cart or code"
-            className={cn(
-              "h-8 w-full rounded-md border border-[var(--hairline-strong)] bg-white pl-8 pr-2.5",
-              "text-[12.5px] tracking-[-0.01em] text-neutral-950 outline-none",
-              "placeholder:text-neutral-300",
-              "focus-visible:border-neutral-400",
-            )}
-          />
-        </div>
-        <div className="inline-flex h-8 items-center rounded-md border border-[var(--hairline-strong)] bg-white p-0.5">
-          {(
-            [
-              ["all", "All"],
-              ["carts", "Carts"],
-              ["laptops", "Laptops"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={kind === id}
-              onClick={() => setKind(id)}
-              className={cn(
-                "h-7 rounded-[5px] px-2.5 text-[12px] font-medium tracking-[-0.01em]",
-                kind === id
-                  ? "bg-neutral-950 text-white"
-                  : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <p className="text-[12.5px] tabular-nums tracking-[-0.01em] text-neutral-400">
-        {kind !== "laptops" ? (
-          <>
-            <span className="font-medium text-neutral-950">{visible.length}</span>{" "}
-            cart{visible.length === 1 ? "" : "s"}
-          </>
-        ) : null}
-        {kind === "all" ? (
-          <span className="mx-1.5 text-neutral-300">·</span>
-        ) : null}
-        {kind !== "carts" ? (
-          <>
-            <span className="font-medium text-neutral-950">{laptopTotal}</span>{" "}
-            laptop{laptopTotal === 1 ? "" : "s"}
-          </>
-        ) : null}
-      </p>
-
-      {visible.length === 0 ? (
-        <div className="flex flex-col items-center rounded-xl border border-dashed border-neutral-200/80 bg-white px-6 py-16 text-center">
+    <section className="min-w-0">
+      {ordered.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-neutral-200/80 bg-white px-6 py-16 text-center">
           <p className="text-[13.5px] font-medium tracking-[-0.015em] text-neutral-950">
-            {ordered.length === 0 ? "No carts in inventory" : "No matching carts"}
+            No carts in inventory
           </p>
-          <p className="mt-1.5 max-w-xs text-[12.5px] leading-relaxed text-neutral-400">
-            {ordered.length === 0
-              ? "Add carts in Inventory, then return here to print labels."
-              : "Try a different cart name or laptop code."}
+          <p className="mt-1.5 text-[12.5px] text-neutral-400">
+            Add carts in Inventory, then return here to print labels.
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {visible.map((cart) => {
-            const codes = cart.laptopCodes ?? []
-            const pending = pendingId === cart.id
-            const draft = draftByCart[cart.id] ?? ""
-            return (
-              <article
-                key={cart.id}
-                className="rounded-xl border border-[var(--hairline-strong)] bg-white p-4 shadow-[var(--shadow-surface)] sm:p-5"
-              >
-                <div className="flex items-start gap-4">
-                  {showCartQr ? (
-                    <div className="flex size-[4.5rem] shrink-0 items-center justify-center rounded-lg border border-neutral-200/80 bg-white p-1.5">
-                      <QrMark
-                        value={cartQrPayload(cart.id)}
-                        className="size-full"
-                      />
-                    </div>
-                  ) : null}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex min-w-0 items-center gap-2">
+        <div className="overflow-hidden rounded-xl border border-[var(--hairline-strong)] bg-white shadow-[var(--shadow-surface)]">
+          <div className="flex flex-wrap items-center gap-2 border-b border-[var(--hairline)] px-3 py-2 sm:px-4">
+            <p className="shrink-0 text-[12.5px] text-neutral-400">
+              Carts{" "}
+              <span className="tabular-nums text-neutral-950">{visible.length}</span>
+            </p>
+            <div className="relative min-w-0 flex-1 sm:max-w-[14rem]">
+              <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search"
+                className={cn(
+                  "h-8 w-full rounded-md border border-neutral-200 bg-white pl-7 pr-2.5",
+                  "text-[12.5px] tracking-[-0.01em] outline-none placeholder:text-neutral-300",
+                  "focus-visible:border-neutral-400",
+                )}
+              />
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  disabled={printing}
+                  className={cn(
+                    "ml-auto inline-flex h-8 items-center gap-1.5 rounded-md bg-neutral-950 px-3",
+                    "text-[12.5px] font-medium text-white hover:opacity-90 disabled:opacity-40",
+                  )}
+                >
+                  {printing ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Printer className="size-3.5" strokeWidth={1.75} />
+                  )}
+                  Print
+                  <ChevronDown className="size-3.5 opacity-70" strokeWidth={1.75} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52 rounded-xl p-1.5">
+                <DropdownMenuItem
+                  className="cursor-pointer rounded-lg"
+                  onSelect={() => printLabels(ordered, "carts", "Cart labels")}
+                >
+                  All cart labels
+                  <span className="ml-auto tabular-nums text-[11px] text-neutral-400">
+                    {ordered.length}
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={laptopTotal === 0}
+                  className="cursor-pointer rounded-lg"
+                  onSelect={() => printLabels(ordered, "laptops", "Laptop labels")}
+                >
+                  All laptop labels
+                  <span className="ml-auto tabular-nums text-[11px] text-neutral-400">
+                    {laptopTotal}
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {visible.length === 0 ? (
+            <p className="px-5 py-14 text-center text-[13px] text-neutral-400">
+              No matching carts.
+            </p>
+          ) : (
+            <div className="lg:grid lg:grid-cols-[15.5rem_minmax(0,1fr)]">
+              <div className="border-b border-[var(--hairline)] lg:border-b-0 lg:border-r">
+                <ul className="max-h-[14rem] overflow-y-auto lg:max-h-[28rem]">
+                  {visible.map((cart) => {
+                    const active = cart.id === selected?.id
+                    return (
+                      <li key={cart.id}>
+                        <button
+                          type="button"
+                          onClick={() => selectCart(cart)}
+                          className={cn(
+                            "flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left",
+                            "border-b border-[var(--hairline)] last:border-b-0",
+                            active ? "bg-neutral-50" : "hover:bg-neutral-50/70",
+                          )}
+                        >
                           <CartBrandMark
                             brand={cart.laptopBrand}
                             className="size-5"
-                            logoClassName="size-4"
+                            logoClassName="size-3.5"
                           />
-                          <h3 className="truncate text-[13.5px] font-medium tracking-[-0.02em] text-neutral-950">
-                            {cart.name}
-                          </h3>
-                        </div>
-                        <p className="mt-1 truncate text-[12px] tracking-[-0.01em] text-neutral-400">
-                          Cart
-                          {cart.location ? ` · ${cart.location}` : ""}
-                          {cart.laptopBrand
-                            ? ` · ${laptopBrandLabel(cart.laptopBrand)}`
-                            : ""}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={printing}
-                        onClick={() =>
-                          printLabels(
-                            [cart],
-                            kind,
-                            kind === "carts"
-                              ? `${cart.name} cart label`
-                              : kind === "laptops"
-                                ? `${cart.name} laptop labels`
-                                : `${cart.name} labels`,
-                          )
-                        }
-                        className={cn(
-                          "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5",
-                          "text-[12px] font-medium tracking-[-0.01em] text-neutral-600",
-                          "hover:bg-neutral-50 hover:text-neutral-950",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
-                          "disabled:opacity-40",
-                        )}
-                      >
-                        <Printer className="size-3.5" strokeWidth={1.75} />
-                        Print
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {showLaptops ? (
-                <div className={cn(showCartQr && "mt-4 border-t border-[var(--hairline)] pt-4")}>
-                  <div className="mb-2.5 flex items-baseline justify-between gap-3">
-                    <p className="text-[11px] font-medium tracking-[0.04em] text-neutral-400">
-                      Laptop cases
-                    </p>
-                    <p className="text-[11.5px] tabular-nums text-neutral-400">
-                      {codes.length}
-                    </p>
-                  </div>
-
-                  {codes.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {codes.map((code) => (
-                        <span
-                          key={code}
-                          className="inline-flex items-center gap-1 rounded-md border border-neutral-200/80 bg-neutral-50/80 py-0.5 pl-2 pr-0.5"
-                        >
-                          <span className="font-mono text-[11.5px] tracking-[-0.01em] text-neutral-800">
-                            {code}
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[13px] font-medium tracking-[-0.02em] text-neutral-950">
+                              {cart.name}
+                            </span>
+                            <span className="mt-0.5 block truncate text-[12px] text-neutral-400">
+                              {cart.location || "No location"}
+                            </span>
                           </span>
-                          <button
-                            type="button"
-                            aria-label={`Remove ${code}`}
-                            disabled={pending}
-                            onClick={() => removeCode(cart, code)}
-                            className="flex size-5 items-center justify-center rounded text-neutral-400 hover:bg-white hover:text-neutral-800 disabled:opacity-40"
-                          >
-                            <X className="size-3" strokeWidth={1.75} />
-                          </button>
+                          <span className="shrink-0 text-[12px] tabular-nums text-neutral-400">
+                            {cart.laptopCodes?.length ?? 0}
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+
+              {selected ? (
+                <div className="min-w-0">
+                  <div className="flex items-center gap-4 px-4 py-4 sm:px-5">
+                    <div className="flex size-20 shrink-0 items-center justify-center rounded-md border border-neutral-200 p-1.5">
+                      {payload ? (
+                        <QrMark value={payload} className="size-full" />
+                      ) : null}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-[13.5px] font-medium tracking-[-0.02em] text-neutral-950">
+                        {showing.type === "laptop" ? showing.code : selected.name}
+                      </h3>
+                      <p className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] text-neutral-400">
+                        <CartBrandMark
+                          brand={selected.laptopBrand}
+                          className="size-3.5"
+                          logoClassName="size-3"
+                        />
+                        <span className="truncate">
+                          {showing.type === "laptop"
+                            ? [selected.name, selected.location]
+                                .filter(Boolean)
+                                .join(" · ")
+                            : selected.location || "No location"}
                         </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-[12.5px] text-neutral-400">
-                      No case codes yet. Add the alphanumeric tags on the laptops.
-                    </p>
-                  )}
-
-                  {codes.length > 0 ? (
-                    <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
-                      {codes.map((code) => (
-                        <div
-                          key={`${cart.id}-${code}`}
-                          className="flex flex-col items-center gap-1.5 rounded-lg border border-neutral-200/70 bg-white px-1.5 py-2"
+                      </p>
+                      <div className="mt-2.5 flex gap-2">
+                        <button
+                          type="button"
+                          disabled={printing}
+                          onClick={() =>
+                            printLabels(
+                              [selected],
+                              "carts",
+                              `${selected.name} cart label`,
+                            )
+                          }
+                          className="h-8 rounded-md bg-neutral-950 px-3 text-[12.5px] font-medium text-white hover:opacity-90 disabled:opacity-40"
                         >
-                          <QrMark
-                            value={laptopQrPayload(code)}
-                            className="size-12"
-                          />
-                          <span className="w-full truncate text-center font-mono text-[10px] tracking-[-0.02em] text-neutral-600">
-                            {code}
-                          </span>
-                        </div>
-                      ))}
+                          Print cart
+                        </button>
+                        <button
+                          type="button"
+                          disabled={printing || codes.length === 0}
+                          onClick={() =>
+                            printLabels(
+                              [selected],
+                              "laptops",
+                              `${selected.name} laptop labels`,
+                            )
+                          }
+                          className="h-8 rounded-md border border-neutral-200 px-3 text-[12.5px] font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
+                        >
+                          Print laptops
+                        </button>
+                      </div>
                     </div>
-                  ) : null}
+                  </div>
 
-                  <form
-                    className="mt-3 flex items-center gap-2"
-                    onSubmit={(event) => {
-                      event.preventDefault()
-                      addCodes(cart)
-                    }}
-                  >
-                    <input
-                      value={draft}
-                      disabled={pending}
-                      onChange={(event) =>
-                        setDraftByCart((prev) => ({
-                          ...prev,
-                          [cart.id]: event.target.value,
-                        }))
-                      }
-                      placeholder="LIB-05 or paste several"
-                      className={cn(
-                        "h-8 min-w-0 flex-1 rounded-md border border-neutral-200 bg-white px-2.5",
-                        "text-[12.5px] tracking-[-0.01em] text-neutral-950 outline-none",
-                        "placeholder:text-neutral-300",
-                        "focus-visible:border-neutral-400",
-                        "disabled:opacity-60",
-                      )}
-                    />
-                    <button
-                      type="submit"
-                      disabled={pending || !draft.trim()}
-                      className={cn(
-                        "inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-neutral-200 bg-white px-2.5",
-                        "text-[12.5px] font-medium text-neutral-700",
-                        "hover:bg-neutral-50 hover:text-neutral-950",
-                        "disabled:opacity-40",
-                      )}
+                  <div className="border-t border-[var(--hairline)]">
+                    {codes.length > 0 ? (
+                      <table className="w-full table-fixed border-collapse text-left">
+                        <colgroup>
+                          <col className="w-12" />
+                          <col />
+                          <col className="w-10" />
+                        </colgroup>
+                        <thead>
+                          <tr className="border-b border-[var(--hairline)]">
+                            <th className="px-4 py-2 text-[11.5px] font-medium text-neutral-400 sm:px-5">
+                              #
+                            </th>
+                            <th className="px-3 py-2 text-[11.5px] font-medium text-neutral-400">
+                              Code
+                            </th>
+                            <th aria-label="Remove" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {codes.map((code, index) => {
+                            const active =
+                              showing.type === "laptop" && showing.code === code
+                            return (
+                              <tr
+                                key={code}
+                                onClick={() =>
+                                  setPreview({ type: "laptop", code })
+                                }
+                                className={cn(
+                                  "cursor-pointer border-t border-[var(--hairline)] first:border-t-0",
+                                  active
+                                    ? "bg-neutral-50"
+                                    : "hover:bg-neutral-50/60",
+                                )}
+                              >
+                                <td className="px-4 py-2.5 text-[12.5px] tabular-nums text-neutral-400 sm:px-5">
+                                  {index + 1}
+                                </td>
+                                <td className="px-3 py-2.5 text-[13px] tracking-[-0.015em] text-neutral-950">
+                                  {code}
+                                </td>
+                                <td className="pr-2">
+                                  <button
+                                    type="button"
+                                    aria-label={`Remove ${code}`}
+                                    disabled={pending}
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      removeCode(code)
+                                    }}
+                                    className="flex size-7 items-center justify-center rounded-md text-neutral-300 hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-40"
+                                  >
+                                    <X className="size-3.5" strokeWidth={1.75} />
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <p className="px-5 py-6 text-[12.5px] text-neutral-400">
+                        No laptop codes yet.
+                      </p>
+                    )}
+
+                    <form
+                      className="flex items-center gap-2 border-t border-[var(--hairline)] px-4 py-2.5 sm:px-5"
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        addCodes()
+                      }}
                     >
-                      {pending ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <Plus className="size-3.5" strokeWidth={1.75} />
-                      )}
-                      Add
-                    </button>
-                  </form>
+                      <input
+                        value={draft}
+                        disabled={pending}
+                        onChange={(event) => setDraft(event.target.value)}
+                        placeholder="Add code"
+                        className={cn(
+                          "h-8 w-40 rounded-md border border-neutral-200 px-2.5",
+                          "text-[12.5px] outline-none placeholder:text-neutral-300",
+                          "focus-visible:border-neutral-400 disabled:opacity-60",
+                        )}
+                      />
+                      <button
+                        type="submit"
+                        disabled={pending || !draft.trim()}
+                        className="inline-flex h-8 items-center gap-1 rounded-md bg-neutral-950 px-2.5 text-[12.5px] font-medium text-white hover:opacity-90 disabled:opacity-40"
+                      >
+                        {pending ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Plus className="size-3.5" strokeWidth={1.75} />
+                        )}
+                        Add
+                      </button>
+                    </form>
+                  </div>
                 </div>
-                ) : null}
-              </article>
-            )
-          })}
+              ) : null}
+            </div>
+          )}
         </div>
       )}
     </section>
