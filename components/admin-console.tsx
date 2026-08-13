@@ -85,6 +85,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { LiquidMetalButton } from "@/components/ui/liquid-metal"
+import { openCorporatePdf } from "@/lib/export/corporate-pdf"
 
 type Tab = "carts" | "bookings" | "staff" | "reports"
 
@@ -1327,356 +1328,278 @@ function BookingsTable({
     })
   }
 
-  function printTodaySchedule() {
-    const list = sorted
-      .filter((b) => b.date === todayKey)
-      .sort(
-        (a, b) =>
-          a.period.localeCompare(b.period) ||
-          (cartMap.get(a.cartId)?.name ?? "").localeCompare(
-            cartMap.get(b.cartId)?.name ?? "",
-          ),
+  function pdfFilterLabel() {
+    const parts: string[] = []
+    if (rangeFilter?.from) {
+      parts.push(
+        rangeFilter.to
+          ? `${format(rangeFilter.from, "MMM d, yyyy")} – ${format(rangeFilter.to, "MMM d, yyyy")}`
+          : format(rangeFilter.from, "MMM d, yyyy"),
       )
+    } else if (dateFilter) {
+      parts.push(format(parseISO(dateFilter), "MMM d, yyyy"))
+    }
+    if (teacherFilter) parts.push(teacherFilter)
+    if (cartFilter) parts.push(cartFilter)
+    if (periodFilter) parts.push(periodFilter)
+    if (showConflicts) parts.push("Paused carts")
+    if (q) parts.push(`“${query.trim()}”`)
+    return parts.length > 0 ? parts.join(" · ") : "Current filters"
+  }
 
-    const esc = (s: string) =>
-      s
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-
-    const conflictCount = list.filter(
-      (b) => cartMap.get(b.cartId)?.status === "maintenance",
-    ).length
-    const generatedAt = format(new Date(), "MMM d, yyyy · HH:mm")
-    const dateLabel = format(parseISO(todayKey), "EEEE, MMMM d, yyyy")
-
-    const bodyRows =
-      list.length === 0
-        ? `<tr class="empty">
-            <td colspan="6">No reservations scheduled for this day.</td>
-          </tr>`
-        : list
-            .map((b) => {
-              const c = cartMap.get(b.cartId)
-              const conflict = c?.status === "maintenance"
-              return `<tr class="${conflict ? "conflict" : ""}">
-                <td class="period">${esc(b.period)}</td>
-                <td class="cart">
-                  <span class="primary">${esc(c?.name ?? "—")}</span>
-                  ${conflict ? `<span class="flag">Paused</span>` : ""}
-                </td>
-                <td class="muted">${esc(c?.location?.trim() || "—")}</td>
-                <td class="teacher">${esc(b.teacherName)}</td>
-                <td class="muted">${esc(b.className?.trim() || "—")}</td>
-                <td class="muted">${esc(b.subject?.trim() || "—")}</td>
-              </tr>`
-            })
-            .join("")
-
-    const html = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cubicle · Schedule · ${todayKey}</title>
-  <style>
-    @page {
-      size: letter portrait;
-      margin: 0.6in 0.65in 0.7in;
-    }
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: #fff;
-      color: #0a0a0a;
-      -webkit-font-smoothing: antialiased;
-      font-family: "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-    }
-    .sheet {
-      width: 100%;
-      max-width: 8.5in;
-      margin: 0 auto;
-    }
-    .top {
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 24px;
-      padding-bottom: 18px;
-      border-bottom: 1.5px solid #0a0a0a;
-    }
-    .brand {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .wordmark {
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: #0a0a0a;
-    }
-    .title {
-      margin: 0;
-      font-size: 22px;
-      font-weight: 500;
-      letter-spacing: -0.035em;
-      line-height: 1.15;
-      color: #0a0a0a;
-    }
-    .meta-block {
-      text-align: right;
-      font-size: 11.5px;
-      line-height: 1.45;
-      color: #737373;
-    }
-    .meta-block strong {
-      display: block;
-      font-size: 13px;
-      font-weight: 500;
-      color: #171717;
-      letter-spacing: -0.01em;
-    }
-    .stats {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 20px;
-      margin: 16px 0 22px;
-      padding: 0;
-      list-style: none;
-      font-size: 11.5px;
-      color: #525252;
-    }
-    .stats li {
-      display: inline-flex;
-      align-items: baseline;
-      gap: 6px;
-    }
-    .stats .n {
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-      color: #0a0a0a;
-      letter-spacing: -0.02em;
-    }
-    .stats .warn {
-      color: #b91c1c;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-    }
-    thead th {
-      padding: 0 10px 10px 0;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: #a3a3a3;
-      text-align: left;
-      border-bottom: 1px solid #e5e5e5;
-    }
-    thead th:last-child { padding-right: 0; }
-    tbody td {
-      padding: 11px 10px 11px 0;
-      font-size: 12px;
-      line-height: 1.35;
-      vertical-align: middle;
-      border-bottom: 1px solid #f0f0f0;
-      color: #171717;
-    }
-    tbody td:last-child { padding-right: 0; }
-    tbody tr:last-child td { border-bottom: none; }
-    .period {
-      width: 9%;
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-      letter-spacing: -0.02em;
-      color: #404040;
-    }
-    .cart { width: 16%; }
-    .cart .primary {
-      font-weight: 600;
-      letter-spacing: -0.015em;
-    }
-    .cart .flag {
-      display: inline-block;
-      margin-left: 6px;
-      padding: 1px 5px;
-      border-radius: 999px;
-      font-size: 9px;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: #b91c1c;
-      background: #fef2f2;
-      vertical-align: middle;
-    }
-    .teacher {
-      width: 20%;
-      font-weight: 500;
-      letter-spacing: -0.01em;
-    }
-    .muted {
-      color: #737373;
-      font-weight: 400;
-    }
-    tr.conflict td { background: #fffafa; }
-    tr.empty td {
-      padding: 36px 0;
-      text-align: center;
-      color: #a3a3a3;
-      font-size: 12.5px;
-      border-bottom: none;
-    }
-    col.c-period { width: 9%; }
-    col.c-cart { width: 16%; }
-    col.c-loc { width: 16%; }
-    col.c-teacher { width: 20%; }
-    col.c-class { width: 20%; }
-    col.c-subj { width: 19%; }
-    .footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-      margin-top: 28px;
-      padding-top: 14px;
-      border-top: 1px solid #e5e5e5;
-      font-size: 10px;
-      letter-spacing: 0.02em;
-      color: #a3a3a3;
-    }
-    .footer .confidential {
-      font-weight: 500;
-      color: #737373;
-    }
-    @media print {
-      html, body { background: #fff; }
-      .sheet { max-width: none; }
-      thead { display: table-header-group; }
-      tr { break-inside: avoid; }
-      .no-print { display: none !important; }
-    }
-    @media screen {
-      body {
-        background: #f4f4f5;
-        padding: 32px 16px 48px;
-      }
-      .sheet {
-        background: #fff;
-        padding: 40px 44px 36px;
-        border-radius: 4px;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 12px 40px rgba(0,0,0,0.06);
-      }
-      .toolbar {
-        display: flex;
-        justify-content: flex-end;
-        gap: 8px;
-        max-width: 8.5in;
-        margin: 0 auto 14px;
-      }
-      .toolbar button {
-        height: 32px;
-        padding: 0 12px;
-        border-radius: 6px;
-        border: 1px solid #e5e5e5;
-        background: #fff;
-        font-size: 12.5px;
-        font-weight: 500;
-        color: #404040;
-        cursor: pointer;
-        font-family: inherit;
-      }
-      .toolbar button.primary {
-        background: #0a0a0a;
-        border-color: #0a0a0a;
-        color: #fff;
-      }
-      .toolbar button:hover { border-color: #d4d4d4; }
-      .toolbar button.primary:hover { background: #262626; }
-    }
-  </style>
-</head>
-<body>
-  <div class="toolbar no-print">
-    <button type="button" onclick="window.close()">Close</button>
-    <button type="button" class="primary" onclick="window.print()">Save as PDF / Print</button>
-  </div>
-  <div class="sheet">
-    <header class="top">
-      <div class="brand">
-        <div class="wordmark">Cubicle</div>
-        <h1 class="title">Daily cart schedule</h1>
-      </div>
-      <div class="meta-block">
-        <strong>${esc(dateLabel)}</strong>
-        Generated ${esc(generatedAt)}
-      </div>
-    </header>
-
-    <ul class="stats">
-      <li><span class="n">${list.length}</span> reservation${list.length === 1 ? "" : "s"}</li>
-      <li><span class="n">${new Set(list.map((b) => b.teacherId || b.teacherName)).size}</span> teachers</li>
-      <li><span class="n">${new Set(list.map((b) => b.cartId)).size}</span> carts</li>
-      ${
-        conflictCount > 0
-          ? `<li class="warn"><span class="n warn">${conflictCount}</span> on paused carts</li>`
-          : ""
-      }
-    </ul>
-
-    <table>
-      <colgroup>
-        <col class="c-period" />
-        <col class="c-cart" />
-        <col class="c-loc" />
-        <col class="c-teacher" />
-        <col class="c-class" />
-        <col class="c-subj" />
-      </colgroup>
-      <thead>
-        <tr>
-          <th>Period</th>
-          <th>Cart</th>
-          <th>Location</th>
-          <th>Teacher</th>
-          <th>Class</th>
-          <th>Subject</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${bodyRows}
-      </tbody>
-    </table>
-
-    <footer class="footer">
-      <span class="confidential">Internal use · authorized staff only</span>
-      <span>Cubicle operations</span>
-    </footer>
-  </div>
-  <script>
-    window.onload = function () {
-      setTimeout(function () { window.print(); }, 250);
-    };
-  </script>
-</body>
-</html>`
-
-    const w = window.open("", "_blank")
-    if (!w) {
+  function openReservationPdf(
+    input: Parameters<typeof openCorporatePdf>[0],
+  ) {
+    const result = openCorporatePdf(input)
+    if (result === "blocked") {
       toast({
         title: "Popup blocked",
         description: "Allow popups to export the PDF schedule.",
         variant: "destructive",
       })
+    }
+  }
+
+  function exportReservationsPdf({
+    list,
+    heading,
+    dateLabel,
+    emptyMessage,
+    documentTitle,
+    includeDate = true,
+  }: {
+    list: Booking[]
+    heading: string
+    dateLabel: string
+    emptyMessage: string
+    documentTitle: string
+    includeDate?: boolean
+  }) {
+    if (list.length === 0) {
+      toast({ title: "Nothing to export", description: emptyMessage })
       return
     }
-    w.document.write(html)
-    w.document.close()
+
+    const ordered = [...list].sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) ||
+        a.period.localeCompare(b.period) ||
+        (cartMap.get(a.cartId)?.name ?? "").localeCompare(
+          cartMap.get(b.cartId)?.name ?? "",
+        ),
+    )
+    const conflictCount = ordered.filter(
+      (booking) => cartMap.get(booking.cartId)?.status === "maintenance",
+    ).length
+    const teacherCount = new Set(
+      ordered.map((booking) => booking.teacherId || booking.teacherName),
+    ).size
+    const cartCount = new Set(ordered.map((booking) => booking.cartId)).size
+
+    openReservationPdf({
+      documentTitle,
+      heading,
+      dateLabel,
+      generatedAt: format(new Date(), "MMM d, yyyy · HH:mm"),
+      stats: [
+        {
+          value: ordered.length,
+          label: `reservation${ordered.length === 1 ? "" : "s"}`,
+        },
+        {
+          value: teacherCount,
+          label: `teacher${teacherCount === 1 ? "" : "s"}`,
+        },
+        {
+          value: cartCount,
+          label: `cart${cartCount === 1 ? "" : "s"}`,
+        },
+        ...(conflictCount > 0
+          ? [
+              {
+                value: conflictCount,
+                label: "on paused carts",
+                warn: true,
+              },
+            ]
+          : []),
+      ],
+      columns: includeDate
+        ? [
+            { label: "Date", width: "16%" },
+            { label: "Period", width: "10%" },
+            { label: "Cart", width: "16%" },
+            { label: "Teacher", width: "20%" },
+            { label: "Class", width: "19%" },
+            { label: "Subject", width: "19%" },
+          ]
+        : [
+            { label: "Period", width: "10%" },
+            { label: "Cart", width: "18%" },
+            { label: "Location", width: "16%" },
+            { label: "Teacher", width: "20%" },
+            { label: "Class", width: "18%" },
+            { label: "Subject", width: "18%" },
+          ],
+      rows: ordered.map((booking) => {
+        const cart = cartMap.get(booking.cartId)
+        const conflict = cart?.status === "maintenance"
+        const cartCell = {
+          text: cart?.name ?? "—",
+          sub: includeDate ? cart?.location?.trim() || undefined : undefined,
+          flag: conflict ? "Paused" : undefined,
+          tone: "strong" as const,
+        }
+        const classCell = {
+          text: booking.className?.trim() || "—",
+          tone: "muted" as const,
+        }
+        const subjectCell = {
+          text: booking.subject?.trim() || "—",
+          tone: "muted" as const,
+        }
+        const teacherCell = {
+          text: booking.teacherName,
+          tone: "strong" as const,
+        }
+        if (includeDate) {
+          return {
+            warn: conflict,
+            cells: [
+              {
+                text: format(parseISO(booking.date), "EEE, MMM d"),
+                tone: "strong" as const,
+              },
+              { text: booking.period, tone: "num" as const },
+              cartCell,
+              teacherCell,
+              classCell,
+              subjectCell,
+            ],
+          }
+        }
+        return {
+          warn: conflict,
+          cells: [
+            { text: booking.period, tone: "num" as const },
+            cartCell,
+            {
+              text: cart?.location?.trim() || "—",
+              tone: "muted" as const,
+            },
+            teacherCell,
+            classCell,
+            subjectCell,
+          ],
+        }
+      }),
+      emptyMessage,
+    })
+  }
+
+  function exportVisiblePdf() {
+    exportReservationsPdf({
+      list: filtered,
+      heading: "Reservations",
+      dateLabel: pdfFilterLabel(),
+      emptyMessage: "No reservations match the current filters.",
+      documentTitle: `Cubicle · Filtered reservations · ${format(new Date(), "yyyy-MM-dd")}`,
+    })
+  }
+
+  function exportAllPdf() {
+    exportReservationsPdf({
+      list: sorted,
+      heading: "All reservations",
+      dateLabel: "All dates",
+      emptyMessage: "No reservations to export.",
+      documentTitle: `Cubicle · All reservations · ${format(new Date(), "yyyy-MM-dd")}`,
+    })
+  }
+
+  function exportTodayPdf() {
+    exportReservationsPdf({
+      list: sorted.filter((booking) => booking.date === todayKey),
+      heading: "Daily cart schedule",
+      dateLabel: format(parseISO(todayKey), "EEEE, MMMM d, yyyy"),
+      emptyMessage: "No reservations scheduled for today.",
+      documentTitle: `Cubicle · Schedule · ${todayKey}`,
+      includeDate: false,
+    })
+  }
+
+  function exportWeekPdf() {
+    exportReservationsPdf({
+      list: sorted.filter(
+        (booking) => booking.date >= todayKey && booking.date <= weekEndKey,
+      ),
+      heading: "Reservations",
+      dateLabel: `${format(parseISO(todayKey), "MMM d")} – ${format(parseISO(weekEndKey), "MMM d, yyyy")}`,
+      emptyMessage: "No reservations in the next 7 days.",
+      documentTitle: `Cubicle · Next 7 days · ${todayKey}`,
+    })
+  }
+
+  function exportConflictsPdf() {
+    exportReservationsPdf({
+      list: sorted.filter(
+        (booking) => cartMap.get(booking.cartId)?.status === "maintenance",
+      ),
+      heading: "Reservations on paused carts",
+      dateLabel: format(new Date(), "MMM d, yyyy"),
+      emptyMessage: "No reservations on paused carts.",
+      documentTitle: `Cubicle · Paused-cart reservations · ${format(new Date(), "yyyy-MM-dd")}`,
+    })
+  }
+
+  function exportByTeacherPdf() {
+    const counts = new Map<string, number>()
+    for (const booking of filtered) {
+      counts.set(booking.teacherName, (counts.get(booking.teacherName) ?? 0) + 1)
+    }
+    const rows = [...counts.entries()].sort(
+      (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+    )
+    if (rows.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No reservations match the current filters.",
+      })
+      return
+    }
+    const total = filtered.length
+    openReservationPdf({
+      documentTitle: `Cubicle · Counts by teacher · ${format(new Date(), "yyyy-MM-dd")}`,
+      heading: "Counts by teacher",
+      dateLabel: pdfFilterLabel(),
+      generatedAt: format(new Date(), "MMM d, yyyy · HH:mm"),
+      stats: [
+        {
+          value: total,
+          label: `reservation${total === 1 ? "" : "s"}`,
+        },
+        {
+          value: rows.length,
+          label: `teacher${rows.length === 1 ? "" : "s"}`,
+        },
+      ],
+      columns: [
+        { label: "Teacher", width: "56%" },
+        { label: "Reservations", width: "22%" },
+        { label: "Share", width: "22%" },
+      ],
+      rows: rows.map(([name, count]) => ({
+        cells: [
+          { text: name, tone: "strong" as const },
+          { text: String(count), tone: "num" as const },
+          {
+            text: total > 0 ? `${Math.round((count / total) * 100)}%` : "—",
+            tone: "muted" as const,
+          },
+        ],
+      })),
+      emptyMessage: "No reservations match the current filters.",
+    })
   }
 
   async function handleBatchDelete() {
@@ -2046,9 +1969,45 @@ function BookingsTable({
                   </DropdownMenuLabel>
                   <DropdownMenuItem
                     className="cursor-pointer rounded-md text-[12.5px]"
-                    onSelect={printTodaySchedule}
+                    onSelect={exportVisiblePdf}
                   >
-                    Today&apos;s schedule
+                    Filtered list
+                    <span className="ml-auto tabular-nums text-[11px] text-neutral-400">
+                      {filtered.length}
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-md text-[12.5px]"
+                    onSelect={exportAllPdf}
+                  >
+                    All reservations
+                    <span className="ml-auto tabular-nums text-[11px] text-neutral-400">
+                      {sorted.length}
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-md text-[12.5px]"
+                    onSelect={exportTodayPdf}
+                  >
+                    Today
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-md text-[12.5px]"
+                    onSelect={exportWeekPdf}
+                  >
+                    Next 7 days
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-md text-[12.5px]"
+                    onSelect={exportConflictsPdf}
+                  >
+                    On paused carts
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-md text-[12.5px]"
+                    onSelect={exportByTeacherPdf}
+                  >
+                    Counts by teacher
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -2911,6 +2870,281 @@ function ReportsPanel({
     URL.revokeObjectURL(url)
   }
 
+  function formatReportInstant(value: string, pattern: string) {
+    try {
+      return format(parseISO(value), pattern)
+    } catch {
+      return value
+    }
+  }
+
+  function openReportPdf(
+    input: Parameters<typeof openCorporatePdf>[0],
+  ) {
+    const result = openCorporatePdf(input)
+    if (result === "blocked") {
+      toast({
+        title: "Popup blocked",
+        description: "Allow popups to export the PDF report.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  function exportBookingsPdf() {
+    if (bookings.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No reservations to export.",
+      })
+      return
+    }
+
+    const list = [...bookings].sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) ||
+        a.period.localeCompare(b.period) ||
+        a.teacherName.localeCompare(b.teacherName),
+    )
+    const conflictCount = list.filter(
+      (booking) => cartMap.get(booking.cartId)?.status === "maintenance",
+    ).length
+    const teacherCount = new Set(
+      list.map((booking) => booking.teacherId || booking.teacherName),
+    ).size
+    const cartCount = new Set(list.map((booking) => booking.cartId)).size
+
+    openReportPdf({
+      documentTitle: `Cubicle · Reservations · ${format(new Date(), "yyyy-MM-dd")}`,
+      heading: "Reservations",
+      dateLabel: rangeLabel || "All dates",
+      generatedAt: format(new Date(), "MMM d, yyyy · HH:mm"),
+      stats: [
+        {
+          value: list.length,
+          label: `reservation${list.length === 1 ? "" : "s"}`,
+        },
+        {
+          value: teacherCount,
+          label: `teacher${teacherCount === 1 ? "" : "s"}`,
+        },
+        {
+          value: cartCount,
+          label: `cart${cartCount === 1 ? "" : "s"}`,
+        },
+        ...(conflictCount > 0
+          ? [
+              {
+                value: conflictCount,
+                label: "on paused carts",
+                warn: true,
+              },
+            ]
+          : []),
+      ],
+      columns: [
+        { label: "Date", width: "16%" },
+        { label: "Period", width: "10%" },
+        { label: "Cart", width: "16%" },
+        { label: "Teacher", width: "20%" },
+        { label: "Class", width: "19%" },
+        { label: "Subject", width: "19%" },
+      ],
+      rows: list.map((booking) => {
+        const cart = cartMap.get(booking.cartId)
+        const conflict = cart?.status === "maintenance"
+        return {
+          warn: conflict,
+          cells: [
+            {
+              text: formatReportInstant(booking.date, "MMM d, yyyy"),
+              tone: "strong" as const,
+            },
+            { text: booking.period, tone: "num" as const },
+            {
+              text: cart?.name ?? "—",
+              sub: cart?.location?.trim() || undefined,
+              flag: conflict ? "Paused" : undefined,
+              tone: "strong" as const,
+            },
+            { text: booking.teacherName, tone: "strong" as const },
+            {
+              text: booking.className?.trim() || "—",
+              tone: "muted" as const,
+            },
+            {
+              text: booking.subject?.trim() || "—",
+              tone: "muted" as const,
+            },
+          ],
+        }
+      }),
+      emptyMessage: "No reservations in this range.",
+    })
+  }
+
+  function exportTeacherUsagePdf() {
+    if (usageRowsWithCarts.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No teacher usage to export.",
+      })
+      return
+    }
+
+    const cartsUsed = new Set(
+      usageRowsWithCarts.flatMap((row) =>
+        row.cartEntries.map(([cartId]) => cartId),
+      ),
+    ).size
+
+    openReportPdf({
+      documentTitle: `Cubicle · Teacher usage · ${format(new Date(), "yyyy-MM-dd")}`,
+      heading: "Teacher usage",
+      dateLabel: rangeLabel || "All dates",
+      generatedAt: format(new Date(), "MMM d, yyyy · HH:mm"),
+      stats: [
+        {
+          value: totalBookings,
+          label: `reservation${totalBookings === 1 ? "" : "s"}`,
+        },
+        {
+          value: activeTeachers,
+          label: `teacher${activeTeachers === 1 ? "" : "s"}`,
+        },
+        {
+          value: teachers.length,
+          label: "on roster",
+        },
+        {
+          value: cartsUsed,
+          label: `cart${cartsUsed === 1 ? "" : "s"} used`,
+        },
+      ],
+      columns: [
+        { label: "Teacher", width: "24%" },
+        { label: "Reservations", width: "13%" },
+        { label: "Share", width: "10%" },
+        { label: "Carts", width: "10%" },
+        { label: "Top cart", width: "20%" },
+        { label: "Cart mix", width: "23%" },
+      ],
+      rows: usageRowsWithCarts.map((row) => {
+        const top = row.topCartEntry
+        const topName = top ? (cartMap.get(top[0])?.name ?? "Cart") : "—"
+        const mix = row.cartEntries
+          .map(
+            ([cartId, count]) =>
+              `${cartMap.get(cartId)?.name ?? "Cart"} (${count})`,
+          )
+          .join("; ")
+        return {
+          cells: [
+            { text: row.teacherName, tone: "strong" as const },
+            { text: String(row.total), tone: "num" as const },
+            {
+              text: row.total > 0 ? `${row.share}%` : "—",
+              tone: "muted" as const,
+            },
+            { text: String(row.carts.size), tone: "num" as const },
+            {
+              text: topName,
+              sub: top
+                ? `${top[1]} reservation${top[1] === 1 ? "" : "s"}`
+                : undefined,
+              tone: top ? ("default" as const) : ("muted" as const),
+            },
+            { text: mix || "—", tone: "muted" as const },
+          ],
+        }
+      }),
+      emptyMessage: "No teacher usage in this range.",
+    })
+  }
+
+  function exportIssuesPdf() {
+    if (issues.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No issues to export.",
+      })
+      return
+    }
+
+    const list = [...issues].sort((a, b) =>
+      b.createdAt.localeCompare(a.createdAt),
+    )
+    const openCount = list.filter((issue) => issue.status === "open").length
+    const highCount = list.filter(
+      (issue) => issue.status === "open" && issue.severity === "high",
+    ).length
+
+    openReportPdf({
+      documentTitle: `Cubicle · Issues · ${format(new Date(), "yyyy-MM-dd")}`,
+      heading: "Issue log",
+      dateLabel: rangeLabel || "All dates",
+      generatedAt: format(new Date(), "MMM d, yyyy · HH:mm"),
+      stats: [
+        {
+          value: list.length,
+          label: `issue${list.length === 1 ? "" : "s"}`,
+        },
+        {
+          value: openCount,
+          label: "open",
+          warn: openCount > 0,
+        },
+        ...(highCount > 0
+          ? [
+              {
+                value: highCount,
+                label: "high priority",
+                warn: true,
+              },
+            ]
+          : []),
+      ],
+      columns: [
+        { label: "Reported", width: "16%" },
+        { label: "Cart", width: "16%" },
+        { label: "Severity", width: "12%" },
+        { label: "Status", width: "12%" },
+        { label: "Reporter", width: "16%" },
+        { label: "Description", width: "28%" },
+      ],
+      rows: list.map((issue) => {
+        const cart = cartMap.get(issue.cartId)
+        const highOpen = issue.status === "open" && issue.severity === "high"
+        return {
+          warn: highOpen,
+          cells: [
+            {
+              text: formatReportInstant(issue.createdAt, "MMM d, yyyy"),
+              tone: "muted" as const,
+            },
+            {
+              text: cart?.name ?? "Cart",
+              sub: cart?.location?.trim() || undefined,
+              tone: "strong" as const,
+            },
+            {
+              text:
+                issue.severity.charAt(0).toUpperCase() + issue.severity.slice(1),
+              tone: "default" as const,
+            },
+            {
+              text: issue.status.charAt(0).toUpperCase() + issue.status.slice(1),
+              tone: "default" as const,
+            },
+            { text: issue.reporterName, tone: "strong" as const },
+            { text: issue.description, tone: "muted" as const },
+          ],
+        }
+      }),
+      emptyMessage: "No issues in this range.",
+    })
+  }
+
   const equipmentHealth = carts.length > 0 ? Math.round(((carts.length - maintenanceCartsCount) / carts.length) * 100) : 0
   const highPriorityIssues = issues.filter(i => i.status === "open" && i.severity === "high")
   const topTeachers = usageRowsWithCarts.filter((row) => row.total > 0).slice(0, 6)
@@ -2965,23 +3199,57 @@ function ReportsPanel({
           <DropdownMenuContent
             align="end"
             sideOffset={6}
-            className="w-44 rounded-lg border-[var(--hairline-strong)] p-1 shadow-[var(--shadow-soft)]"
+            className="w-52 rounded-lg border-[var(--hairline-strong)] p-1 shadow-[var(--shadow-soft)]"
           >
+            <DropdownMenuLabel className="px-2 py-1.5 text-[11px] font-medium text-neutral-400">
+              CSV
+            </DropdownMenuLabel>
             <DropdownMenuItem
               className="cursor-pointer rounded-md text-[12.5px]"
               onSelect={exportBookingsCsv}
             >
               Bookings
+              <span className="ml-auto tabular-nums text-[11px] text-neutral-400">
+                {totalBookings}
+              </span>
             </DropdownMenuItem>
             <DropdownMenuItem
               className="cursor-pointer rounded-md text-[12.5px]"
               onSelect={exportTeacherUsageCsv}
             >
               Teacher usage
+              <span className="ml-auto tabular-nums text-[11px] text-neutral-400">
+                {usageRowsWithCarts.length}
+              </span>
             </DropdownMenuItem>
             <DropdownMenuItem
               className="cursor-pointer rounded-md text-[12.5px]"
               onSelect={exportIssuesCsv}
+            >
+              Issues
+              <span className="ml-auto tabular-nums text-[11px] text-neutral-400">
+                {issues.length}
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="my-1" />
+            <DropdownMenuLabel className="px-2 py-1.5 text-[11px] font-medium text-neutral-400">
+              PDF
+            </DropdownMenuLabel>
+            <DropdownMenuItem
+              className="cursor-pointer rounded-md text-[12.5px]"
+              onSelect={exportBookingsPdf}
+            >
+              Bookings
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer rounded-md text-[12.5px]"
+              onSelect={exportTeacherUsagePdf}
+            >
+              Teacher usage
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer rounded-md text-[12.5px]"
+              onSelect={exportIssuesPdf}
             >
               Issues
             </DropdownMenuItem>
