@@ -1,3 +1,4 @@
+import { parseLaptopCodeList } from "@/lib/labels/codes";
 import {
   parseLaptopBrand,
   type Booking,
@@ -20,6 +21,7 @@ export type DbCart = {
   laptop_count: number | null;
   location: string | null;
   laptop_brand?: string | null;
+  laptop_codes?: string[] | null;
   sort_order?: number | null;
 };
 
@@ -128,6 +130,7 @@ export function mapCart(row: DbCart): Cart {
     laptopCount: row.laptop_count ?? undefined,
     location: row.location ?? undefined,
     laptopBrand: parseLaptopBrand(row.laptop_brand),
+    laptopCodes: parseLaptopCodeList(row.laptop_codes),
     sortOrder:
       typeof row.sort_order === "number" && Number.isFinite(row.sort_order)
         ? row.sort_order

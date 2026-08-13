@@ -32,6 +32,7 @@ Run each file fully, wait for **Success**:
 | 7 | `issues-delete.sql` | Allow reporters/admins to **delete issues** from Postgres |
 | 8 | `swap-accept.sql` | **Two-way cart swap accept** (owners can accept; both slots exchange) |
 | 9 | `cart-laptop-brand.sql` | Dell / Chromebook fleet on inventory carts |
+| 10 | `cart-laptop-codes.sql` | Laptop case codes for QR labels |
 
 **Durability:** App deploys never touch this data. See [`DATA_DURABILITY.md`](./DATA_DURABILITY.md).  
 Never `drop table` / `truncate` on a live school project without a backup.

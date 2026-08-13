@@ -45,6 +45,7 @@ import {
   dbSyncLastEditorAvatar,
   dbUpdateAllowedEmail,
   dbUpdateBookingPolicy,
+  dbSetCartLaptopCodes,
   dbUpdateCart,
   dbUpdateIssueStatus,
   dbUpdateProfile,
@@ -58,6 +59,12 @@ import {
   parseEmploymentType,
 } from "@/lib/staff/employment";
 import { splitDisplayName } from "@/lib/profile/display-name";
+import {
+  isValidLaptopCode,
+  MAX_LAPTOP_CODES_PER_CART,
+  normalizeLaptopCode,
+  parseLaptopCodeList,
+} from "@/lib/labels/codes";
 import {
   parseLaptopBrand,
   sortCarts,
@@ -1091,6 +1098,7 @@ export async function createCart(input: {
       location,
       laptopCount,
       laptopBrand,
+      laptopCodes: [],
       sortOrder: nextOrder,
     });
     draft.carts = sortCarts(draft.carts);
@@ -1197,6 +1205,68 @@ export async function updateCart(
   });
 
   return { ok: true };
+}
+
+/** Admin: replace the laptop case codes for one cart (QR labels). */
+export async function setCartLaptopCodes(
+  cartId: string,
+  input: string[] | string,
+): Promise<Result<{ codes: string[] }>> {
+  const session = requireSession();
+  if (!session || session.role !== "admin") {
+    return { ok: false, error: "Admin only." };
+  }
+  if (!cartId) return { ok: false, error: "Cart not found." };
+
+  const existing = getState().carts.find((c) => c.id === cartId);
+  if (!existing) return { ok: false, error: "Cart not found." };
+
+  const codes = parseLaptopCodeList(input);
+  if (codes.length > MAX_LAPTOP_CODES_PER_CART) {
+    return {
+      ok: false,
+      error: `At most ${MAX_LAPTOP_CODES_PER_CART} laptop codes per cart.`,
+    };
+  }
+  for (const code of codes) {
+    if (!isValidLaptopCode(code)) {
+      return {
+        ok: false,
+        error: `“${code}” is not a valid code. Use 2–16 letters, numbers, or hyphens.`,
+      };
+    }
+  }
+
+  const taken = new Set<string>();
+  for (const cart of getState().carts) {
+    if (cart.id === cartId) continue;
+    for (const code of cart.laptopCodes ?? []) {
+      taken.add(normalizeLaptopCode(code));
+    }
+  }
+  const clash = codes.find((code) => taken.has(code));
+  if (clash) {
+    return {
+      ok: false,
+      error: `Code ${clash} is already assigned to another cart.`,
+    };
+  }
+
+  if (isRemoteEnabled()) {
+    const { error } = await dbSetCartLaptopCodes(cartId, codes);
+    if (error) return { ok: false, error };
+    const refreshed = await refreshRemote();
+    if (!refreshed.ok) return refreshed;
+    return { ok: true, data: { codes } };
+  }
+
+  const __demo = assertLocalDemoAllowed();
+  if (!__demo.ok) return __demo;
+  mutate((draft) => {
+    const cart = draft.carts.find((entry) => entry.id === cartId);
+    if (cart) cart.laptopCodes = codes;
+  });
+  return { ok: true, data: { codes } };
 }
 
 /**

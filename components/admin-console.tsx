@@ -82,6 +82,7 @@ import {
   CartBrandMark,
   LaptopBrandToggle,
 } from "@/components/admin/laptop-brand-toggle"
+import { QrLabelsPanel } from "@/components/admin/qr-labels-panel"
 import {
   ActivityAreaChart,
   CartUsageBarChart,
@@ -102,7 +103,7 @@ import {
 import { LiquidMetalButton } from "@/components/ui/liquid-metal"
 import { openCorporatePdf } from "@/lib/export/corporate-pdf"
 
-type Tab = "carts" | "bookings" | "staff" | "reports"
+type Tab = "carts" | "labels" | "bookings" | "staff" | "reports"
 
 function isDateInRange(date: Date, range: DateRange | undefined) {
   if (!range?.from) return true
@@ -177,6 +178,7 @@ export function AdminConsole({
 
   const tabs: Array<{ id: Tab; label: string }> = [
     { id: "carts", label: "Inventory" },
+    { id: "labels", label: "QR codes" },
     { id: "bookings", label: "Reservations" },
     { id: "reports", label: "Reports" },
     { id: "staff", label: "Staff" },
@@ -276,6 +278,8 @@ export function AdminConsole({
 
       {tab === "carts" ? (
         <CartsGrid carts={carts} bookings={bookings} users={users} />
+      ) : tab === "labels" ? (
+        <QrLabelsPanel carts={carts} />
       ) : tab === "bookings" ? (
         <BookingsTable bookings={filteredBookings} carts={carts} users={users} />
       ) : tab === "reports" ? (

@@ -89,6 +89,8 @@ export type Cart = {
   location?: string;
   /** Dell or Chromebook fleet. Optional on legacy carts. */
   laptopBrand?: LaptopBrand;
+  /** Case asset tags printed as per-laptop QR labels. */
+  laptopCodes?: string[];
   /** Board / inventory row order (admin drag-and-drop). Lower = higher. */
   sortOrder?: number;
 };

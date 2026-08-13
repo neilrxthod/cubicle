@@ -23,7 +23,7 @@ export const LOCAL_DEMO_TEACHER_ID = "local-demo-teacher";
 export const LOCAL_DEMO_TEACHER_B_ID = "local-demo-teacher-b";
 
 /** Bump when seed shape changes so local browsers re-apply missing pieces. */
-const LOCAL_DEMO_SEED_REVISION = 4;
+const LOCAL_DEMO_SEED_REVISION = 5;
 const SEED_REVISION_KEY = "cubicle_local_demo_seed_revision";
 
 /**
@@ -92,6 +92,7 @@ const SEED_CARTS: Cart[] = [
     laptopCount: 30,
     location: "Library",
     laptopBrand: "dell",
+    laptopCodes: ["LIB-01", "LIB-02", "LIB-03", "LIB-04"],
     sortOrder: 0,
   },
   {
@@ -101,6 +102,7 @@ const SEED_CARTS: Cart[] = [
     laptopCount: 28,
     location: "Room 204",
     laptopBrand: "chromebook",
+    laptopCodes: ["R204-01", "R204-02", "R204-03"],
     sortOrder: 1,
   },
   {
@@ -110,6 +112,7 @@ const SEED_CARTS: Cart[] = [
     laptopCount: 32,
     location: "Science wing",
     laptopBrand: "dell",
+    laptopCodes: ["SCI-01", "SCI-02"],
     sortOrder: 2,
   },
   {
@@ -119,6 +122,7 @@ const SEED_CARTS: Cart[] = [
     laptopCount: 24,
     location: "IT office",
     laptopBrand: "chromebook",
+    laptopCodes: ["IT-01"],
     sortOrder: 3,
   },
 ];

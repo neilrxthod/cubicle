@@ -666,6 +666,24 @@ export async function dbUpdateCart(
   return { error: error?.message };
 }
 
+export async function dbSetCartLaptopCodes(
+  cartId: string,
+  laptopCodes: string[],
+): Promise<{ error?: string }> {
+  const supabase = client();
+  const { error } = await supabase
+    .from("carts")
+    .update({ laptop_codes: laptopCodes })
+    .eq("id", cartId);
+  if (error && error.message.toLowerCase().includes("laptop_codes")) {
+    return {
+      error:
+        "Laptop code column missing. Run supabase/cart-laptop-codes.sql in the SQL editor.",
+    };
+  }
+  return { error: error?.message };
+}
+
 /** Deletes a cart; related bookings/issues/restrictions cascade in Postgres. */
 export async function dbDeleteCart(
   cartId: string,
