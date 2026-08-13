@@ -727,7 +727,10 @@ export function StaffPanel({
                             : "bg-white hover:bg-neutral-50/80",
                         )}
                       >
-                        <StaffAvatar user={user} />
+                        <StaffAvatar
+                          user={user}
+                          online={status === "active"}
+                        />
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-1.5">
                             <VerifiedName
@@ -1076,10 +1079,16 @@ function StaffDetail({
     <div className="flex max-h-[min(68vh,38rem)] flex-col">
       <div className="border-b border-neutral-200 px-4 py-4 sm:px-5">
         <div className="flex items-start gap-3">
-          <StaffAvatar user={user} size="lg" verified={verified} />
+          <StaffAvatar
+            user={user}
+            size="lg"
+            verified={verified}
+            online={metrics.status === "active"}
+          />
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-[15px] font-medium text-neutral-950">
-              {user.name}
+            <h3 className="flex min-w-0 items-center gap-1.5 text-[15px] font-medium text-neutral-950">
+              <span className="truncate">{user.name}</span>
+              {verified ? <VerifiedBadge size="sm" /> : null}
             </h3>
             <button
               type="button"
@@ -1275,25 +1284,15 @@ function StaffDetail({
 /* ─── Atoms ─── */
 
 function ListStatus({ status }: { status: StaffMetrics["status"] }) {
-  if (status === "ok") return null
-  const label =
-    status === "active"
-      ? "Active"
-      : status === "pending"
-        ? "Pending"
-        : "Revoked"
+  if (status === "ok" || status === "active") return null
   return (
     <span
       className={cn(
         "hidden shrink-0 text-[11.5px] sm:block",
-        status === "active"
-          ? "text-emerald-700"
-          : status === "pending"
-            ? "text-amber-700"
-            : "text-red-600",
+        status === "pending" ? "text-amber-700" : "text-red-600",
       )}
     >
-      {label}
+      {status === "pending" ? "Pending" : "Revoked"}
     </span>
   )
 }
@@ -1402,10 +1401,12 @@ function StaffAvatar({
   user,
   size = "md",
   verified = false,
+  online = false,
 }: {
   user: User
   size?: "md" | "lg"
   verified?: boolean
+  online?: boolean
 }) {
   const dim = size === "lg" ? "size-10 text-[12px]" : "size-8 text-[11px]"
   const badgeSize = size === "lg" ? "sm" : "xs"
@@ -1432,7 +1433,7 @@ function StaffAvatar({
   return (
     <span className="relative shrink-0">
       {face}
-      {verified ? (
+      {verified && !online ? (
         <span
           className={cn(
             "absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full bg-white ring-2 ring-white",
@@ -1441,6 +1442,17 @@ function StaffAvatar({
         >
           <VerifiedBadge size={badgeSize} className="size-full" />
         </span>
+      ) : null}
+      {online ? (
+        <span
+          aria-label="Active today"
+          className={cn(
+            "absolute rounded-full bg-emerald-500 ring-2 ring-white",
+            size === "lg"
+              ? "bottom-0 right-0 size-2.5"
+              : "bottom-0 right-0 size-2",
+          )}
+        />
       ) : null}
     </span>
   )
