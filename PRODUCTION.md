@@ -163,6 +163,73 @@ Attached on Vercel; apex redirects to `www` and serves the Next app.
 
 SSL is issued by Vercel (no separate registrar cert).
 
+## BIMI (official logo next to Brevo emails)
+
+BIMI is **DNS + a hosted logo + (for Gmail) a paid certificate**. It is not a Brevo app toggle. Sending stays `noreply-mail@mycubicle.app`.
+
+The logo file is already in the repo:
+
+- `https://www.mycubicle.app/.well-known/bimi/logo.svg`
+- After you buy a mark certificate, drop the PEM next to it as `public/.well-known/bimi/certificate.pem`
+
+### What is already true on mycubicle.app
+
+| Record | Status |
+|--------|--------|
+| Brevo ownership TXT | Present |
+| DKIM `brevo1._domainkey` / `brevo2._domainkey` | Present |
+| DMARC | Present, but `p=none` — **blocks BIMI** |
+| `default._bimi` | Missing — you add this after DMARC is enforced |
+
+Staff inboxes are `@rbe.sk.ca` (Google Workspace). Gmail will **not** show the logo until you have a **CMC** or **VMC**. Yahoo can show a logo without a certificate. Outlook never shows BIMI.
+
+### You do this at Name.com (DNS for mycubicle.app)
+
+**1. Enforce DMARC** (edit the existing `_dmarc` TXT — do not add a second one):
+
+```text
+Host:  _dmarc
+Type:  TXT
+Value: v=DMARC1; p=quarantine; pct=100; rua=mailto:rua@dmarc.brevo.com
+```
+
+Only Cubicle/Brevo is sending on this domain today, so this is the usual next step. If anything else ever sends as `@mycubicle.app`, authenticate it first or mail will start landing in spam.
+
+**2. After the logo is live on production**, add BIMI (no certificate yet — Yahoo only):
+
+```text
+Host:  default._bimi
+Type:  TXT
+Value: v=BIMI1; l=https://www.mycubicle.app/.well-known/bimi/logo.svg;
+```
+
+**3. For Gmail / school inboxes**, buy a certificate, host the PEM, then change the same TXT to:
+
+```text
+Host:  default._bimi
+Type:  TXT
+Value: v=BIMI1; l=https://www.mycubicle.app/.well-known/bimi/logo.svg; a=https://www.mycubicle.app/.well-known/bimi/certificate.pem;
+```
+
+Certificate options (you purchase these — not in Brevo):
+
+| Certificate | Trademark? | Gmail logo | Gmail blue check | Apple Mail | Typical cost |
+|-------------|------------|------------|------------------|------------|--------------|
+| **CMC** | No | Yes | No | No | ~$400–750 / year |
+| **VMC** | Yes, matching logo | Yes | Yes | Yes | ~$750–1,500 / year + trademark |
+
+Issuers: [DigiCert](https://www.digicert.com/tls-ssl/compare-mark-certificates), [Sectigo](https://www.sectigo.com/ssl-certificates-tls/verified-mark-certificates), [Entrust](https://www.entrust.com/). Directory: [BIMI mark certificate issuers](https://bimigroup.org/vmc-issuers/).
+
+Practical path for Cubicle: **CMC** (no trademark). Use **VMC** only if you register the cube mark and want the Gmail check.
+
+### Check it
+
+1. Open `https://www.mycubicle.app/.well-known/bimi/logo.svg` — black cube, no login wall.
+2. [MXToolbox BIMI](https://mxtoolbox.com/bimi.aspx) → `mycubicle.app`
+3. Send a real Brevo mail to a Gmail address. Logo can take up to 48 hours. Gmail still hides it without a CMC/VMC.
+
+Brevo: one BIMI logo per account; keep the selector as `default`.
+
 ## Pre-deploy verification
 
 ```bash

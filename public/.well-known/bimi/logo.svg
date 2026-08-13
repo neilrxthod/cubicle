@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     version="1.2"
+     baseProfile="tiny-ps"
+     viewBox="0 0 240 240"
+     width="240"
+     height="240">
+  <title>Cubicle</title>
+  <desc>Cubicle official brand logo</desc>
+  <rect fill="#0A0A0A" width="240" height="240"/>
+  <polygon fill="#0A0A0A"
+           stroke="#FFFFFF"
+           stroke-width="1.75"
+           stroke-linejoin="miter"
+           points="120,118 58,82 120,46 182,82"/>
+  <polygon fill="#0A0A0A"
+           stroke="#FFFFFF"
+           stroke-width="1.75"
+           stroke-linejoin="miter"
+           points="116,126 54,90 54,166 116,202"/>
+  <polygon fill="#0A0A0A"
+           stroke="#FFFFFF"
+           stroke-width="1.75"
+           stroke-linejoin="miter"
+           points="124,126 186,90 186,166 124,202"/>
+</svg>

@@ -1,3 +1,5 @@
 # Cubicle is a private school staff application — do not index.
+# BIMI logo/cert must stay fetchable by mailbox providers.
 User-agent: *
+Allow: /.well-known/bimi/
 Disallow: /
