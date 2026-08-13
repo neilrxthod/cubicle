@@ -1,5 +1,28 @@
+/**
+ * Linear email-shape check (local@host.tld).
+ * Avoids backtracking regexes on user input (CodeQL js/polynomial-redos).
+ */
+export function isValidEmailShape(email: string): boolean {
+  const value = email.trim();
+  if (value.length < 5 || value.length > 254) return false;
+
+  const at = value.indexOf("@");
+  if (at < 1 || at !== value.lastIndexOf("@")) return false;
+
+  const domain = value.slice(at + 1);
+  const dot = domain.lastIndexOf(".");
+  if (dot < 1 || dot >= domain.length - 1) return false;
+
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    // Same set as JS \s in the BMP ASCII range (space, tab, CR/LF, VT, FF).
+    if (code <= 0x20) return false;
+  }
+  return true;
+}
+
 export function isSchoolEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  return isValidEmailShape(email);
 }
 
 export function passwordsMatch(password: string, confirm: string): boolean {

@@ -4,6 +4,7 @@ import { eachDayOfInterval, format } from "date-fns";
 import { getSession, setSession, clearSession } from "@/lib/auth/session";
 import { ensureLocalDemoSandbox } from "@/lib/auth/local-demo";
 import { schoolEmailError } from "@/lib/auth/school-domain";
+import { isValidEmailShape } from "@/lib/auth/validation";
 import {
   clearPlatformBrowserCache,
   forceEmptyPlatformState,
@@ -2187,10 +2188,6 @@ export type CredentialResult = {
 
 function parseStaffRole(value: FormDataEntryValue | null): "teacher" | "admin" {
   return value === "admin" ? "admin" : "teacher";
-}
-
-function isValidEmailShape(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 /**

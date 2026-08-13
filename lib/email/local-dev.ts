@@ -6,6 +6,7 @@
  * to a personal inbox.
  */
 
+import { isValidEmailShape } from "@/lib/auth/validation";
 import { isLocalDevRuntime } from "@/lib/data/durability";
 
 export const LOCAL_EMAIL_PREFS_KEY = "cubicle_email_dev_v1";
@@ -22,10 +23,6 @@ const DEFAULTS: LocalEmailPrefs = {
   enabled: false,
   testEmail: "",
 };
-
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-}
 
 function read(): LocalEmailPrefs {
   if (typeof window === "undefined") return { ...DEFAULTS };
@@ -84,7 +81,7 @@ export function showLocalEmailTestingUi(): boolean {
 export function shouldQueueEmailFromClient(): boolean {
   if (!isLocalDevRuntime()) return true;
   const prefs = read();
-  return prefs.enabled === true && isValidEmail(prefs.testEmail);
+  return prefs.enabled === true && isValidEmailShape(prefs.testEmail);
 }
 
 /**
@@ -96,10 +93,10 @@ export function localEmailSinkForRequest():
   | undefined {
   if (!isLocalDevRuntime()) return undefined;
   const prefs = read();
-  if (!prefs.enabled || !isValidEmail(prefs.testEmail)) return undefined;
+  if (!prefs.enabled || !isValidEmailShape(prefs.testEmail)) return undefined;
   return { enabled: true, testEmail: prefs.testEmail.trim().toLowerCase() };
 }
 
 export function isValidLocalTestEmail(email: string): boolean {
-  return isValidEmail(email);
+  return isValidEmailShape(email);
 }

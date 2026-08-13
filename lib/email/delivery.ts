@@ -4,6 +4,7 @@
  * Production: always normal multi-recipient delivery; never honor client sinks.
  */
 
+import { isValidEmailShape } from "@/lib/auth/validation";
 import { isLocalDevRuntime } from "@/lib/data/durability";
 
 export type LocalEmailSink = {
@@ -15,10 +16,6 @@ export type DeliveryPlan =
   | { mode: "production" }
   | { mode: "blocked"; reason: string }
   | { mode: "local_sink"; email: string };
-
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-}
 
 /**
  * Resolve how this request may send mail.
@@ -41,7 +38,7 @@ export function resolveDeliveryPlan(sink?: LocalEmailSink | null): DeliveryPlan 
   const email = String(sink.testEmail ?? "")
     .trim()
     .toLowerCase();
-  if (!isValidEmail(email)) {
+  if (!isValidEmailShape(email)) {
     return {
       mode: "blocked",
       reason: "Set a valid test email in Settings → Email (local testing).",
