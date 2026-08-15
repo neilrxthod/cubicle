@@ -22,14 +22,14 @@ export function inviteDeclineClassName(className?: string) {
   );
 }
 
-/** Primary confirm — solid dark, no color wash. */
+/** Primary confirm — flat red fill, no glow or gradient. */
 export function inviteAcceptClassName(className?: string) {
   return cn(
-    "inline-flex items-center justify-center font-medium outline-none",
-    "bg-neutral-950 text-white",
-    "hover:bg-neutral-800",
-    "active:bg-neutral-900",
-    "focus-visible:ring-2 focus-visible:ring-neutral-900/20 focus-visible:ring-offset-1",
+    "inline-flex items-center justify-center font-medium outline-none shadow-none",
+    "bg-red-600 text-white",
+    "hover:bg-red-700",
+    "active:bg-red-800",
+    "focus-visible:ring-2 focus-visible:ring-red-600/25 focus-visible:ring-offset-1",
     motion,
     className,
   );
@@ -55,11 +55,11 @@ export function inviteChipDeclineClassName(className?: string) {
 
 export function inviteChipAcceptClassName(className?: string) {
   return cn(
-    "inline-flex items-center justify-center font-medium outline-none",
-    "bg-neutral-950 text-white ring-1 ring-neutral-950",
-    "hover:bg-neutral-800 hover:ring-neutral-800",
-    "active:bg-neutral-900",
-    "focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-1 focus-visible:ring-offset-transparent",
+    "inline-flex items-center justify-center font-medium outline-none shadow-none",
+    "bg-red-600 text-white ring-1 ring-red-600",
+    "hover:bg-red-700 hover:ring-red-700",
+    "active:bg-red-800",
+    "focus-visible:ring-2 focus-visible:ring-red-600/30 focus-visible:ring-offset-1 focus-visible:ring-offset-transparent",
     motion,
     className,
   );

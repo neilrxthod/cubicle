@@ -342,6 +342,7 @@ export function DailyBoard({
   }, [platform.users, session.id, session.name])
 
   const [bookDialog, setBookDialog] = useState<{ cart: Cart; period: Period } | null>(null)
+  const [bookingSlotKey, setBookingSlotKey] = useState<string | null>(null)
   const [issueDialog, setIssueDialog] = useState<Cart | null>(null)
   const [swapDialog, setSwapDialog] = useState<Booking | null>(null)
   const [manageDialog, setManageDialog] = useState<Booking | null>(null)
@@ -627,6 +628,8 @@ export function DailyBoard({
   async function quickMultiBook(cart: Cart, period: Period) {
     if (multiBusy.current) return
     multiBusy.current = true
+    const key = `${cart.id}:${period}`
+    setBookingSlotKey(key)
     try {
       const formData = new FormData()
       formData.set("cartId", cart.id)
@@ -649,6 +652,7 @@ export function DailyBoard({
       router.refresh()
     } finally {
       multiBusy.current = false
+      setBookingSlotKey(null)
     }
   }
 
@@ -765,6 +769,7 @@ export function DailyBoard({
       return
     }
 
+    setBookingSlotKey(`${cart.id}:${period}`)
     setBookDialog({ cart, period })
   }
 
@@ -1491,31 +1496,16 @@ export function DailyBoard({
 
                     return (
                       <div key={period} className={cellBase}>
-                        <button
-                          type="button"
-                          onClick={() => onCellClick(cart, period)}
-                          title={
+                        <OpenSlotBookButton
+                          busy={bookingSlotKey === `${cart.id}:${period}`}
+                          blocked={bookingSlotKey !== null}
+                          multiLabel={
                             multiMode && isAdmin
                               ? `Book as “${multiTag.trim() || DEFAULT_ADMIN_MULTI_TAG}”`
-                              : "Book this slot"
+                              : undefined
                           }
-                          className={cn(
-                            slotFace,
-                            "group/cell bg-neutral-50/50",
-                            "hover:bg-neutral-950",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-900/15",
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              "text-[10px] font-medium uppercase tracking-[0.16em]",
-                              "text-neutral-300 transition-colors duration-150",
-                              "group-hover/cell:text-white",
-                            )}
-                          >
-                            Book
-                          </span>
-                        </button>
+                          onBook={() => onCellClick(cart, period)}
+                        />
                       </div>
                     )
                   })}
@@ -1976,31 +1966,16 @@ export function DailyBoard({
 
                     return (
                       <div key={period} className={cellBase}>
-                        <button
-                          type="button"
-                          onClick={() => onCellClick(cart, period)}
-                          title={
+                        <OpenSlotBookButton
+                          busy={bookingSlotKey === `${cart.id}:${period}`}
+                          blocked={bookingSlotKey !== null}
+                          multiLabel={
                             multiMode && isAdmin
                               ? `Book as “${multiTag.trim() || DEFAULT_ADMIN_MULTI_TAG}”`
-                              : "Book this slot"
+                              : undefined
                           }
-                          className={cn(
-                            slotFace,
-                            "group/cell bg-neutral-50/50",
-                            "hover:bg-neutral-950",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-900/15",
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              "text-[10px] font-medium uppercase tracking-[0.16em]",
-                              "text-neutral-300 transition-colors duration-150",
-                              "group-hover/cell:text-white",
-                            )}
-                          >
-                            Book
-                          </span>
-                        </button>
+                          onBook={() => onCellClick(cart, period)}
+                        />
                       </div>
                     )
                   })}
@@ -2017,7 +1992,11 @@ export function DailyBoard({
           cart={bookDialog.cart}
           period={bookDialog.period}
           date={date}
-          onClose={() => setBookDialog(null)}
+          onOpened={() => setBookingSlotKey(null)}
+          onClose={() => {
+            setBookDialog(null)
+            setBookingSlotKey(null)
+          }}
         />
       )}
       {issueDialog && (
@@ -2174,6 +2153,51 @@ function BoardCartRowDragOverlay({
         dangerouslySetInnerHTML={{ __html: snapshot.html }}
       />
     </div>
+  )
+}
+
+function OpenSlotBookButton({
+  busy,
+  blocked,
+  multiLabel,
+  onBook,
+}: {
+  busy: boolean
+  blocked: boolean
+  multiLabel?: string
+  onBook: () => void
+}) {
+  return (
+    <button
+      type="button"
+      disabled={blocked}
+      aria-busy={busy}
+      aria-label="Book this slot"
+      onClick={onBook}
+      title={multiLabel ?? "Book this slot"}
+      className={cn(
+        slotFace,
+        "group/cell bg-neutral-50/50",
+        "hover:bg-neutral-950",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-900/15",
+        busy && "bg-neutral-50",
+        blocked && !busy && "opacity-50",
+      )}
+    >
+      {busy ? (
+        <InviteActionBusy spinnerClassName="text-neutral-400" />
+      ) : (
+        <span
+          className={cn(
+            "text-[10px] font-medium uppercase tracking-[0.16em]",
+            "text-neutral-300 transition-colors duration-150",
+            "group-hover/cell:text-white",
+          )}
+        >
+          Book
+        </span>
+      )}
+    </button>
   )
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useMemo,
   useState,
   useTransition,
@@ -42,11 +43,13 @@ export function BookDialog({
   period,
   date,
   onClose,
+  onOpened,
 }: {
   cart: Cart;
   period: Period;
   date: string;
   onClose: () => void;
+  onOpened?: () => void;
 }) {
   const router = useRouter();
   const platform = usePlatformStore();
@@ -59,6 +62,12 @@ export function BookDialog({
 
   const session = getSessionSnapshot();
   const purpose = getBookingPurposeOption(purposeId);
+
+  useEffect(() => {
+    onOpened?.();
+    // Only when the dialog chunk has mounted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const colleagues = useMemo(() => {
     if (!session) return [] as StaffUser[];
