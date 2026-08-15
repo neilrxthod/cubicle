@@ -138,8 +138,9 @@ export function isRemoteRequiredButMissing(): boolean {
 
 export const REMOTE_REQUIRED_MESSAGE =
   "Cubicle is running in production mode but Supabase is not configured. " +
-  "Set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, and " +
-  "SUPABASE_SERVICE_ROLE_KEY on Vercel, then redeploy. " +
+  "Set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY " +
+  "(or NEXT_PUBLIC_SUPABASE_ANON_KEY), and SUPABASE_SERVICE_ROLE_KEY " +
+  "on Vercel, then redeploy. " +
   "School data is never stored in the app deploy — only in Supabase.";
 
 export const LOCAL_WRITE_BLOCKED_MESSAGE =

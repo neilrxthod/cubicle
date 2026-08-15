@@ -20,7 +20,9 @@ export function isLaptopBrand(value: unknown): value is LaptopBrand {
 }
 
 export function parseLaptopBrand(value: unknown): LaptopBrand | undefined {
-  return isLaptopBrand(value) ? value : undefined;
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toLowerCase();
+  return isLaptopBrand(normalized) ? normalized : undefined;
 }
 
 export function laptopBrandLabel(brand: LaptopBrand): string {

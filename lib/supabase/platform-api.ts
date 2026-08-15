@@ -93,6 +93,21 @@ function isMissingMaxSlotsColumnError(message: string | undefined): boolean {
   );
 }
 
+function isMissingLaptopBrandColumnError(message: string | undefined): boolean {
+  const msg = (message ?? "").toLowerCase();
+  return (
+    msg.includes("laptop_brand") &&
+    (msg.includes("schema cache") ||
+      msg.includes("could not find") ||
+      msg.includes("does not exist") ||
+      msg.includes("column") ||
+      msg.includes("42703"))
+  );
+}
+
+const LAPTOP_BRAND_COLUMN_HELP =
+  "Laptop brand column missing. Run supabase/cart-laptop-brand.sql in the Supabase SQL Editor, then set Dell or Chromebook on each cart.";
+
 /** Load booking_policy; tolerate pre-migration DBs without max_slots column. */
 async function fetchBookingPolicyRow(
   supabase: ReturnType<typeof client>,
@@ -601,9 +616,8 @@ async function insertCartPayload(
     delete payload.sort_order;
     return insertCartPayload(payload);
   }
-  if (msg.includes("laptop_brand") && "laptop_brand" in payload) {
-    delete payload.laptop_brand;
-    return insertCartPayload(payload);
+  if (isMissingLaptopBrandColumnError(error.message)) {
+    return { error: LAPTOP_BRAND_COLUMN_HELP };
   }
   return { error: error.message };
 }
@@ -651,17 +665,8 @@ export async function dbUpdateCart(
     payload.laptop_brand = input.laptopBrand;
   }
   const { error } = await supabase.from("carts").update(payload).eq("id", cartId);
-  if (
-    error &&
-    error.message.toLowerCase().includes("laptop_brand") &&
-    "laptop_brand" in payload
-  ) {
-    delete payload.laptop_brand;
-    const retry = await supabase
-      .from("carts")
-      .update(payload)
-      .eq("id", cartId);
-    return { error: retry.error?.message };
+  if (error && isMissingLaptopBrandColumnError(error.message)) {
+    return { error: LAPTOP_BRAND_COLUMN_HELP };
   }
   return { error: error?.message };
 }

@@ -713,11 +713,28 @@ function CartsGrid({
 
                     <div className="flex min-w-0 items-start justify-between gap-2">
                       <div className="flex min-w-0 items-start gap-2.5">
-                        <CartBrandMark
-                          brand={cart.laptopBrand}
-                          className="mt-0.5 size-7 rounded-md border border-neutral-200/80 bg-white"
-                          logoClassName="size-4"
-                        />
+                        {cart.laptopBrand ? (
+                          <CartBrandMark
+                            brand={cart.laptopBrand}
+                            className="mt-0.5 size-7 rounded-md border border-neutral-200/80 bg-white"
+                            logoClassName="size-4"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            title="Set laptop type"
+                            aria-label={`Set laptop type for ${cart.name}`}
+                            onClick={() => setEditor({ mode: "edit", cart })}
+                            className={cn(
+                              "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md",
+                              "border border-dashed border-neutral-300",
+                              "text-[8px] font-medium uppercase tracking-[0.06em] text-neutral-400",
+                              "motion-micro hover:border-neutral-400 hover:text-neutral-600",
+                            )}
+                          >
+                            Type
+                          </button>
+                        )}
                         <div className="min-w-0">
                           <InventoryRenameField
                             field="name"

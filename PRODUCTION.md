@@ -79,10 +79,14 @@ Copy from `.env.local.example`.
 | 6 | `supabase/employment-type.sql` | Permanent / sub / temp + blue tick |
 | 7 | `supabase/booking-policy-max-slots.sql` | Max cart slots per teacher per day |
 | 8 | `supabase/booking-share.sql` | Share / borrow second teacher on a slot |
+| 9 | `supabase/cart-laptop-brand.sql` | Dell / Chromebook fleet on inventory carts |
+| 10 | `supabase/cart-laptop-codes.sql` | Per-cart laptop case codes for QR labels |
 
 **If Settings → Booking policy shows a schema-cache error about `max_slots_per_teacher_per_day`:** run file **7** in the Supabase SQL Editor, then save again.
 
 **If share/borrow fails or dual PFPs never save:** run file **8** (`booking-share.sql`).
+
+**If Dell / Chromebook logos never appear on the daily board or Inventory:** run file **9** (`cart-laptop-brand.sql`), then edit each cart and set Dell or Chromebook. The UI cannot persist a brand until that column exists.
 
 Then seed real staff:
 

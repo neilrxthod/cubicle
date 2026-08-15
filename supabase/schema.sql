@@ -63,6 +63,8 @@ alter table public.carts
   add constraint carts_laptop_brand_check
   check (laptop_brand is null or laptop_brand in ('dell', 'chromebook'));
 
+notify pgrst, 'reload schema';
+
 alter table public.carts
   add column if not exists laptop_codes text[] not null default '{}';
 

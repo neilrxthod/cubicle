@@ -13,3 +13,6 @@ alter table public.carts
 
 comment on column public.carts.laptop_brand is
   'Laptop fleet for this cart: dell or chromebook. Set by admins in Inventory.';
+
+-- Refresh PostgREST so select/insert/update include laptop_brand immediately.
+notify pgrst, 'reload schema';
