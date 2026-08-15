@@ -127,6 +127,7 @@ import {
 } from "@/lib/ui/invite-actions"
 import { usePlatformStore } from "@/lib/data/platform-store"
 import { CartBrandMark } from "@/components/admin/laptop-brand-toggle"
+import { InviteActionBusy } from "@/components/ui/invite-action-busy"
 
 const PERIODS: Period[] = ["P1", "P2", "P3", "P4", "P5"]
 
@@ -348,9 +349,10 @@ export function DailyBoard({
   const [deletingBookingId, setDeletingBookingId] = useState<string | null>(
     null,
   )
-  const [shareInviteBusyId, setShareInviteBusyId] = useState<string | null>(
-    null,
-  )
+  const [shareInviteBusy, setShareInviteBusy] = useState<{
+    id: string
+    action: "accept" | "decline"
+  } | null>(null)
   /** Admin multi-book: click open slots to book instantly. */
   const [multiMode, setMultiMode] = useState(false)
   const [multiTag, setMultiTag] = useState(DEFAULT_ADMIN_MULTI_TAG)
@@ -548,8 +550,8 @@ export function DailyBoard({
     booking: Booking,
     action: "accept" | "decline",
   ) {
-    if (shareInviteBusyId) return
-    setShareInviteBusyId(booking.id)
+    if (shareInviteBusy) return
+    setShareInviteBusy({ id: booking.id, action })
     try {
       const res =
         action === "accept"
@@ -572,7 +574,7 @@ export function DailyBoard({
       })
       router.refresh()
     } finally {
-      setShareInviteBusyId(null)
+      setShareInviteBusy(null)
     }
   }
 
@@ -1198,7 +1200,10 @@ export function DailyBoard({
                               ? `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — swap or delete`
                               : `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — hover to swap`
                       const deleting = deletingBookingId === booking.id
-                      const inviteBusy = shareInviteBusyId === booking.id
+                      const inviteBusy =
+                        shareInviteBusy?.id === booking.id
+                          ? shareInviteBusy.action
+                          : null
 
                       return (
                         <div key={period} className={cellBase}>
@@ -1288,47 +1293,15 @@ export function DailyBoard({
 
                           {/* Share invite for you — same slot look + Accept / Decline */}
                           {inviteForMe ? (
-                            <div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-1.5 p-1">
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  title="Decline"
-                                  aria-label="Decline share invite"
-                                  disabled={inviteBusy}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    void respondShareInvite(booking, "decline")
-                                  }}
-                                  className={inviteChipDeclineClassName(
-                                    "h-7 rounded-full px-2.5 text-[10.5px]",
-                                  )}
-                                >
-                                  Decline
-                                </button>
-                                <button
-                                  type="button"
-                                  title="Accept"
-                                  aria-label="Accept share invite"
-                                  disabled={inviteBusy}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    void respondShareInvite(booking, "accept")
-                                  }}
-                                  className={inviteChipAcceptClassName(
-                                    "h-7 min-w-[3.25rem] rounded-full px-2.5 text-[10.5px]",
-                                  )}
-                                >
-                                  {inviteBusy ? (
-                                    <Loader2
-                                      className="size-3.5 animate-spin"
-                                      strokeWidth={2}
-                                    />
-                                  ) : (
-                                    "Accept"
-                                  )}
-                                </button>
-                              </div>
-                            </div>
+                            <ShareInviteSlotActions
+                              busy={inviteBusy}
+                              onDecline={() =>
+                                void respondShareInvite(booking, "decline")
+                              }
+                              onAccept={() =>
+                                void respondShareInvite(booking, "accept")
+                              }
+                            />
                           ) : null}
 
                           {/* Owner: pending invite indicator */}
@@ -1712,7 +1685,10 @@ export function DailyBoard({
                               ? `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — swap or delete`
                               : `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — hover to swap`
                       const deleting = deletingBookingId === booking.id
-                      const inviteBusy = shareInviteBusyId === booking.id
+                      const inviteBusy =
+                        shareInviteBusy?.id === booking.id
+                          ? shareInviteBusy.action
+                          : null
 
                       return (
                         <div key={period} className={cellBase}>
@@ -1802,47 +1778,15 @@ export function DailyBoard({
 
                           {/* Share invite for you — same slot look + Accept / Decline */}
                           {inviteForMe ? (
-                            <div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-1.5 p-1">
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  title="Decline"
-                                  aria-label="Decline share invite"
-                                  disabled={inviteBusy}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    void respondShareInvite(booking, "decline")
-                                  }}
-                                  className={inviteChipDeclineClassName(
-                                    "h-7 rounded-full px-2.5 text-[10.5px]",
-                                  )}
-                                >
-                                  Decline
-                                </button>
-                                <button
-                                  type="button"
-                                  title="Accept"
-                                  aria-label="Accept share invite"
-                                  disabled={inviteBusy}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    void respondShareInvite(booking, "accept")
-                                  }}
-                                  className={inviteChipAcceptClassName(
-                                    "h-7 min-w-[3.25rem] rounded-full px-2.5 text-[10.5px]",
-                                  )}
-                                >
-                                  {inviteBusy ? (
-                                    <Loader2
-                                      className="size-3.5 animate-spin"
-                                      strokeWidth={2}
-                                    />
-                                  ) : (
-                                    "Accept"
-                                  )}
-                                </button>
-                              </div>
-                            </div>
+                            <ShareInviteSlotActions
+                              busy={inviteBusy}
+                              onDecline={() =>
+                                void respondShareInvite(booking, "decline")
+                              }
+                              onAccept={() =>
+                                void respondShareInvite(booking, "accept")
+                              }
+                            />
                           ) : null}
 
                           {/* Owner: pending invite indicator */}
@@ -2229,6 +2173,70 @@ function BoardCartRowDragOverlay({
         )}
         dangerouslySetInnerHTML={{ __html: snapshot.html }}
       />
+    </div>
+  )
+}
+
+function ShareInviteSlotActions({
+  busy,
+  onAccept,
+  onDecline,
+}: {
+  busy: "accept" | "decline" | null
+  onAccept: () => void
+  onDecline: () => void
+}) {
+  const blocked = busy !== null
+  return (
+    <div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-1.5 p-1">
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          title="Decline"
+          aria-label="Decline share invite"
+          aria-busy={busy === "decline"}
+          disabled={blocked}
+          onClick={(e) => {
+            e.stopPropagation()
+            onDecline()
+          }}
+          className={inviteChipDeclineClassName(
+            cn(
+              "h-7 min-w-[3.5rem] rounded-full px-2.5 text-[10.5px]",
+              busy === "decline"
+                ? "disabled:opacity-100"
+                : busy
+                  ? "opacity-40 disabled:opacity-40"
+                  : null,
+            ),
+          )}
+        >
+          {busy === "decline" ? <InviteActionBusy /> : "Decline"}
+        </button>
+        <button
+          type="button"
+          title="Accept"
+          aria-label="Accept share invite"
+          aria-busy={busy === "accept"}
+          disabled={blocked}
+          onClick={(e) => {
+            e.stopPropagation()
+            onAccept()
+          }}
+          className={inviteChipAcceptClassName(
+            cn(
+              "h-7 min-w-[3.5rem] rounded-full px-2.5 text-[10.5px]",
+              busy === "accept"
+                ? "disabled:opacity-100"
+                : busy
+                  ? "opacity-40 disabled:opacity-40"
+                  : null,
+            ),
+          )}
+        >
+          {busy === "accept" ? <InviteActionBusy /> : "Accept"}
+        </button>
+      </div>
     </div>
   )
 }

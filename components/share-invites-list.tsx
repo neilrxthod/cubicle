@@ -17,6 +17,9 @@ import {
   inviteAcceptEmphasizedClassName,
   inviteDeclineClassName,
 } from "@/lib/ui/invite-actions"
+import { InviteActionBusy } from "@/components/ui/invite-action-busy"
+
+type InviteBusyAction = "accept" | "decline" | "cancel" | "dismiss"
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -79,7 +82,10 @@ export function ShareInvitesList({
 }) {
   const router = useRouter()
   const platform = usePlatformStore()
-  const [busyId, setBusyId] = useState<string | null>(null)
+  const [busy, setBusy] = useState<{
+    id: string
+    action: InviteBusyAction
+  } | null>(null)
 
   const cartMap = new Map(carts.map((c) => [c.id, c]))
   const avatarByUserId = useMemo(() => {
@@ -109,11 +115,8 @@ export function ShareInvitesList({
     return null
   }
 
-  async function run(
-    bookingId: string,
-    action: "accept" | "decline" | "cancel" | "dismiss",
-  ) {
-    setBusyId(bookingId)
+  async function run(bookingId: string, action: InviteBusyAction) {
+    setBusy({ id: bookingId, action })
     try {
       const res =
         action === "accept"
@@ -148,11 +151,11 @@ export function ShareInvitesList({
       })
       router.refresh()
     } finally {
-      setBusyId(null)
+      setBusy(null)
     }
   }
 
-  const blocked = busyId !== null
+  const blocked = busy !== null
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -163,18 +166,27 @@ export function ShareInvitesList({
         const avatarSrc =
           avatarByUserId.get(booking.teacherId) ??
           booking.lastEditedByAvatarUrl
-        const busy = busyId === booking.id
+        const thisBusy = busy?.id === booking.id
+        const accepting = busy?.id === booking.id && busy.action === "accept"
+        const declining = busy?.id === booking.id && busy.action === "decline"
 
         return (
           <article
             key={booking.id}
+            aria-busy={thisBusy}
             className={cn(
               "flex flex-col gap-3 rounded-xl border border-red-200/90 bg-white p-3.5 sm:flex-row sm:items-center sm:gap-4 sm:p-4",
               "shadow-[0_1px_0_rgba(0,0,0,0.03)]",
               "border-l-[3px] border-l-red-500",
+              thisBusy && "pointer-events-none",
             )}
           >
-            <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div
+              className={cn(
+                "flex min-w-0 flex-1 items-center gap-3",
+                thisBusy && "opacity-55",
+              )}
+            >
               <Avatar name={name} src={avatarSrc} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] leading-snug tracking-[-0.01em] text-neutral-950">
@@ -194,22 +206,48 @@ export function ShareInvitesList({
               <button
                 type="button"
                 disabled={blocked}
+                aria-busy={declining}
                 onClick={() => void run(booking.id, "decline")}
                 className={inviteDeclineClassName(
-                  "h-9 rounded-lg px-3 text-[12.5px]",
+                  cn(
+                    "h-9 min-w-[6.25rem] rounded-lg px-3 text-[12.5px]",
+                    declining
+                      ? "disabled:opacity-100"
+                      : thisBusy
+                        ? "opacity-40 disabled:opacity-40"
+                        : null,
+                  ),
                 )}
               >
-                {busy ? "…" : "Decline"}
+                {declining ? (
+                  <InviteActionBusy>Declining</InviteActionBusy>
+                ) : (
+                  "Decline"
+                )}
               </button>
               <button
                 type="button"
                 disabled={blocked}
+                aria-busy={accepting}
                 onClick={() => void run(booking.id, "accept")}
                 className={inviteAcceptEmphasizedClassName(
-                  "h-9 rounded-lg px-3 text-[12.5px]",
+                  cn(
+                    "h-9 min-w-[6.25rem] rounded-lg px-3 text-[12.5px]",
+                    accepting
+                      ? "disabled:opacity-100"
+                      : thisBusy
+                        ? "opacity-40 disabled:opacity-40"
+                        : null,
+                  ),
                 )}
               >
-                {busy ? "…" : "Accept"}
+                {accepting ? (
+                  <InviteActionBusy spinnerClassName="text-white">
+                    Accepting
+                  </InviteActionBusy>
+                ) : (
+                  "Accept"
+                )}
               </button>
             </div>
           </article>
@@ -225,15 +263,17 @@ export function ShareInvitesList({
           (booking.shareDeclinedById
             ? avatarByUserId.get(booking.shareDeclinedById)
             : undefined) ?? booking.shareDeclinedByAvatarUrl
-        const busy = busyId === booking.id
+        const dismissing = busy?.id === booking.id && busy.action === "dismiss"
 
         return (
           <article
             key={`declined-${booking.id}`}
+            aria-busy={dismissing}
             className={cn(
               "flex flex-col gap-3 rounded-xl border border-red-200/90 bg-white p-3.5 sm:flex-row sm:items-center sm:gap-4 sm:p-4",
               "shadow-[0_1px_0_rgba(0,0,0,0.03)]",
               "border-l-[3px] border-l-red-500",
+              dismissing && "pointer-events-none",
             )}
           >
             <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -255,16 +295,21 @@ export function ShareInvitesList({
             <button
               type="button"
               disabled={blocked}
+              aria-busy={dismissing}
               onClick={() => void run(booking.id, "dismiss")}
               className={cn(
-                "h-9 w-full shrink-0 rounded-lg border border-neutral-200 bg-white px-3 sm:w-auto",
+                "h-9 w-full min-w-[6.25rem] shrink-0 rounded-lg border border-neutral-200 bg-white px-3 sm:w-auto",
                 "text-[12.5px] font-medium text-neutral-600",
                 "transition-colors hover:bg-neutral-50 hover:text-neutral-950",
-                "disabled:opacity-50",
+                dismissing ? "disabled:opacity-100" : "disabled:opacity-50",
                 "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-900/15",
               )}
             >
-              {busy ? "…" : "Dismiss"}
+              {dismissing ? (
+                <InviteActionBusy>Dismissing</InviteActionBusy>
+              ) : (
+                "Dismiss"
+              )}
             </button>
           </article>
         )
@@ -278,14 +323,16 @@ export function ShareInvitesList({
           (booking.sharePendingId
             ? avatarByUserId.get(booking.sharePendingId)
             : undefined) ?? booking.sharePendingAvatarUrl
-        const busy = busyId === booking.id
+        const cancelling = busy?.id === booking.id && busy.action === "cancel"
 
         return (
           <article
             key={booking.id}
+            aria-busy={cancelling}
             className={cn(
               "flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-3.5 sm:flex-row sm:items-center sm:gap-4 sm:p-4",
               "shadow-[0_1px_0_rgba(0,0,0,0.03)]",
+              cancelling && "pointer-events-none",
             )}
           >
             <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -306,16 +353,21 @@ export function ShareInvitesList({
             <button
               type="button"
               disabled={blocked}
+              aria-busy={cancelling}
               onClick={() => void run(booking.id, "cancel")}
               className={cn(
-                "h-9 w-full shrink-0 rounded-lg border border-neutral-200 bg-white px-3 sm:w-auto",
+                "h-9 w-full min-w-[6.25rem] shrink-0 rounded-lg border border-neutral-200 bg-white px-3 sm:w-auto",
                 "text-[12.5px] font-medium text-neutral-600",
                 "transition-colors hover:bg-neutral-50 hover:text-neutral-950",
-                "disabled:opacity-50",
+                cancelling ? "disabled:opacity-100" : "disabled:opacity-50",
                 "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-900/15",
               )}
             >
-              {busy ? "…" : "Cancel"}
+              {cancelling ? (
+                <InviteActionBusy>Cancelling</InviteActionBusy>
+              ) : (
+                "Cancel"
+              )}
             </button>
           </article>
         )
