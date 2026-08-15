@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isLocalDemoMode } from "@/lib/data/durability";
 import { createClient } from "@/lib/supabase/server";
 
 /**
  * Self-service account deletion.
  * Removes the allowlist row (so the email cannot sign back in) and deletes
  * the Auth user. Profile and related rows cascade via FK.
+ *
+ * Local sandbox: no Supabase Auth user — the client deletes the local row.
  */
 export async function POST() {
   try {
+    if (isLocalDemoMode()) {
+      return NextResponse.json({ ok: true, local: true });
+    }
+
     const supabase = await createClient();
     const {
       data: { user },

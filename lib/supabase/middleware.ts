@@ -12,8 +12,18 @@ import { getSupabasePublicKey, getSupabaseUrl } from "@/lib/supabase/env";
  * If the refresh token in cookies is gone/revoked server-side, clear those
  * cookies so we stop retrying every request (AuthApiError spam + stuck UI).
  */
+function passthrough(request: NextRequest) {
+  // Next.js 16 only forwards `{ request: { headers } }` — passing the full
+  // NextRequest object makes App Router miss `route.ts` handlers (404 HTML).
+  return NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
+}
+
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
+  let supabaseResponse = passthrough(request);
 
   const url = getSupabaseUrl();
   const publicKey = getSupabasePublicKey();
@@ -39,7 +49,7 @@ export async function updateSession(request: NextRequest) {
         cookiesToSet.forEach(({ name, value }) => {
           request.cookies.set(name, value);
         });
-        supabaseResponse = NextResponse.next({ request });
+        supabaseResponse = passthrough(request);
         cookiesToSet.forEach(({ name, value, options }) => {
           supabaseResponse.cookies.set(name, value, options);
         });

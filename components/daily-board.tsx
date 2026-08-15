@@ -122,6 +122,7 @@ import {
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import {
+  holdInviteBusy,
   inviteChipAcceptClassName,
   inviteChipDeclineClassName,
 } from "@/lib/ui/invite-actions"
@@ -553,6 +554,7 @@ export function DailyBoard({
   ) {
     if (shareInviteBusy) return
     setShareInviteBusy({ id: booking.id, action })
+    const startedAt = Date.now()
     try {
       const res =
         action === "accept"
@@ -575,6 +577,7 @@ export function DailyBoard({
       })
       router.refresh()
     } finally {
+      await holdInviteBusy(startedAt)
       setShareInviteBusy(null)
     }
   }
@@ -1154,10 +1157,9 @@ export function DailyBoard({
                             : undefined) ??
                           booking.sharedWithAvatarUrl)
                         : undefined
-                      const inviteForMe = bookingHasShareInviteFor(
-                        booking,
-                        session.id,
-                      )
+                      const inviteForMe =
+                        bookingHasShareInviteFor(booking, session.id) ||
+                        shareInviteBusy?.id === booking.id
                       const invitePendingName = booking.sharePendingId
                         ? nameByTeacherId.get(booking.sharePendingId) ||
                           booking.sharePendingName ||
@@ -1624,10 +1626,9 @@ export function DailyBoard({
                             : undefined) ??
                           booking.sharedWithAvatarUrl)
                         : undefined
-                      const inviteForMe = bookingHasShareInviteFor(
-                        booking,
-                        session.id,
-                      )
+                      const inviteForMe =
+                        bookingHasShareInviteFor(booking, session.id) ||
+                        shareInviteBusy?.id === booking.id
                       const invitePendingName = booking.sharePendingId
                         ? nameByTeacherId.get(booking.sharePendingId) ||
                           booking.sharePendingName ||

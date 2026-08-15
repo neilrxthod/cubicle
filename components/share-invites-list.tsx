@@ -14,6 +14,7 @@ import { usePlatformStore } from "@/lib/data/platform-store"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import {
+  holdInviteBusy,
   inviteAcceptClassName,
   inviteDeclineClassName,
 } from "@/lib/ui/invite-actions"
@@ -96,7 +97,12 @@ export function ShareInvitesList({
     return map
   }, [platform.users])
 
-  const incoming = bookings.filter((b) => bookingHasShareInviteFor(b, userId))
+  const incoming = bookings.filter(
+    (b) =>
+      bookingHasShareInviteFor(b, userId) ||
+      (busy?.id === b.id &&
+        (busy.action === "accept" || busy.action === "decline")),
+  )
   const outgoing = bookings.filter(
     (b) => b.teacherId === userId && Boolean(b.sharePendingId),
   )
@@ -117,6 +123,7 @@ export function ShareInvitesList({
 
   async function run(bookingId: string, action: InviteBusyAction) {
     setBusy({ id: bookingId, action })
+    const startedAt = Date.now()
     try {
       const res =
         action === "accept"
@@ -151,6 +158,7 @@ export function ShareInvitesList({
       })
       router.refresh()
     } finally {
+      await holdInviteBusy(startedAt)
       setBusy(null)
     }
   }

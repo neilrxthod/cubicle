@@ -1,11 +1,11 @@
 /**
- * Local-development only: fixed Admin + Teacher personas and a seeded sandbox
- * so product work can exercise both perspectives without production data.
+ * Local-development only: fixed Admin + Teacher personas so product work
+ * can exercise both perspectives without production data.
  *
+ * Operational data (carts, bookings, issues) starts empty — add it in the UI.
  * Never active when remote platform / production deploy is on.
  */
 
-import { format } from "date-fns";
 import type { DemoAccount, SessionUser as AuthSessionUser } from "@/lib/auth/types";
 import { setSession } from "@/lib/auth/session";
 import {
@@ -15,16 +15,28 @@ import {
 import { getState, mutate } from "@/lib/data/platform-store";
 import { completeOnboarding } from "@/lib/onboarding/storage";
 import type { Grade } from "@/lib/onboarding/storage";
-import type { Booking, Cart, Period, SessionUser, User } from "@/lib/types";
+import type { Period, PlatformState, SessionUser, User } from "@/lib/types";
 
 export const LOCAL_DEMO_ADMIN_ID = "local-demo-admin";
 export const LOCAL_DEMO_TEACHER_ID = "local-demo-teacher";
-/** Second teacher so share / swap flows can be exercised locally. */
-export const LOCAL_DEMO_TEACHER_B_ID = "local-demo-teacher-b";
 
-/** Bump when seed shape changes so local browsers re-apply missing pieces. */
-const LOCAL_DEMO_SEED_REVISION = 5;
+/** Bump when seed shape changes so local browsers drop leftover dummy data. */
+const LOCAL_DEMO_SEED_REVISION = 6;
 const SEED_REVISION_KEY = "cubicle_local_demo_seed_revision";
+
+/** Legacy dummy rows from older local sandbox seeds — never re-insert these. */
+const LEGACY_DUMMY_CART_IDS = new Set([
+  "local-demo-cart-a",
+  "local-demo-cart-b",
+  "local-demo-cart-c",
+  "local-demo-cart-d",
+]);
+const LEGACY_DUMMY_BOOKING_IDS = new Set([
+  "local-demo-booking-1",
+  "local-demo-booking-2",
+]);
+const LEGACY_DUMMY_USER_IDS = new Set(["local-demo-teacher-b"]);
+const LEGACY_DUMMY_USER_EMAILS = new Set(["demo.teacher2@rbe.sk.ca"]);
 
 /**
  * Sample portrait photos for local sandbox personas (served from /public/demo).
@@ -33,7 +45,6 @@ const SEED_REVISION_KEY = "cubicle_local_demo_seed_revision";
 const DEMO_AVATAR = {
   admin: "/demo/alex-admin.jpg",
   teacher: "/demo/taylor-teacher.jpg",
-  teacherB: "/demo/jordan-lee.jpg",
 } as const;
 
 /** Fixed admin identity for the local sandbox. */
@@ -68,69 +79,9 @@ export const LOCAL_DEMO_TEACHER: SessionUser = {
   notifyIssues: true,
 };
 
-/** Second teacher (for multi-user board / swap demos). Not a login switcher target. */
-export const LOCAL_DEMO_TEACHER_B: SessionUser = {
-  id: LOCAL_DEMO_TEACHER_B_ID,
-  email: "demo.teacher2@rbe.sk.ca",
-  name: "Jordan Lee",
-  firstName: "Jordan",
-  lastName: "Lee",
-  role: "teacher",
-  avatarUrl: DEMO_AVATAR.teacherB,
-  title: "English Teacher",
-  department: "English",
-  employmentType: "permanent",
-  notifyEmail: true,
-  notifyIssues: true,
-};
-
-const SEED_CARTS: Cart[] = [
-  {
-    id: "local-demo-cart-a",
-    name: "Cart A",
-    status: "active",
-    laptopCount: 30,
-    location: "Library",
-    laptopBrand: "dell",
-    laptopCodes: ["LIB-01", "LIB-02", "LIB-03", "LIB-04"],
-    sortOrder: 0,
-  },
-  {
-    id: "local-demo-cart-b",
-    name: "Cart B",
-    status: "active",
-    laptopCount: 28,
-    location: "Room 204",
-    laptopBrand: "chromebook",
-    laptopCodes: ["R204-01", "R204-02", "R204-03"],
-    sortOrder: 1,
-  },
-  {
-    id: "local-demo-cart-c",
-    name: "Cart C",
-    status: "active",
-    laptopCount: 32,
-    location: "Science wing",
-    laptopBrand: "dell",
-    laptopCodes: ["SCI-01", "SCI-02"],
-    sortOrder: 2,
-  },
-  {
-    id: "local-demo-cart-d",
-    name: "Cart D",
-    status: "maintenance",
-    laptopCount: 24,
-    location: "IT office",
-    laptopBrand: "chromebook",
-    laptopCodes: ["IT-01"],
-    sortOrder: 3,
-  },
-];
-
 const SEED_USERS: Array<{ persona: SessionUser; password: string }> = [
   { persona: LOCAL_DEMO_ADMIN, password: "demo-admin" },
   { persona: LOCAL_DEMO_TEACHER, password: "demo-teacher" },
-  { persona: LOCAL_DEMO_TEACHER_B, password: "demo-teacher" },
 ];
 
 function toUser(persona: SessionUser, password: string): User {
@@ -180,44 +131,6 @@ function writeSeedRevision(revision: number): void {
   } catch {
     // ignore quota / private mode
   }
-}
-
-function todayYmd(): string {
-  return format(new Date(), "yyyy-MM-dd");
-}
-
-function buildSampleBookings(nowIso: string): Booking[] {
-  const date = todayYmd();
-  return [
-    {
-      id: "local-demo-booking-1",
-      cartId: "local-demo-cart-a",
-      date,
-      period: "P1",
-      teacherId: LOCAL_DEMO_TEACHER_ID,
-      teacherName: LOCAL_DEMO_TEACHER.name,
-      className: "Bio 10",
-      subject: "Biology",
-      createdAt: nowIso,
-      lastEditedById: LOCAL_DEMO_TEACHER_ID,
-      lastEditedByName: LOCAL_DEMO_TEACHER.name,
-      lastEditedAt: nowIso,
-    },
-    {
-      id: "local-demo-booking-2",
-      cartId: "local-demo-cart-b",
-      date,
-      period: "P3",
-      teacherId: LOCAL_DEMO_TEACHER_B_ID,
-      teacherName: LOCAL_DEMO_TEACHER_B.name,
-      className: "Eng 11",
-      subject: "English",
-      createdAt: nowIso,
-      lastEditedById: LOCAL_DEMO_TEACHER_B_ID,
-      lastEditedByName: LOCAL_DEMO_TEACHER_B.name,
-      lastEditedAt: nowIso,
-    },
-  ];
 }
 
 /** True only in the isolated browser sandbox (never production / remote). */
@@ -280,22 +193,6 @@ export function completeLocalDemoOnboarding(user?: SessionUser): void {
     notifyIssues: true,
   };
 
-  const teacherBPrefs = {
-    title: LOCAL_DEMO_TEACHER_B.title,
-    department: LOCAL_DEMO_TEACHER_B.department,
-    teachingAssignments: [
-      {
-        id: "local-demo-load-2",
-        subject: "English",
-        grades: [11, 12] as Grade[],
-        periods: ["P3", "P4"] as Period[],
-      },
-    ],
-    preferredPeriods: ["P3", "P4"],
-    notifyEmail: true,
-    notifyIssues: true,
-  };
-
   const adminPrefs = {
     title: LOCAL_DEMO_ADMIN.title,
     department: LOCAL_DEMO_ADMIN.department,
@@ -307,9 +204,6 @@ export function completeLocalDemoOnboarding(user?: SessionUser): void {
 
   completeOnboarding(LOCAL_DEMO_TEACHER_ID, teacherPrefs, [
     LOCAL_DEMO_TEACHER.email,
-  ]);
-  completeOnboarding(LOCAL_DEMO_TEACHER_B_ID, teacherBPrefs, [
-    LOCAL_DEMO_TEACHER_B.email,
   ]);
   completeOnboarding(LOCAL_DEMO_ADMIN_ID, adminPrefs, [
     LOCAL_DEMO_ADMIN.email,
@@ -368,60 +262,54 @@ function upsertSeedUsers(
   }
 }
 
-function upsertSeedCarts(draft: { carts: Cart[] }): void {
-  for (const seed of SEED_CARTS) {
-    const idx = draft.carts.findIndex((c) => c.id === seed.id);
-    if (idx >= 0) {
-      // Restore canonical seed cart metadata without dropping user carts.
-      draft.carts[idx] = { ...seed };
-    } else {
-      draft.carts.push({ ...seed });
-    }
+function hasLegacyDummyData(state: PlatformState): boolean {
+  if (state.carts.some((c) => LEGACY_DUMMY_CART_IDS.has(c.id))) return true;
+  if (state.bookings.some((b) => LEGACY_DUMMY_BOOKING_IDS.has(b.id))) return true;
+  if (state.bookings.some((b) => LEGACY_DUMMY_CART_IDS.has(b.cartId))) return true;
+  if (state.issues.some((i) => LEGACY_DUMMY_CART_IDS.has(i.cartId))) return true;
+  if (state.slotRestrictions.some((r) => LEGACY_DUMMY_CART_IDS.has(r.cartId))) {
+    return true;
   }
+  if (
+    state.users.some(
+      (u) =>
+        LEGACY_DUMMY_USER_IDS.has(u.id) ||
+        LEGACY_DUMMY_USER_EMAILS.has(u.email.toLowerCase()),
+    )
+  ) {
+    return true;
+  }
+  return false;
 }
 
-function ensureSampleBookings(draft: {
-  bookings: Booking[];
-  carts: Cart[];
-}): void {
-  const cartIds = new Set(draft.carts.map((c) => c.id));
-  const samples = buildSampleBookings(new Date().toISOString());
-  for (const booking of samples) {
-    if (!cartIds.has(booking.cartId)) continue;
-    const exists = draft.bookings.some((b) => b.id === booking.id);
-    if (exists) {
-      // Refresh sample bookings to "today" so the board isn't stuck on old dates.
-      draft.bookings = draft.bookings.map((b) =>
-        b.id === booking.id
-          ? {
-              ...b,
-              date: booking.date,
-              cartId: booking.cartId,
-              period: booking.period,
-              teacherId: booking.teacherId,
-              teacherName: booking.teacherName,
-              className: booking.className,
-              subject: booking.subject,
-            }
-          : b,
-      );
-      continue;
-    }
-    // Don't collide with an existing slot booking for the same cart/date/period.
-    const slotTaken = draft.bookings.some(
-      (b) =>
-        b.cartId === booking.cartId &&
-        b.date.slice(0, 10) === booking.date &&
-        b.period === booking.period,
-    );
-    if (slotTaken) continue;
-    draft.bookings.push(booking);
-  }
+/** Drop leftover sample carts / bookings so deletes are not immediately restored. */
+function stripLegacyDummyData(draft: PlatformState): void {
+  draft.carts = draft.carts.filter((c) => !LEGACY_DUMMY_CART_IDS.has(c.id));
+  draft.bookings = draft.bookings.filter(
+    (b) =>
+      !LEGACY_DUMMY_BOOKING_IDS.has(b.id) &&
+      !LEGACY_DUMMY_CART_IDS.has(b.cartId),
+  );
+  const bookingIds = new Set(draft.bookings.map((b) => b.id));
+  draft.issues = draft.issues.filter((i) => !LEGACY_DUMMY_CART_IDS.has(i.cartId));
+  draft.slotRestrictions = draft.slotRestrictions.filter(
+    (r) => !LEGACY_DUMMY_CART_IDS.has(r.cartId),
+  );
+  draft.swapRequests = draft.swapRequests.filter(
+    (s) =>
+      bookingIds.has(s.bookingId) &&
+      (!s.offeredBookingId || bookingIds.has(s.offeredBookingId)),
+  );
+  draft.users = draft.users.filter(
+    (u) =>
+      !LEGACY_DUMMY_USER_IDS.has(u.id) &&
+      !LEGACY_DUMMY_USER_EMAILS.has(u.email.toLowerCase()),
+  );
 }
 
 /**
- * Ensure demo users, starter carts, and sample bookings exist.
- * Safe to call often — fills missing pieces and upgrades seed revision.
+ * Ensure demo login personas exist. Does not seed carts or bookings.
+ * Safe to call often — also strips leftover dummy operational data.
  */
 export function ensureLocalDemoSandbox(): void {
   if (typeof window === "undefined") return;
@@ -431,6 +319,7 @@ export function ensureLocalDemoSandbox(): void {
   const before = getState();
   const revision = readSeedRevision();
   const needsUpgrade = revision < LOCAL_DEMO_SEED_REVISION;
+  const leftoverDummy = hasLegacyDummyData(before);
 
   const missingUser = SEED_USERS.some(
     ({ persona }) =>
@@ -440,12 +329,6 @@ export function ensureLocalDemoSandbox(): void {
           u.email.toLowerCase() === persona.email.toLowerCase(),
       ),
   );
-  const missingCart = SEED_CARTS.some(
-    (seed) => !before.carts.some((c) => c.id === seed.id),
-  );
-  const missingSampleBooking = buildSampleBookings(
-    new Date().toISOString(),
-  ).some((sample) => !before.bookings.some((b) => b.id === sample.id));
 
   const missingAvatar = SEED_USERS.some(({ persona }) => {
     const u = before.users.find(
@@ -456,24 +339,16 @@ export function ensureLocalDemoSandbox(): void {
     return !u?.avatarUrl;
   });
 
-  if (
-    !needsUpgrade &&
-    !missingUser &&
-    !missingCart &&
-    !missingSampleBooking &&
-    !missingAvatar
-  ) {
+  if (!needsUpgrade && !leftoverDummy && !missingUser && !missingAvatar) {
     completeLocalDemoOnboarding();
     return;
   }
 
   mutate((draft) => {
-    // Seed rev 3+: force bundled sample faces onto demo personas.
+    stripLegacyDummyData(draft);
     upsertSeedUsers(draft, {
       forceDemoAvatars: needsUpgrade || missingAvatar,
     });
-    upsertSeedCarts(draft);
-    // Policy defaults for local testing.
     if (!draft.bookingPolicy) {
       draft.bookingPolicy = {
         maxAdvanceDays: 14,
@@ -487,7 +362,6 @@ export function ensureLocalDemoSandbox(): void {
         draft.bookingPolicy.maxSlotsPerTeacherPerDay = 5;
       }
     }
-    ensureSampleBookings(draft);
   });
 
   writeSeedRevision(LOCAL_DEMO_SEED_REVISION);

@@ -149,7 +149,7 @@ export function PlatformBootstrap({
     };
   }, [ready, error, remoteEnabled, remoteMissing]);
 
-  // Local sandbox: seed Demo Admin / Teacher + starter carts when empty.
+  // Local sandbox: keep Demo Admin / Teacher login personas. No sample carts.
   useEffect(() => {
     if (!ready || !isLocalDemoMode()) return;
     ensureLocalDemoSandbox();

@@ -4,6 +4,16 @@ import { cn } from "@/lib/utils";
  * Shared Accept / Decline control polish.
  * Soft lift + color shift on hover; brief press scale — no layout jump.
  */
+
+/** Keep the in-button spinner on screen for local (sync) invite actions. */
+const INVITE_ACTION_MIN_MS = 320;
+
+export async function holdInviteBusy(startedAt: number): Promise<void> {
+  const remaining = INVITE_ACTION_MIN_MS - (Date.now() - startedAt);
+  if (remaining <= 0) return;
+  await new Promise((resolve) => setTimeout(resolve, remaining));
+}
+
 const motion =
   "transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50";
 

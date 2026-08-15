@@ -2735,30 +2735,36 @@ export async function deleteAccountAction(): Promise<Result> {
 
   if (isRemoteEnabled() && isUuid(session.id)) {
     try {
-      const res = await fetch("/api/account/delete", { method: "POST" });
+      const res = await fetch("/api/account/delete", {
+        method: "POST",
+        credentials: "same-origin",
+      });
       const body = (await res.json().catch(() => ({}))) as {
         error?: string;
         ok?: boolean;
+        local?: boolean;
       };
-      if (!res.ok) {
+      if (res.status === 401 || body.local) {
+        // No remote Auth session (or local sandbox) — fall through to
+        // browser-store cleanup instead of failing the button.
+      } else if (!res.ok) {
         return {
           ok: false,
           error: body.error || "Could not delete account.",
         };
+      } else {
+        clearSession();
+        try {
+          clearPlatformBrowserCache();
+        } catch {
+          // ignore
+        }
+        window.location.href = "/login?deleted=1";
+        return { ok: true };
       }
     } catch {
       return { ok: false, error: "Could not reach the server. Try again." };
     }
-
-    // Clear local session chrome; auth user is already gone server-side.
-    clearSession();
-    try {
-      clearPlatformBrowserCache();
-    } catch {
-      // ignore
-    }
-    window.location.href = "/login?deleted=1";
-    return { ok: true };
   }
 
   const __demo = assertLocalDemoAllowed();
