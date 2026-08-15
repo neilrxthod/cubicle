@@ -52,9 +52,76 @@ export function countUserDaySlots(
   ).length;
 }
 
+export type SlotLimitKind = "period" | "daily";
+
+export type SlotLimitNotice = {
+  kind: SlotLimitKind;
+  title: string;
+  body: string;
+  meta: string;
+};
+
 export type SlotCheck =
   | { ok: true }
-  | { ok: false; error: string };
+  | { ok: false; error: string; limit: SlotLimitNotice };
+
+export function periodLimitNotice(
+  used: number,
+  max: number,
+  who = "You",
+): SlotLimitNotice {
+  const isSelf = who === "You";
+  return {
+    kind: "period",
+    title: "Period limit reached",
+    body: isSelf
+      ? `You can hold at most ${max} cart${max === 1 ? "" : "s"} in the same period. Cancel one of those bookings to free a slot.`
+      : `${who} already holds ${max} cart${max === 1 ? "" : "s"} in this period.`,
+    meta: `${used} of ${max} this period`,
+  };
+}
+
+export function dailyLimitNotice(
+  used: number,
+  max: number,
+  who = "You",
+): SlotLimitNotice {
+  const isSelf = who === "You";
+  return {
+    kind: "daily",
+    title: "Daily limit reached",
+    body: isSelf
+      ? max === 1
+        ? "You can book at most 1 cart slot per day. Cancel today’s booking to make room."
+        : `You’ve used all ${max} cart slots allowed for this day. Cancel an existing booking to make room.`
+      : `${who} is at their daily cart limit.`,
+    meta: `${used} of ${max} today`,
+  };
+}
+
+/** Recover a notice from an action error string (toasts are disabled). */
+export function slotLimitNoticeFromError(
+  error: string | undefined,
+): SlotLimitNotice | null {
+  if (!error) return null;
+  const text = error.toLowerCase();
+  if (
+    text.includes("same period") ||
+    text.includes("this period") ||
+    text.includes("max carts this period")
+  ) {
+    return periodLimitNotice(
+      MAX_CARTS_PER_PERIOD_TEACHER,
+      MAX_CARTS_PER_PERIOD_TEACHER,
+    );
+  }
+  if (text.includes("per day") || text.includes("daily cart limit")) {
+    const match = error.match(/(\d+)/);
+    const max = match ? Number(match[1]) : 5;
+    return dailyLimitNotice(max, Number.isFinite(max) ? max : 5);
+  }
+  return null;
+}
 
 /**
  * Whether a teacher may take another cart on this date/period.
@@ -74,8 +141,14 @@ export function canTeacherBookSlot(input: {
 
   const periodCount = countUserPeriodSlots(bookings, userId, date, period);
   if (periodCount >= MAX_CARTS_PER_PERIOD_TEACHER) {
+    const limit = periodLimitNotice(
+      periodCount,
+      MAX_CARTS_PER_PERIOD_TEACHER,
+      who,
+    );
     return {
       ok: false,
+      limit,
       error: isSelf
         ? `You can book at most ${MAX_CARTS_PER_PERIOD_TEACHER} carts in the same period.`
         : `${who} already has ${MAX_CARTS_PER_PERIOD_TEACHER} carts this period.`,
@@ -85,8 +158,10 @@ export function canTeacherBookSlot(input: {
   const dayCount = countUserDaySlots(bookings, userId, date);
   const dayMax = maxSlotsPerDay(policy);
   if (dayCount >= dayMax) {
+    const limit = dailyLimitNotice(dayCount, dayMax, who);
     return {
       ok: false,
+      limit,
       error: isSelf
         ? dayMax === 1
           ? "You can book at most 1 cart slot per day."

@@ -54,7 +54,9 @@ import {
 import {
   bookingBoardTagText,
   canTeacherBookSlot,
+  slotLimitNoticeFromError,
   DEFAULT_ADMIN_MULTI_TAG,
+  type SlotLimitNotice,
 } from "@/lib/booking/slot-rules"
 
 function restrictionLabel(restriction: SlotRestriction): string {
@@ -81,6 +83,11 @@ const SwapRequestDialog = dynamic(
 const ManageBookingDialog = dynamic(
   () => import("./manage-booking-dialog").then((mod) => mod.ManageBookingDialog),
   { ssr: false }
+)
+const BookingLimitDialog = dynamic(
+  () =>
+    import("./booking-limit-dialog").then((mod) => mod.BookingLimitDialog),
+  { ssr: false },
 )
 
 import {
@@ -347,6 +354,7 @@ export function DailyBoard({
   const [issueDialog, setIssueDialog] = useState<Cart | null>(null)
   const [swapDialog, setSwapDialog] = useState<Booking | null>(null)
   const [manageDialog, setManageDialog] = useState<Booking | null>(null)
+  const [slotLimit, setSlotLimit] = useState<SlotLimitNotice | null>(null)
   const [datePickerOpen, setDatePickerOpen] = useState(false)
   const [deletingBookingId, setDeletingBookingId] = useState<string | null>(
     null,
@@ -561,6 +569,11 @@ export function DailyBoard({
           ? await acceptShareInvite(booking.id)
           : await declineShareInvite(booking.id)
       if (res && "error" in res && res.error) {
+        const limit = slotLimitNoticeFromError(res.error)
+        if (limit) {
+          setSlotLimit(limit)
+          return
+        }
         toast({
           title:
             action === "accept"
@@ -757,11 +770,7 @@ export function DailyBoard({
         period,
       })
       if (!check.ok) {
-        toast({
-          title: "Limit reached",
-          description: check.error,
-          variant: "destructive",
-        })
+        setSlotLimit(check.limit)
         return
       }
     }
@@ -1033,14 +1042,14 @@ export function DailyBoard({
           className="board-track"
           data-reordering={isReordering ? "true" : undefined}
         >
-          <div className="board-cols grid border-b border-[var(--hairline)] bg-neutral-50/80">
-            <div className="board-sticky-label flex items-center bg-neutral-50/80 px-3 py-2 text-[11px] font-medium tracking-[-0.01em] text-neutral-400 sm:px-4">
+          <div className="board-cols grid border-b border-neutral-950 bg-neutral-950">
+            <div className="board-sticky-label flex items-center bg-neutral-950 px-3 py-2 text-[11px] font-medium tracking-[-0.01em] text-white/70 sm:px-4">
               Cart
             </div>
             {PERIODS.map((p) => (
               <div
                 key={p}
-                className="flex items-center justify-center border-l border-[var(--hairline)] px-1.5 py-2 text-[11px] font-medium tabular-nums tracking-[-0.01em] text-neutral-400 sm:px-2"
+                className="flex items-center justify-center border-l border-white/10 px-1.5 py-2 text-[11px] font-medium tabular-nums tracking-[-0.01em] text-white/70 sm:px-2"
               >
                 {p}
               </div>
@@ -2013,6 +2022,10 @@ export function DailyBoard({
           onClose={() => setManageDialog(null)}
         />
       )}
+      <BookingLimitDialog
+        notice={slotLimit}
+        onClose={() => setSlotLimit(null)}
+      />
 
       {/* Admin two-step delete: trash → confirm → remove */}
       <Dialog

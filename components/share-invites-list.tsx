@@ -19,6 +19,11 @@ import {
   inviteDeclineClassName,
 } from "@/lib/ui/invite-actions"
 import { InviteActionBusy } from "@/components/ui/invite-action-busy"
+import { BookingLimitDialog } from "@/components/booking-limit-dialog"
+import {
+  slotLimitNoticeFromError,
+  type SlotLimitNotice,
+} from "@/lib/booking/slot-rules"
 
 type InviteBusyAction = "accept" | "decline" | "cancel" | "dismiss"
 
@@ -87,6 +92,7 @@ export function ShareInvitesList({
     id: string
     action: InviteBusyAction
   } | null>(null)
+  const [slotLimit, setSlotLimit] = useState<SlotLimitNotice | null>(null)
 
   const cartMap = new Map(carts.map((c) => [c.id, c]))
   const avatarByUserId = useMemo(() => {
@@ -132,6 +138,11 @@ export function ShareInvitesList({
             ? await dismissShareDeclineNotice(bookingId)
             : await declineShareInvite(bookingId)
       if (res && "error" in res && res.error) {
+        const limit = slotLimitNoticeFromError(res.error)
+        if (limit) {
+          setSlotLimit(limit)
+          return
+        }
         toast({
           title:
             action === "accept"
@@ -364,6 +375,10 @@ export function ShareInvitesList({
           </article>
         )
       })}
+      <BookingLimitDialog
+        notice={slotLimit}
+        onClose={() => setSlotLimit(null)}
+      />
     </div>
   )
 }

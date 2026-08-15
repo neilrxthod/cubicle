@@ -21,7 +21,7 @@ export const LOCAL_DEMO_ADMIN_ID = "local-demo-admin";
 export const LOCAL_DEMO_TEACHER_ID = "local-demo-teacher";
 
 /** Bump when seed shape changes so local browsers drop leftover dummy data. */
-const LOCAL_DEMO_SEED_REVISION = 6;
+const LOCAL_DEMO_SEED_REVISION = 7;
 const SEED_REVISION_KEY = "cubicle_local_demo_seed_revision";
 
 /** Legacy dummy rows from older local sandbox seeds — never re-insert these. */
@@ -79,9 +79,61 @@ export const LOCAL_DEMO_TEACHER: SessionUser = {
   notifyIssues: true,
 };
 
+/** Extra local-only staff so share search / long lists can be judged in the UI. */
+const SEED_STAFF: Array<{
+  first: string;
+  last: string;
+  department: string;
+  title: string;
+  avatarUrl?: string;
+}> = [
+  {
+    first: "Jordan",
+    last: "Lee",
+    department: "English",
+    title: "English Teacher",
+    avatarUrl: "/demo/jordan-lee.jpg",
+  },
+  { first: "Priya", last: "Patel", department: "Math", title: "Math Teacher" },
+  { first: "Marcus", last: "Chen", department: "Science", title: "Chemistry Teacher" },
+  { first: "Amina", last: "Hassan", department: "Social Studies", title: "History Teacher" },
+  { first: "Noah", last: "Brooks", department: "Phys Ed", title: "PE Teacher" },
+  { first: "Sofia", last: "Reyes", department: "Languages", title: "French Teacher" },
+  { first: "Liam", last: "Okoye", department: "Arts", title: "Visual Arts Teacher" },
+  { first: "Emily", last: "Park", department: "Math", title: "Math Teacher" },
+  { first: "Daniel", last: "Nguyen", department: "Science", title: "Physics Teacher" },
+  { first: "Chloe", last: "Martin", department: "English", title: "English Teacher" },
+  { first: "Hassan", last: "Ali", department: "Technology", title: "Computer Science" },
+  { first: "Maya", last: "Singh", department: "Guidance", title: "Counsellor" },
+  { first: "Owen", last: "Clarke", department: "Music", title: "Band Teacher" },
+  { first: "Isla", last: "Berg", department: "Science", title: "Biology Teacher" },
+];
+
+function seedStaffPersona(row: (typeof SEED_STAFF)[number]): SessionUser {
+  const slug = `${row.first}.${row.last}`.toLowerCase().replace(/\s+/g, "");
+  return {
+    id: `local-seed-staff-${slug}`,
+    email: `seed.${slug}@rbe.sk.ca`,
+    name: `${row.first} ${row.last}`,
+    firstName: row.first,
+    lastName: row.last,
+    role: "teacher",
+    avatarUrl: row.avatarUrl,
+    title: row.title,
+    department: row.department,
+    employmentType: "permanent",
+    notifyEmail: true,
+    notifyIssues: true,
+  };
+}
+
 const SEED_USERS: Array<{ persona: SessionUser; password: string }> = [
   { persona: LOCAL_DEMO_ADMIN, password: "demo-admin" },
   { persona: LOCAL_DEMO_TEACHER, password: "demo-teacher" },
+  ...SEED_STAFF.map((row) => ({
+    persona: seedStaffPersona(row),
+    password: "demo-staff",
+  })),
 ];
 
 function toUser(persona: SessionUser, password: string): User {

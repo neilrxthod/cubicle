@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
-import { User } from "lucide-react";
+import { Search, User, X } from "lucide-react";
 import {
   Dialog,
   DialogCancel,
@@ -19,7 +19,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { BookingLimitDialog } from "@/components/booking-limit-dialog";
 import { createBooking } from "@/lib/actions";
+import { slotLimitNoticeFromError } from "@/lib/booking/slot-rules";
+import type { SlotLimitNotice } from "@/lib/booking/slot-rules";
 import { getSessionSnapshot } from "@/lib/auth/session";
 import {
   getOnboarding,
@@ -59,6 +62,8 @@ export function BookDialog({
   const [purposeId, setPurposeId] = useState<BookingPurposeId>("class");
   /** null = just me; string = colleague id */
   const [shareWithId, setShareWithId] = useState<string | null>(null);
+  const [shareQuery, setShareQuery] = useState("");
+  const [slotLimit, setSlotLimit] = useState<SlotLimitNotice | null>(null);
 
   const session = getSessionSnapshot();
   const purpose = getBookingPurposeOption(purposeId);
@@ -88,6 +93,26 @@ export function BookDialog({
     ? colleagues.find((c) => c.id === shareWithId)
     : undefined;
 
+  const shareQueryNorm = shareQuery.trim().toLowerCase();
+  const filteredColleagues = useMemo(() => {
+    if (!shareQueryNorm) return colleagues;
+    return colleagues.filter((u) => {
+      const name = u.name.toLowerCase();
+      const email = u.email.toLowerCase();
+      return name.includes(shareQueryNorm) || email.includes(shareQueryNorm);
+    });
+  }, [colleagues, shareQueryNorm]);
+
+  const visibleColleagues = useMemo(() => {
+    if (
+      !selectedPartner ||
+      filteredColleagues.some((c) => c.id === selectedPartner.id)
+    ) {
+      return filteredColleagues;
+    }
+    return [selectedPartner, ...filteredColleagues];
+  }, [filteredColleagues, selectedPartner]);
+
   const dateLabel = (() => {
     try {
       return format(parseISO(date), "EEE, MMM d");
@@ -111,273 +136,324 @@ export function BookDialog({
     setError(null);
   }
 
+  function handleBook() {
+    setError(null);
+    const formData = new FormData();
+    formData.set("cartId", cart.id);
+    formData.set("date", date);
+    formData.set("period", period);
+
+    const teachingSubject = resolveSubject();
+    const otherNote = custom.trim();
+
+    if (purposeId === "class") {
+      if (teachingSubject) {
+        formData.set("subject", teachingSubject);
+        formData.set("className", teachingSubject);
+      } else {
+        formData.set("className", purpose.label);
+        formData.set("subject", purpose.label);
+      }
+    } else if (purposeId === "other" && otherNote) {
+      formData.set("className", purpose.label);
+      formData.set("subject", purpose.label);
+      formData.set("notes", otherNote);
+    } else {
+      formData.set("className", purpose.label);
+      formData.set("subject", purpose.label);
+    }
+
+    if (shareWithId) {
+      formData.set("sharedWithId", shareWithId);
+    }
+
+    startTransition(async () => {
+      const res = await createBooking(formData);
+      if (res && "error" in res && res.error) {
+        const limit = slotLimitNoticeFromError(res.error);
+        if (limit) {
+          setSlotLimit(limit);
+          return;
+        }
+        setError(res.error);
+        toast({
+          title: "Could not book cart",
+          description: res.error,
+          variant: "destructive",
+        });
+        router.refresh();
+        return;
+      }
+      if (res.ok && res.data?.shareSkipped) {
+        toast({
+          title: "Cart booked",
+          description:
+            "Share needs a DB update — run supabase/booking-share.sql in Supabase.",
+        });
+      } else {
+        toast({
+          title:
+            purposeId !== "class"
+              ? `${purpose.label} booked`
+              : selectedPartner
+                ? "Cart booked · invite sent"
+                : "Cart booked",
+          description: [
+            cart.name,
+            period,
+            purposeId !== "class" ? purpose.label : null,
+            selectedPartner ? `invite → ${selectedPartner.name}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        });
+      }
+      router.refresh();
+      onClose();
+    });
+  }
+
+  const meta = [
+    period,
+    dateLabel,
+    purposeId !== "class" ? purpose.label : null,
+    selectedPartner ? `with ${selectedPartner.name.split(/\s+/)[0]}` : null,
+  ]
+    .filter(Boolean)
+    .join("  ·  ");
+
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="gap-0 overflow-hidden rounded-2xl border-border/60 bg-white p-0 shadow-xl sm:max-w-sm">
+    <>
+    <Dialog open={!slotLimit} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        showCloseButton
+        className="w-[min(100%,27rem)] gap-0 overflow-hidden rounded-2xl border border-[var(--hairline-strong)] bg-white p-0 shadow-[var(--shadow-surface)] sm:max-w-[27rem]"
+      >
         <DialogHeader className="space-y-0 px-5 pb-0 pt-5 text-left">
           <DialogTitle className="text-[15px] font-light tracking-[-0.02em] text-neutral-950">
             Book {cart.name}?
           </DialogTitle>
           <DialogDescription className="mt-1 text-[12.5px] text-neutral-400">
-            {period}
-            <span className="text-neutral-300"> · </span>
-            {dateLabel}
-            {purposeId !== "class" ? (
-              <>
-                <span className="text-neutral-300"> · </span>
-                <span className="text-neutral-600">{purpose.label}</span>
-              </>
-            ) : null}
-            {selectedPartner ? (
-              <>
-                <span className="text-neutral-300"> · </span>
-                <span className="text-neutral-600">
-                  with {selectedPartner.name.split(/\s+/)[0]}
-                </span>
-              </>
-            ) : null}
+            {meta}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4 px-5 pb-5 pt-4">
-          {/* Purpose — all roles */}
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-medium tracking-[0.04em] text-neutral-400">
-              Purpose
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {BOOKING_PURPOSES.map((p) => {
-                const selected = purposeId === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    disabled={pending}
-                    onClick={() => {
-                      setPurposeId(p.id);
-                      if (p.id !== "other") setCustom("");
-                      setError(null);
-                    }}
-                    className={cn(
-                      "h-8 rounded-full px-3 text-[12.5px] font-medium transition-colors",
-                      selected
-                        ? p.id === "ap_exam"
-                          ? "bg-violet-700 text-white"
-                          : "bg-neutral-950 text-white"
-                        : "border border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:text-neutral-900",
-                    )}
-                  >
-                    {p.label}
-                  </button>
-                );
-              })}
-            </div>
-            {purposeId === "other" ? (
-              <Input
-                id="book-custom"
-                value={custom}
-                onChange={(e) => setCustom(e.target.value)}
-                placeholder="What for? (optional)"
-                disabled={pending}
-                autoComplete="off"
-                className="mt-1 h-9 rounded-lg border-neutral-200 bg-white text-[13px] tracking-[-0.01em] shadow-none placeholder:text-neutral-300"
-              />
-            ) : null}
-          </div>
-
-          {/* Share row */}
-          <div className="space-y-2.5">
-            <p className="text-[11px] font-medium tracking-[0.04em] text-neutral-400">
-              Invite to share
-            </p>
-            <p className="text-[11px] leading-snug text-neutral-400">
-              They must accept before the cart is shared.
-            </p>
-            {colleagues.length > 0 ? (
-              <div
-                className="flex gap-3 overflow-x-auto pb-1 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                role="listbox"
-                aria-label="Share with colleague"
-              >
-                <ShareIconButton
-                  selected={shareWithId === null}
+        <div className="flex flex-col gap-5 px-5 pt-5">
+          <div className="flex flex-nowrap gap-1.5">
+            {BOOKING_PURPOSES.map((p) => {
+              const selected = purposeId === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
                   disabled={pending}
-                  label="Just me"
                   onClick={() => {
-                    setShareWithId(null);
+                    setPurposeId(p.id);
+                    if (p.id !== "other") setCustom("");
                     setError(null);
                   }}
-                  face={
-                    <span
-                      className={cn(
-                        "flex size-full items-center justify-center",
-                        shareWithId === null
-                          ? "bg-neutral-950 text-white"
-                          : "bg-neutral-100 text-neutral-500",
-                      )}
-                    >
-                      <User className="size-4" strokeWidth={1.75} />
-                    </span>
-                  }
-                  caption={
-                    <span
-                      className={cn(
-                        "max-w-[3rem] truncate text-center text-[10px] font-medium leading-tight",
-                        shareWithId === null
-                          ? "text-neutral-950"
-                          : "text-neutral-400",
-                      )}
-                    >
-                      You
-                    </span>
-                  }
-                />
-
-                {colleagues.map((u) => {
-                  const selected = shareWithId === u.id;
-                  const first = u.name.trim().split(/\s+/)[0] || u.name;
-                  return (
-                    <ShareIconButton
-                      key={u.id}
-                      selected={selected}
-                      disabled={pending}
-                      label={u.name}
-                      onClick={() => togglePartner(u.id)}
-                      face={
-                        u.avatarUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={u.avatarUrl}
-                            alt=""
-                            referrerPolicy="no-referrer"
-                            draggable={false}
-                            className="size-full object-cover"
-                          />
-                        ) : (
-                          <span
-                            className={cn(
-                              "flex size-full items-center justify-center text-[11px] font-medium",
-                              selected
-                                ? "bg-neutral-950 text-white"
-                                : "bg-neutral-100 text-neutral-600",
-                            )}
-                          >
-                            {initials(u.name)}
-                          </span>
-                        )
-                      }
-                      caption={
-                        <span
-                          className={cn(
-                            "max-w-[3rem] truncate text-center text-[10px] font-medium leading-tight",
-                            selected ? "text-neutral-950" : "text-neutral-400",
-                          )}
-                        >
-                          {first}
-                        </span>
-                      }
-                    />
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-[12px] text-neutral-400">
-                No other staff signed in yet — only you can be on this slot.
-              </p>
-            )}
+                  className={cn(
+                    "h-8 rounded-full px-3 text-[12.5px] font-medium transition-colors",
+                    selected
+                      ? p.id === "ap_exam"
+                        ? "bg-violet-700 text-white"
+                        : "bg-neutral-950 text-white"
+                      : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200/80 hover:text-neutral-900",
+                  )}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
           </div>
+          {purposeId === "other" ? (
+            <Input
+              id="book-custom"
+              value={custom}
+              onChange={(e) => setCustom(e.target.value)}
+              placeholder="What for? (optional)"
+              disabled={pending}
+              autoComplete="off"
+              className="-mt-2 h-9 rounded-lg border-neutral-200 bg-white text-[13px] tracking-[-0.01em] shadow-none placeholder:text-neutral-300"
+            />
+          ) : null}
+
+          {colleagues.length > 0 ? (
+            <ShareColleagueGrid
+              query={shareQuery}
+              onQueryChange={setShareQuery}
+              colleagues={visibleColleagues}
+              shareWithId={shareWithId}
+              pending={pending}
+              showSearch={colleagues.length > 6}
+              empty={
+                shareQueryNorm.length > 0 && visibleColleagues.length === 0
+              }
+              onJustMe={() => {
+                setShareWithId(null);
+                setError(null);
+              }}
+              onToggle={togglePartner}
+            />
+          ) : null}
 
           {error ? (
             <p className="text-[12.5px] font-medium text-red-600">{error}</p>
           ) : null}
+        </div>
 
-          <div className="flex items-center justify-end gap-3">
-            <DialogCancel onClick={onClose}>Cancel</DialogCancel>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                setError(null);
-                const formData = new FormData();
-                formData.set("cartId", cart.id);
-                formData.set("date", date);
-                formData.set("period", period);
-
-                const teachingSubject = resolveSubject();
-                const otherNote = custom.trim();
-
-                if (purposeId === "class") {
-                  // Regular class — keep teaching subject when known
-                  if (teachingSubject) {
-                    formData.set("subject", teachingSubject);
-                    formData.set("className", teachingSubject);
-                  } else {
-                    formData.set("className", purpose.label);
-                    formData.set("subject", purpose.label);
-                  }
-                } else if (purposeId === "other" && otherNote) {
-                  // Store label so board can tag "Other"; keep free text in notes
-                  formData.set("className", purpose.label);
-                  formData.set("subject", purpose.label);
-                  formData.set("notes", otherNote);
-                } else {
-                  formData.set("className", purpose.label);
-                  formData.set("subject", purpose.label);
-                }
-
-                if (shareWithId) {
-                  formData.set("sharedWithId", shareWithId);
-                }
-                startTransition(async () => {
-                  const res = await createBooking(formData);
-                  if (res && "error" in res && res.error) {
-                    setError(res.error);
-                    toast({
-                      title: "Could not book cart",
-                      description: res.error,
-                      variant: "destructive",
-                    });
-                    router.refresh();
-                    return;
-                  }
-                  if (res.ok && res.data?.shareSkipped) {
-                    toast({
-                      title: "Cart booked",
-                      description:
-                        "Share needs a DB update — run supabase/booking-share.sql in Supabase.",
-                    });
-                  } else {
-                    toast({
-                      title:
-                        purposeId !== "class"
-                          ? `${purpose.label} booked`
-                          : selectedPartner
-                            ? "Cart booked · invite sent"
-                            : "Cart booked",
-                      description: [
-                        cart.name,
-                        period,
-                        purposeId !== "class" ? purpose.label : null,
-                        selectedPartner
-                          ? `invite → ${selectedPartner.name}`
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · "),
-                    });
-                  }
-                  router.refresh();
-                  onClose();
-                });
-              }}
-              className="h-9 rounded-lg bg-foreground px-5 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {pending ? "Booking…" : "Book"}
-            </button>
-          </div>
+        <div className="flex items-center justify-end gap-3 px-5 py-5">
+          <DialogCancel onClick={onClose}>Cancel</DialogCancel>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={handleBook}
+            className="inline-flex h-9 min-w-[5.5rem] items-center justify-center rounded-full bg-neutral-950 px-5 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {pending ? "Booking…" : "Book"}
+          </button>
         </div>
       </DialogContent>
     </Dialog>
+    <BookingLimitDialog
+      notice={slotLimit}
+      onClose={() => {
+        setSlotLimit(null);
+        onClose();
+      }}
+    />
+    </>
+  );
+}
+
+function ShareFace({ user }: { user: StaffUser }) {
+  if (user.avatarUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={user.avatarUrl}
+        alt=""
+        referrerPolicy="no-referrer"
+        draggable={false}
+        loading="lazy"
+        decoding="async"
+        className="size-full object-cover"
+      />
+    );
+  }
+  return (
+    <span className="flex size-full items-center justify-center bg-neutral-100 text-[11px] font-medium tracking-[-0.02em] text-neutral-600">
+      {initials(user.name)}
+    </span>
+  );
+}
+
+function ShareColleagueGrid({
+  query,
+  onQueryChange,
+  colleagues,
+  shareWithId,
+  pending,
+  showSearch,
+  empty,
+  onJustMe,
+  onToggle,
+}: {
+  query: string;
+  onQueryChange: (value: string) => void;
+  colleagues: StaffUser[];
+  shareWithId: string | null;
+  pending: boolean;
+  showSearch: boolean;
+  empty: boolean;
+  onJustMe: () => void;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      {showSearch ? (
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400"
+            strokeWidth={2}
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            placeholder="Find someone"
+            autoComplete="off"
+            spellCheck={false}
+            disabled={pending}
+            className={cn(
+              "h-8 w-full rounded-full border-0 bg-neutral-100 py-0 pl-8 pr-8",
+              "text-[13px] tracking-[-0.01em] text-neutral-950 outline-none",
+              "placeholder:text-neutral-400",
+              "disabled:opacity-50",
+              "[appearance:none] [&::-webkit-search-cancel-button]:hidden",
+            )}
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={() => onQueryChange("")}
+              className="absolute right-2 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-neutral-400 hover:text-neutral-700"
+              aria-label="Clear search"
+            >
+              <X className="size-3.5" strokeWidth={2} />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div
+        className="max-h-[11.5rem] overflow-y-auto overscroll-contain"
+        role="listbox"
+        aria-label="Share with colleague"
+      >
+        {empty ? (
+          <p className="py-6 text-center text-[12.5px] text-neutral-400">
+            No match
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-x-3.5 gap-y-3">
+            <ShareIconButton
+              selected={shareWithId === null}
+              disabled={pending}
+              label="Just me"
+              onClick={onJustMe}
+              face={
+                <span
+                  className={cn(
+                    "flex size-full items-center justify-center",
+                    shareWithId === null
+                      ? "bg-neutral-950 text-white"
+                      : "bg-neutral-100 text-neutral-500",
+                  )}
+                >
+                  <User className="size-4" strokeWidth={1.75} />
+                </span>
+              }
+              caption="You"
+            />
+            {colleagues.map((u) => {
+              const selected = shareWithId === u.id;
+              return (
+                <ShareIconButton
+                  key={u.id}
+                  selected={selected}
+                  disabled={pending}
+                  label={u.name}
+                  onClick={() => onToggle(u.id)}
+                  face={<ShareFace user={u} />}
+                  caption={u.name.trim().split(/\s+/)[0] || u.name}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -402,7 +478,7 @@ function ShareIconButton({
   label: string;
   onClick: () => void;
   face: ReactNode;
-  caption?: ReactNode;
+  caption: string;
 }) {
   return (
     <button
@@ -414,28 +490,32 @@ function ShareIconButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex w-12 shrink-0 flex-col items-center gap-1 outline-none",
+        "flex w-11 shrink-0 flex-col items-center gap-1 outline-none",
         "disabled:pointer-events-none disabled:opacity-40",
-        "rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/15 focus-visible:ring-offset-2",
+        "rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/15",
       )}
     >
       <span
         className={cn(
-          "box-border flex size-11 shrink-0 items-center justify-center rounded-full p-[2px] transition-[background-color,transform]",
+          "box-border flex size-10 shrink-0 items-center justify-center rounded-full p-[1.5px] transition-transform",
           selected ? "bg-neutral-950" : "bg-transparent",
           "active:scale-[0.97]",
         )}
       >
-        <span
-          className={cn(
-            "size-full overflow-hidden rounded-full",
-            !selected && "ring-1 ring-inset ring-black/[0.1]",
-          )}
-        >
+        <span className="size-full overflow-hidden rounded-full">
           {face}
         </span>
       </span>
-      {caption}
+      <span
+        className={cn(
+          "max-w-[2.75rem] truncate text-center text-[10px] leading-tight",
+          selected
+            ? "font-medium text-neutral-950"
+            : "font-normal text-neutral-400",
+        )}
+      >
+        {caption}
+      </span>
     </button>
   );
 }
