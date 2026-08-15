@@ -10,9 +10,10 @@ import { resolveOfferedBooking } from "@/lib/booking/swap-rules"
 import { usePlatformStore } from "@/lib/data/platform-store"
 import { cn } from "@/lib/utils"
 import {
-  inviteAcceptEmphasizedClassName,
+  inviteAcceptClassName,
   inviteDeclineClassName,
 } from "@/lib/ui/invite-actions"
+import { InviteActionBusy } from "@/components/ui/invite-action-busy"
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -81,7 +82,10 @@ export function SwapRequestsList({
 }) {
   const router = useRouter()
   const platform = usePlatformStore()
-  const [busyId, setBusyId] = useState<string | null>(null)
+  const [busy, setBusy] = useState<{
+    id: string
+    action: "accept" | "decline"
+  } | null>(null)
 
   const cartMap = new Map(carts.map((c) => [c.id, c]))
   const bookingMap = new Map(bookings.map((b) => [b.id, b]))
@@ -99,10 +103,11 @@ export function SwapRequestsList({
 
   async function run(
     id: string,
+    kind: "accept" | "decline",
     action: () => Promise<{ ok: boolean; error?: string }>,
     okTitle: string,
   ) {
-    setBusyId(id)
+    setBusy({ id, action: kind })
     try {
       const res = await action()
       if (res && "error" in res && res.error) {
@@ -116,17 +121,19 @@ export function SwapRequestsList({
       toast({ title: okTitle })
       router.refresh()
     } finally {
-      setBusyId(null)
+      setBusy(null)
     }
   }
 
-  const blocked = busyId !== null
+  const blocked = busy !== null
 
   return (
     <div className="flex flex-col gap-2.5">
       {requests.map((req) => {
         const booking = bookingMap.get(req.bookingId)
-        const busy = busyId === req.id
+        const thisBusy = busy?.id === req.id
+        const accepting = busy?.id === req.id && busy.action === "accept"
+        const declining = busy?.id === req.id && busy.action === "decline"
 
         // Target slot gone — still allow cancel when you sent it
         if (!booking) {
@@ -154,15 +161,19 @@ export function SwapRequestsList({
                 onClick={() =>
                   void run(
                     req.id,
+                    "decline",
                     () => declineSwap(req.id),
                     "Request cancelled",
                   )
                 }
                 className={inviteDeclineClassName(
-                  "h-9 w-full rounded-lg px-3 text-[12.5px] sm:w-auto",
+                  cn(
+                    "h-9 w-full min-w-[5.5rem] rounded-lg px-3 text-[12.5px] sm:w-auto",
+                    declining && "disabled:opacity-100",
+                  ),
                 )}
               >
-                {busy ? "…" : "Cancel"}
+                {declining ? <InviteActionBusy /> : "Cancel"}
               </button>
             </article>
           )
@@ -215,12 +226,11 @@ export function SwapRequestsList({
         return (
           <article
             key={req.id}
+            aria-busy={thisBusy}
             className={cn(
-              "flex flex-col gap-3 rounded-xl border bg-white p-3.5 sm:flex-row sm:items-center sm:gap-4 sm:p-4",
+              "flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-3.5 sm:flex-row sm:items-center sm:gap-4 sm:p-4",
               "shadow-[0_1px_0_rgba(0,0,0,0.03)]",
-              isOutgoing
-                ? "border-neutral-200"
-                : "border-red-200/90 border-l-[3px] border-l-red-500",
+              thisBusy && "pointer-events-none",
             )}
           >
             <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -244,52 +254,79 @@ export function SwapRequestsList({
               <button
                 type="button"
                 disabled={blocked}
+                aria-busy={declining}
                 onClick={() =>
                   void run(
                     req.id,
+                    "decline",
                     () => declineSwap(req.id),
                     "Request cancelled",
                   )
                 }
                 className={inviteDeclineClassName(
-                  "h-9 w-full rounded-lg px-3 text-[12.5px] sm:w-auto sm:shrink-0",
+                  cn(
+                    "h-9 w-full min-w-[5.5rem] rounded-lg px-3 text-[12.5px] sm:w-auto sm:shrink-0",
+                    declining && "disabled:opacity-100",
+                  ),
                 )}
               >
-                {busy ? "…" : "Cancel"}
+                {declining ? <InviteActionBusy /> : "Cancel"}
               </button>
             ) : (
               <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:items-center">
                 <button
                   type="button"
                   disabled={blocked}
+                  aria-busy={declining}
                   onClick={() =>
                     void run(
                       req.id,
+                      "decline",
                       () => declineSwap(req.id),
                       "Swap declined",
                     )
                   }
                   className={inviteDeclineClassName(
-                    "h-9 rounded-lg px-3 text-[12.5px]",
+                    cn(
+                      "h-9 min-w-[5.5rem] rounded-lg px-3 text-[12.5px]",
+                      declining
+                        ? "disabled:opacity-100"
+                        : thisBusy
+                          ? "opacity-40 disabled:opacity-40"
+                          : null,
+                    ),
                   )}
                 >
-                  {busy ? "…" : "Decline"}
+                  {declining ? <InviteActionBusy /> : "Decline"}
                 </button>
                 <button
                   type="button"
                   disabled={blocked}
+                  aria-busy={accepting}
                   onClick={() =>
                     void run(
                       req.id,
+                      "accept",
                       () => acceptSwap(req.id),
                       isExchange ? "Carts exchanged" : "Slot handed off",
                     )
                   }
-                  className={inviteAcceptEmphasizedClassName(
-                    "h-9 rounded-lg px-3 text-[12.5px]",
+                  className={inviteAcceptClassName(
+                    cn(
+                      "h-9 min-w-[5.5rem] rounded-lg px-3 text-[12.5px]",
+                      accepting
+                        ? "disabled:opacity-100"
+                        : thisBusy
+                          ? "opacity-40 disabled:opacity-40"
+                          : null,
+                    ),
                   )}
                 >
-                  {busy ? "…" : "Accept"}
+                  {accepting ? (
+                    <InviteActionBusy spinnerClassName="text-white" />
+                  ) : (
+                    "Accept"
+                  )}
                 </button>
               </div>
             )}

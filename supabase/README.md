@@ -44,6 +44,7 @@ Run each file fully in the Supabase **SQL Editor** and wait for **Success** befo
 | 9 | `swap-accept.sql` | Atomic two-way cart swap accept, offered cart column, owner RLS |
 | 10 | `booking-policy-max-slots.sql` | Admin max cart slots per teacher per day (`max_slots_per_teacher_per_day`) |
 | 11 | `booking-share.sql` | Share / borrow co-teacher on a booking (dual PFPs on board) |
+| 11b | `booking-share-resolve.sql` | Teachers can accept / decline a share invite (RPC) |
 | 12 | `cart-laptop-brand.sql` | Dell / Chromebook fleet on inventory carts (`laptop_brand`) |
 | 13 | `cart-laptop-codes.sql` | Per-cart laptop case codes for QR labels (`laptop_codes`) |
 

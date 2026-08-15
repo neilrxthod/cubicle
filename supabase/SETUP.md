@@ -31,6 +31,8 @@ Run each file fully, wait for **Success**:
 | 6 | `employment-type.sql` | Permanent / sub / temp + blue tick |
 | 7 | `issues-delete.sql` | Allow reporters/admins to **delete issues** from Postgres |
 | 8 | `swap-accept.sql` | **Two-way cart swap accept** (owners can accept; both slots exchange) |
+| 8b | `booking-share.sql` | Share / borrow columns on bookings |
+| 8c | `booking-share-resolve.sql` | Teachers can accept / decline share invites |
 | 9 | `cart-laptop-brand.sql` | Dell / Chromebook fleet on inventory carts |
 | 10 | `cart-laptop-codes.sql` | Laptop case codes for QR labels |
 

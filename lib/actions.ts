@@ -565,13 +565,7 @@ export async function acceptShareInvite(bookingId: string): Promise<Result> {
 
   if (isRemoteEnabled()) {
     const { dbResolveShareInvite } = await import("@/lib/supabase/platform-api");
-    const { error } = await dbResolveShareInvite(bookingId, {
-      sharedWithId: session.id,
-      sharedWithName: session.name,
-      sharedWithAvatarUrl: session.avatarUrl ?? null,
-      clearPending: true,
-      clearDeclined: true,
-    });
+    const { error } = await dbResolveShareInvite(bookingId, "accept");
     if (error) return { ok: false, error };
     return refreshRemote();
   }
@@ -615,17 +609,10 @@ export async function declineShareInvite(bookingId: string): Promise<Result> {
 
   if (isRemoteEnabled()) {
     const { dbResolveShareInvite } = await import("@/lib/supabase/platform-api");
-    const { error } = await dbResolveShareInvite(bookingId, {
-      clearPending: true,
-      declinedBy: inviteeDeclined
-        ? {
-            id: session.id,
-            name: session.name,
-            avatarUrl: session.avatarUrl ?? null,
-          }
-        : null,
-      clearDeclined: !inviteeDeclined,
-    });
+    const { error } = await dbResolveShareInvite(
+      bookingId,
+      inviteeDeclined ? "decline" : "cancel",
+    );
     if (error) return { ok: false, error };
     return refreshRemote();
   }
@@ -669,10 +656,7 @@ export async function dismissShareDeclineNotice(
 
   if (isRemoteEnabled()) {
     const { dbResolveShareInvite } = await import("@/lib/supabase/platform-api");
-    const { error } = await dbResolveShareInvite(bookingId, {
-      clearPending: false,
-      clearDeclined: true,
-    });
+    const { error } = await dbResolveShareInvite(bookingId, "dismiss");
     if (error) return { ok: false, error };
     return refreshRemote();
   }

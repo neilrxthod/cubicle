@@ -2234,7 +2234,11 @@ function ShareInviteSlotActions({
             ),
           )}
         >
-          {busy === "accept" ? <InviteActionBusy /> : "Accept"}
+          {busy === "accept" ? (
+            <InviteActionBusy spinnerClassName="text-white" />
+          ) : (
+            "Accept"
+          )}
         </button>
       </div>
     </div>

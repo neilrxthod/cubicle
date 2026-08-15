@@ -14,7 +14,7 @@ import { usePlatformStore } from "@/lib/data/platform-store"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import {
-  inviteAcceptEmphasizedClassName,
+  inviteAcceptClassName,
   inviteDeclineClassName,
 } from "@/lib/ui/invite-actions"
 import { InviteActionBusy } from "@/components/ui/invite-action-busy"
@@ -175,9 +175,8 @@ export function ShareInvitesList({
             key={booking.id}
             aria-busy={thisBusy}
             className={cn(
-              "flex flex-col gap-3 rounded-xl border border-red-200/90 bg-white p-3.5 sm:flex-row sm:items-center sm:gap-4 sm:p-4",
+              "flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-3.5 sm:flex-row sm:items-center sm:gap-4 sm:p-4",
               "shadow-[0_1px_0_rgba(0,0,0,0.03)]",
-              "border-l-[3px] border-l-red-500",
               thisBusy && "pointer-events-none",
             )}
           >
@@ -210,7 +209,7 @@ export function ShareInvitesList({
                 onClick={() => void run(booking.id, "decline")}
                 className={inviteDeclineClassName(
                   cn(
-                    "h-9 min-w-[6.25rem] rounded-lg px-3 text-[12.5px]",
+                    "h-9 min-w-[5.5rem] rounded-lg px-3 text-[12.5px]",
                     declining
                       ? "disabled:opacity-100"
                       : thisBusy
@@ -219,20 +218,16 @@ export function ShareInvitesList({
                   ),
                 )}
               >
-                {declining ? (
-                  <InviteActionBusy>Declining</InviteActionBusy>
-                ) : (
-                  "Decline"
-                )}
+                {declining ? <InviteActionBusy /> : "Decline"}
               </button>
               <button
                 type="button"
                 disabled={blocked}
                 aria-busy={accepting}
                 onClick={() => void run(booking.id, "accept")}
-                className={inviteAcceptEmphasizedClassName(
+                className={inviteAcceptClassName(
                   cn(
-                    "h-9 min-w-[6.25rem] rounded-lg px-3 text-[12.5px]",
+                    "h-9 min-w-[5.5rem] rounded-lg px-3 text-[12.5px]",
                     accepting
                       ? "disabled:opacity-100"
                       : thisBusy
@@ -242,9 +237,7 @@ export function ShareInvitesList({
                 )}
               >
                 {accepting ? (
-                  <InviteActionBusy spinnerClassName="text-white">
-                    Accepting
-                  </InviteActionBusy>
+                  <InviteActionBusy spinnerClassName="text-white" />
                 ) : (
                   "Accept"
                 )}
@@ -270,9 +263,8 @@ export function ShareInvitesList({
             key={`declined-${booking.id}`}
             aria-busy={dismissing}
             className={cn(
-              "flex flex-col gap-3 rounded-xl border border-red-200/90 bg-white p-3.5 sm:flex-row sm:items-center sm:gap-4 sm:p-4",
+              "flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-3.5 sm:flex-row sm:items-center sm:gap-4 sm:p-4",
               "shadow-[0_1px_0_rgba(0,0,0,0.03)]",
-              "border-l-[3px] border-l-red-500",
               dismissing && "pointer-events-none",
             )}
           >
@@ -305,11 +297,7 @@ export function ShareInvitesList({
                 "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-900/15",
               )}
             >
-              {dismissing ? (
-                <InviteActionBusy>Dismissing</InviteActionBusy>
-              ) : (
-                "Dismiss"
-              )}
+              {dismissing ? <InviteActionBusy /> : "Dismiss"}
             </button>
           </article>
         )
@@ -363,11 +351,7 @@ export function ShareInvitesList({
                 "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-900/15",
               )}
             >
-              {cancelling ? (
-                <InviteActionBusy>Cancelling</InviteActionBusy>
-              ) : (
-                "Cancel"
-              )}
+              {cancelling ? <InviteActionBusy /> : "Cancel"}
             </button>
           </article>
         )

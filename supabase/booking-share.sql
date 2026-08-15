@@ -26,3 +26,7 @@ create index if not exists bookings_share_pending_idx
   where share_pending_id is not null;
 
 notify pgrst, 'reload schema';
+
+-- Teachers still cannot UPDATE another teacher's booking (RLS).
+-- After this file succeeds, run booking-share-resolve.sql so invitees
+-- can accept / decline.

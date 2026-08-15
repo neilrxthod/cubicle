@@ -400,75 +400,27 @@ export async function dbCreateBooking(input: {
   };
 }
 
-/** Accept / decline / clear a pending share invite on a booking. */
+/** Accept / decline / cancel / dismiss a share invite (security-definer RPC). */
 export async function dbResolveShareInvite(
   bookingId: string,
-  next: {
-    sharedWithId?: string | null;
-    sharedWithName?: string | null;
-    sharedWithAvatarUrl?: string | null;
-    clearPending: boolean;
-    /** When invitee declines — notify the booking owner. */
-    declinedBy?: {
-      id: string;
-      name: string;
-      avatarUrl?: string | null;
-    } | null;
-    /** Clear a previous decline notice (owner dismiss, or re-invite / accept). */
-    clearDeclined?: boolean;
-  },
+  action: "accept" | "decline" | "cancel" | "dismiss",
 ): Promise<{ error?: string }> {
   const supabase = client();
-  const payload: Record<string, unknown> = {};
-  if (next.clearPending) {
-    payload.share_pending_id = null;
-    payload.share_pending_name = null;
-    payload.share_pending_avatar_url = null;
+  const { error } = await supabase.rpc("resolve_share_invite", {
+    p_booking_id: bookingId,
+    p_action: action,
+  });
+  if (!error) return {};
+  const msg = error.message ?? "";
+  if (
+    /could not find the function|schema cache|does not exist|42883/i.test(msg)
+  ) {
+    return {
+      error:
+        "Share invites need a database update. Run supabase/booking-share-resolve.sql in the Supabase SQL Editor.",
+    };
   }
-  if (next.sharedWithId !== undefined) {
-    payload.shared_with_id = next.sharedWithId;
-    payload.shared_with_name = next.sharedWithName ?? null;
-    payload.shared_with_avatar_url = next.sharedWithAvatarUrl ?? null;
-  }
-  if (next.declinedBy) {
-    payload.share_declined_by_id = next.declinedBy.id;
-    payload.share_declined_by_name = next.declinedBy.name;
-    payload.share_declined_by_avatar_url = next.declinedBy.avatarUrl ?? null;
-    payload.share_declined_at = new Date().toISOString();
-  }
-  if (next.clearDeclined) {
-    payload.share_declined_by_id = null;
-    payload.share_declined_by_name = null;
-    payload.share_declined_by_avatar_url = null;
-    payload.share_declined_at = null;
-  }
-  let { error } = await supabase
-    .from("bookings")
-    .update(payload)
-    .eq("id", bookingId);
-  // Soft-fail decline columns if migration not applied yet.
-  if (error && /share_declined/i.test(error.message ?? "")) {
-    const fallback: Record<string, unknown> = {};
-    if (next.clearPending) {
-      fallback.share_pending_id = null;
-      fallback.share_pending_name = null;
-      fallback.share_pending_avatar_url = null;
-    }
-    if (next.sharedWithId !== undefined) {
-      fallback.shared_with_id = next.sharedWithId;
-      fallback.shared_with_name = next.sharedWithName ?? null;
-      fallback.shared_with_avatar_url = next.sharedWithAvatarUrl ?? null;
-    }
-    if (Object.keys(fallback).length === 0) {
-      return { error: error.message };
-    }
-    const retry = await supabase
-      .from("bookings")
-      .update(fallback)
-      .eq("id", bookingId);
-    error = retry.error;
-  }
-  return { error: error?.message };
+  return { error: msg };
 }
 
 export async function dbDeleteBooking(bookingId: string): Promise<{ error?: string }> {

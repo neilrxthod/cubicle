@@ -112,6 +112,9 @@ create index if not exists bookings_share_pending_idx
   on public.bookings (share_pending_id)
   where share_pending_id is not null;
 
+-- Invitees cannot UPDATE another teacher's booking under RLS.
+-- Run booking-share-resolve.sql so teachers can accept / decline.
+
 -- ---------------------------------------------------------------------------
 -- Issues
 -- ---------------------------------------------------------------------------

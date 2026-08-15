@@ -88,6 +88,8 @@ Copy from `.env.local.example`.
 
 **If Dell / Chromebook logos never appear on the daily board or Inventory:** run file **9** (`cart-laptop-brand.sql`), then edit each cart and set Dell or Chromebook. The UI cannot persist a brand until that column exists.
 
+**If teachers cannot accept a share invite:** run `supabase/booking-share-resolve.sql`. Invitees are not the booking owner, so they cannot write the row until that function exists.
+
 Then seed real staff:
 
 ```sql
