@@ -33,7 +33,7 @@ export function TeacherMobileTabBar({
           icon={<QrCode className="size-5" strokeWidth={1.75} />}
         />
         <TabButton
-          label="You"
+          label="Profile"
           active={tab === "profile"}
           onClick={onProfile}
           icon={

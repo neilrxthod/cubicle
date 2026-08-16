@@ -74,32 +74,53 @@ function resolveHit(raw: string, carts: Cart[]): ScanHit | "foreign" {
     : { kind: "missing", title: target.code };
 }
 
-function Corner({
-  pos,
-  locked,
-  className,
-}: {
-  pos: "tl" | "tr" | "bl" | "br";
-  locked: boolean;
-  className?: string;
-}) {
+/** Viewfinder: thin ring + thick corners share one rounded-rect path. */
+function ScanReticle({ locked }: { locked: boolean }) {
+  const size = 280;
+  const stroke = 3;
+  const inset = stroke / 2;
+  const radius = 22;
+  const arm = 36;
+  const x0 = inset;
+  const y0 = inset;
+  const x1 = size - inset;
+  const y1 = size - inset;
+
+  const corners = [
+    `M ${x0} ${y0 + arm} L ${x0} ${y0 + radius} Q ${x0} ${y0} ${x0 + radius} ${y0} L ${x0 + arm} ${y0}`,
+    `M ${x1 - arm} ${y0} L ${x1 - radius} ${y0} Q ${x1} ${y0} ${x1} ${y0 + radius} L ${x1} ${y0 + arm}`,
+    `M ${x0} ${y1 - arm} L ${x0} ${y1 - radius} Q ${x0} ${y1} ${x0 + radius} ${y1} L ${x0 + arm} ${y1}`,
+    `M ${x1 - arm} ${y1} L ${x1 - radius} ${y1} Q ${x1} ${y1} ${x1} ${y1 - radius} L ${x1} ${y1 - arm}`,
+  ].join(" ");
+
   return (
-    <span
+    <svg
+      viewBox={`0 0 ${size} ${size}`}
+      className="pointer-events-none absolute inset-0 size-full"
       aria-hidden
-      className={cn(
-        "pointer-events-none absolute size-11",
-        pos[0] === "t" ? "top-0" : "bottom-0",
-        pos[1] === "l" ? "left-0" : "right-0",
-        pos === "tl" && "rounded-tl-[22px]",
-        pos === "tr" && "rounded-tr-[22px]",
-        pos === "bl" && "rounded-bl-[22px]",
-        pos === "br" && "rounded-br-[22px]",
-        pos[0] === "t" ? "border-t-[3px]" : "border-b-[3px]",
-        pos[1] === "l" ? "border-l-[3px]" : "border-r-[3px]",
-        locked ? "border-white" : "border-white/90",
-        className,
-      )}
-    />
+    >
+      <rect
+        x={inset}
+        y={inset}
+        width={size - stroke}
+        height={size - stroke}
+        rx={radius}
+        ry={radius}
+        fill="none"
+        stroke="white"
+        strokeOpacity={locked ? 0.18 : 0.3}
+        strokeWidth={1.15}
+      />
+      <path
+        d={corners}
+        fill="none"
+        stroke="white"
+        strokeWidth={stroke}
+        strokeLinecap="butt"
+        strokeLinejoin="round"
+        opacity={locked ? 1 : 0.96}
+      />
+    </svg>
   );
 }
 
@@ -193,16 +214,7 @@ function TeacherScanHome({
     <div className="flex h-full min-h-0 w-full flex-col bg-[#f2f2f7]">
       <header className="flex items-center justify-between gap-3 px-5 pt-[max(1.15rem,env(safe-area-inset-top))]">
         <CubicleWordmark size="sm" href={null} className="font-bold" />
-        <div className="flex items-center gap-3">
-          <LocalPerspectiveSwitch user={user} />
-          <button
-            type="button"
-            onClick={() => void signOutAction()}
-            className="text-[15px] font-medium tracking-[-0.02em] text-neutral-400 active:text-neutral-700"
-          >
-            Sign Out
-          </button>
-        </div>
+        <LocalPerspectiveSwitch user={user} />
       </header>
 
       <main className="mx-auto flex w-full max-w-[22.5rem] flex-1 flex-col overflow-y-auto px-5 pb-4 pt-6">
@@ -553,35 +565,35 @@ function TeacherScanCamera({
         <LocalPerspectiveSwitch user={user} />
       </header>
 
-      <div className="relative z-10 flex flex-1 flex-col items-center px-5 pt-8">
-        <div
-          className={cn(
-            "relative size-[min(72vw,17.5rem)] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
-            locking && "scale-[0.985]",
-          )}
-        >
-          <div className="absolute inset-0 rounded-[12px] border border-white/35" />
-          <Corner pos="tl" locked={locking || Boolean(hit)} />
-          <Corner pos="tr" locked={locking || Boolean(hit)} />
-          <Corner pos="bl" locked={locking || Boolean(hit)} />
-          <Corner pos="br" locked={locking || Boolean(hit)} />
-          {simulate && !hit ? (
-            <button
-              type="button"
-              disabled={locking || targets.length === 0}
-              onClick={() => {
-                const pick = targets[0];
-                if (pick) simulateScan(pick.payload);
-              }}
-              className="absolute inset-0 rounded-[28px]"
-              aria-label="Simulate a scan"
-            />
-          ) : null}
-        </div>
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center px-5">
+        <div className="flex flex-1 flex-col items-center justify-center">
+          <div
+            className={cn(
+              "relative size-[min(72vw,17.5rem)] overflow-visible rounded-[22px]",
+              "transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+              locking && "scale-[0.985]",
+            )}
+            style={{ boxShadow: "0 0 0 200vmax rgba(0,0,0,0.5)" }}
+          >
+            <ScanReticle locked={locking || Boolean(hit)} />
+            {simulate && !hit ? (
+              <button
+                type="button"
+                disabled={locking || targets.length === 0}
+                onClick={() => {
+                  const pick = targets[0];
+                  if (pick) simulateScan(pick.payload);
+                }}
+                className="absolute inset-0 rounded-[22px]"
+                aria-label="Simulate a scan"
+              />
+            ) : null}
+          </div>
 
-        <p className="mt-6 max-w-[16rem] text-center text-[13px] font-medium tracking-[-0.01em] text-white/70">
-          {hint ?? liveHint}
-        </p>
+          <p className="relative z-[1] mt-7 max-w-[17rem] text-center text-[13px] font-medium tracking-[-0.015em] text-white/75">
+            {hint ?? liveHint}
+          </p>
+        </div>
 
         {simulate && !hit ? (
           <div className="mt-8 w-full max-w-[22rem] flex-1 overflow-y-auto pb-[max(1.25rem,env(safe-area-inset-bottom))]">

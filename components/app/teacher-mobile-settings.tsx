@@ -65,6 +65,7 @@ export function TeacherMobileSettings({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [signOutArmed, setSignOutArmed] = useState(false);
 
   const verified = isVerifiedStaff(user);
   const roleLabel = user.role === "admin" ? "Admin" : "Teacher";
@@ -211,37 +212,12 @@ export function TeacherMobileSettings({
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-[#f2f2f7] pt-[env(safe-area-inset-top,0px)]">
       {embedded ? (
-        <header className="flex items-end justify-between gap-3 px-5 pb-1 pt-5">
-          <h1 className="text-[34px] font-semibold tracking-[-0.04em] text-neutral-950">
-            You
-          </h1>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void signOutAction()}
-            className="pb-1 text-[15px] font-medium tracking-[-0.02em] text-red-600 disabled:opacity-40"
-          >
-            Sign Out
-          </button>
-        </header>
+        <div className="h-3 shrink-0" aria-hidden />
       ) : (
-        <TeacherMobileNav
-          title="Profile"
-          onBack={onBack}
-          trailing={
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void signOutAction()}
-              className="px-3 py-1 text-[17px] font-medium tracking-[-0.02em] text-red-600 disabled:opacity-40"
-            >
-              Sign Out
-            </button>
-          }
-        />
+        <TeacherMobileNav title="Profile" onBack={onBack} />
       )}
 
-      <main className="flex flex-1 flex-col gap-7 overflow-y-auto px-5 pb-10 pt-2">
+      <main className="flex flex-1 flex-col gap-7 overflow-y-auto px-5 pb-28 pt-2">
         <section className="flex flex-col items-center pt-3">
           <button
             type="button"
@@ -394,19 +370,40 @@ export function TeacherMobileSettings({
           </Group>
         </Labeled>
 
+        <Group>
+          {signOutArmed ? (
+            <div className="grid grid-cols-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setSignOutArmed(false)}
+                className="flex h-[2.75rem] items-center justify-center text-[17px] text-neutral-500 active:bg-neutral-50 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void signOutAction()}
+                className="flex h-[2.75rem] items-center justify-center text-[17px] font-medium text-red-600 active:bg-red-50 disabled:opacity-40"
+              >
+                Confirm
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setSignOutArmed(true)}
+              className="flex h-[2.75rem] w-full items-center justify-center text-[17px] text-red-600 active:bg-neutral-50 disabled:opacity-40"
+            >
+              Sign Out
+            </button>
+          )}
+        </Group>
+
         <SetupPreferences user={user} />
         <LocalEmailTestingSection />
-
-        <Group>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void signOutAction()}
-            className="flex h-[2.75rem] w-full items-center justify-center text-[17px] text-red-600 active:bg-neutral-50 disabled:opacity-40"
-          >
-            Sign Out
-          </button>
-        </Group>
 
         <Group>
           <button
