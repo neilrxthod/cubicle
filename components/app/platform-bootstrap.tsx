@@ -17,6 +17,8 @@ import {
   requiresRemoteDatabase,
 } from "@/lib/data/durability";
 import { ensureLocalDemoSandbox } from "@/lib/auth/local-demo";
+import { getSessionSnapshot, subscribeToSession } from "@/lib/auth/session";
+import { startPresence } from "@/lib/staff/presence";
 import { subscribePlatformRealtime } from "@/lib/supabase/realtime";
 import { RemoteRequiredScreen } from "@/components/app/remote-required-screen";
 
@@ -56,6 +58,9 @@ export function PlatformBootstrap({
       isPlatformRemoteHydrated(),
   );
   const [error, setError] = useState("");
+  const [presenceUserId, setPresenceUserId] = useState(
+    () => getSessionSnapshot()?.id ?? "",
+  );
 
   // Initial load from Postgres (async only — sync ready cases are in useState above)
   // Browser cache epoch resets are handled inside platform-store (local only).
@@ -154,6 +159,17 @@ export function PlatformBootstrap({
     if (!ready || !isLocalDemoMode()) return;
     ensureLocalDemoSandbox();
   }, [ready]);
+
+  useEffect(() => {
+    const sync = () => setPresenceUserId(getSessionSnapshot()?.id ?? "");
+    sync();
+    return subscribeToSession(sync);
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !presenceUserId) return;
+    return startPresence(presenceUserId);
+  }, [ready, presenceUserId]);
 
   // Keep header/session name in lockstep with platform store (Realtime + local).
   useEffect(() => {

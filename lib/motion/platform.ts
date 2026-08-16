@@ -37,6 +37,20 @@ export const transitionPanel: Transition = {
   ease: EASE_OUT_EXPO,
 };
 
+/** Longer settle — no bounce, no snap. */
+export const transitionSoft: Transition = {
+  duration: 0.32,
+  ease: EASE_OUT_SOFT,
+};
+
+/** iOS-like spring — chips, pills, compact controls. */
+export const transitionSpring: Transition = {
+  type: "spring",
+  stiffness: 520,
+  damping: 38,
+  mass: 0.72,
+};
+
 /** Fade + tiny rise — no scale layout thrash. */
 export const fadeUpVariants: Variants = {
   initial: { opacity: 0, y: 4 },

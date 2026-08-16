@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
-import { Search, User, X } from "lucide-react";
+import { Check, Search, User, X } from "lucide-react";
 import {
   Dialog,
   DialogCancel,
@@ -24,6 +24,7 @@ import { createBooking } from "@/lib/actions";
 import { slotLimitNoticeFromError } from "@/lib/booking/slot-rules";
 import type { SlotLimitNotice } from "@/lib/booking/slot-rules";
 import { getSessionSnapshot } from "@/lib/auth/session";
+import { useOnlineUserIds } from "@/lib/staff/presence";
 import {
   getOnboarding,
   isAssignmentComplete,
@@ -67,6 +68,7 @@ export function BookDialog({
 
   const session = getSessionSnapshot();
   const purpose = getBookingPurposeOption(purposeId);
+  const onlineIds = useOnlineUserIds();
 
   useEffect(() => {
     onOpened?.();
@@ -284,6 +286,8 @@ export function BookDialog({
               onQueryChange={setShareQuery}
               colleagues={visibleColleagues}
               shareWithId={shareWithId}
+              youOnline={Boolean(session?.id && onlineIds.has(session.id))}
+              onlineIds={onlineIds}
               pending={pending}
               showSearch={colleagues.length > 6}
               empty={
@@ -353,6 +357,8 @@ function ShareColleagueGrid({
   onQueryChange,
   colleagues,
   shareWithId,
+  youOnline,
+  onlineIds,
   pending,
   showSearch,
   empty,
@@ -363,14 +369,33 @@ function ShareColleagueGrid({
   onQueryChange: (value: string) => void;
   colleagues: StaffUser[];
   shareWithId: string | null;
+  youOnline: boolean;
+  onlineIds: Set<string>;
   pending: boolean;
   showSearch: boolean;
   empty: boolean;
   onJustMe: () => void;
   onToggle: (id: string) => void;
 }) {
+  const youButton = (
+    <ShareIconButton
+      selected={shareWithId === null}
+      disabled={pending}
+      online={youOnline}
+      label="Just me"
+      onClick={onJustMe}
+      face={
+        <span className="flex size-full items-center justify-center bg-[#e5e5ea] text-neutral-500">
+          <User className="size-[18px]" strokeWidth={1.75} />
+        </span>
+      }
+      caption="You"
+    />
+  );
+
   return (
     <div className="flex flex-col gap-3">
+      {showSearch ? youButton : null}
       {showSearch ? (
         <div className="relative">
           <Search
@@ -417,25 +442,7 @@ function ShareColleagueGrid({
           </p>
         ) : (
           <div className="flex flex-wrap gap-x-3.5 gap-y-3">
-            <ShareIconButton
-              selected={shareWithId === null}
-              disabled={pending}
-              label="Just me"
-              onClick={onJustMe}
-              face={
-                <span
-                  className={cn(
-                    "flex size-full items-center justify-center",
-                    shareWithId === null
-                      ? "bg-neutral-950 text-white"
-                      : "bg-neutral-100 text-neutral-500",
-                  )}
-                >
-                  <User className="size-4" strokeWidth={1.75} />
-                </span>
-              }
-              caption="You"
-            />
+            {showSearch ? null : youButton}
             {colleagues.map((u) => {
               const selected = shareWithId === u.id;
               return (
@@ -443,6 +450,7 @@ function ShareColleagueGrid({
                   key={u.id}
                   selected={selected}
                   disabled={pending}
+                  online={onlineIds.has(u.id)}
                   label={u.name}
                   onClick={() => onToggle(u.id)}
                   face={<ShareFace user={u} />}
@@ -468,6 +476,7 @@ function initials(name: string) {
 function ShareIconButton({
   selected,
   disabled,
+  online = false,
   label,
   onClick,
   face,
@@ -475,6 +484,7 @@ function ShareIconButton({
 }: {
   selected: boolean;
   disabled?: boolean;
+  online?: boolean;
   label: string;
   onClick: () => void;
   face: ReactNode;
@@ -490,28 +500,33 @@ function ShareIconButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex w-11 shrink-0 flex-col items-center gap-1 outline-none",
+        "flex w-[3.25rem] shrink-0 flex-col items-center gap-[5px] outline-none",
         "disabled:pointer-events-none disabled:opacity-40",
-        "rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/15",
+        "rounded-lg focus-visible:outline-none",
       )}
     >
-      <span
-        className={cn(
-          "box-border flex size-10 shrink-0 items-center justify-center rounded-full p-[1.5px] transition-transform",
-          selected ? "bg-neutral-950" : "bg-transparent",
-          "active:scale-[0.97]",
-        )}
-      >
-        <span className="size-full overflow-hidden rounded-full">
+      <span className="relative size-11 shrink-0">
+        <span className="block size-11 overflow-hidden rounded-full">
           {face}
         </span>
+        {online && !selected ? (
+          <span
+            aria-label="Online"
+            className="absolute right-0 bottom-0 size-2.5 rounded-full bg-emerald-500 ring-2 ring-white"
+          />
+        ) : null}
+        {selected ? (
+          <span className="absolute -right-px -bottom-px flex size-[18px] items-center justify-center rounded-full bg-neutral-950 ring-[2px] ring-white">
+            <Check className="size-[10px] text-white" strokeWidth={2.75} />
+          </span>
+        ) : null}
       </span>
       <span
         className={cn(
-          "max-w-[2.75rem] truncate text-center text-[10px] leading-tight",
+          "max-w-[3.25rem] truncate text-center text-[11px] leading-tight tracking-[-0.02em]",
           selected
             ? "font-medium text-neutral-950"
-            : "font-normal text-neutral-400",
+            : "font-normal text-[#8e8e93]",
         )}
       >
         {caption}

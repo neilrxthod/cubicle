@@ -13,6 +13,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { format, parseISO, addDays } from "date-fns"
+import { AnimatePresence, motion } from "motion/react"
+import { motionSafe, transitionSoft } from "@/lib/motion/platform"
 import {
   DndContext,
   DragOverlay,
@@ -817,63 +819,52 @@ export function DailyBoard({
         )}
       >
         <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-            <h2 className="truncate text-[15px] font-light tracking-[-0.03em] text-neutral-950 sm:text-[16px]">
-              {heading}
-            </h2>
-            {isViewingToday ? (
-              <span className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-                Today
-              </span>
-            ) : null}
+          <div className="flex min-w-0 items-center gap-2">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.h2
+                key={date}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -3 }}
+                transition={motionSafe(transitionSoft)}
+                className={cn(
+                  "truncate font-light leading-none tracking-[-0.03em] text-neutral-950",
+                  compact ? "text-[16px]" : "text-[20px]",
+                )}
+              >
+                {heading}
+              </motion.h2>
+            </AnimatePresence>
+            <AnimatePresence initial={false}>
+              {isViewingToday ? (
+                <motion.span
+                  key="today-pill"
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={motionSafe(transitionSoft)}
+                  className="inline-flex h-5 shrink-0 origin-left items-center rounded-full bg-neutral-950 px-2 text-[11px] font-light tracking-[-0.01em] text-white"
+                >
+                  Today
+                </motion.span>
+              ) : null}
+            </AnimatePresence>
           </div>
           {session.role !== "admin" && date >= today && !compact ? (
-            <p className="mt-1 text-[12px] font-normal tracking-[-0.01em] text-neutral-400">
+            <p className="mt-1.5 text-[13px] font-light tracking-[-0.016em] text-neutral-400">
               Booking through {format(parseISO(lastBookableDate), "MMM d")}
-            </p>
-          ) : null}
-          {/* Multi mode status — lives with the date, not the chrome */}
-          {isAdmin && multiMode ? (
-            <p className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-[12px] tracking-[-0.01em] text-neutral-500">
-              <span>Click open slots to book</span>
-              <span aria-hidden className="text-neutral-300">
-                ·
-              </span>
-              <label className="inline-flex min-w-0 items-center gap-1">
-                <span className="shrink-0 text-neutral-400">Tag</span>
-                <input
-                  type="text"
-                  value={multiTag}
-                  onChange={(e) => setMultiTag(e.target.value.slice(0, 18))}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") (e.target as HTMLInputElement).blur()
-                  }}
-                  aria-label="Booking tag"
-                  placeholder={DEFAULT_ADMIN_MULTI_TAG}
-                  className={cn(
-                    "min-w-[3rem] max-w-[7rem] border-0 bg-transparent p-0",
-                    "text-[12px] font-medium tracking-[-0.01em] text-neutral-900",
-                    "placeholder:font-normal placeholder:text-neutral-300",
-                    "focus-visible:outline-none",
-                    "underline decoration-neutral-200 underline-offset-4",
-                    "focus-visible:decoration-neutral-900",
-                  )}
-                />
-              </label>
             </p>
           ) : null}
         </div>
 
         <div className="flex shrink-0 items-center gap-3 self-start sm:self-center">
           {isAdmin ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <label
                 htmlFor="admin-multi-book"
                 className={cn(
-                  "cursor-pointer select-none text-[12.5px] tracking-[-0.015em]",
-                  multiMode
-                    ? "font-medium text-neutral-950"
-                    : "font-normal text-neutral-500",
+                  "cursor-pointer select-none text-[15px] tracking-[-0.022em]",
+                  multiMode ? "text-neutral-950" : "text-[#8e8e93]",
                 )}
               >
                 Multi
@@ -884,13 +875,41 @@ export function DailyBoard({
                 onCheckedChange={setMultiMode}
                 aria-label="Multi-book mode"
                 className={cn(
-                  "h-[18px] w-[32px] shadow-none",
-                  "data-[state=checked]:bg-neutral-950 data-[state=unchecked]:bg-neutral-200/90",
-                  "[&_[data-slot=switch-thumb]]:size-[14px] [&_[data-slot=switch-thumb]]:shadow-none",
-                  "data-[state=checked]:[&_[data-slot=switch-thumb]]:translate-x-[14px]",
+                  "h-[22px] w-[38px] shadow-none",
+                  "data-[state=checked]:bg-neutral-950 data-[state=unchecked]:bg-[#e5e5ea]",
+                  "[&_[data-slot=switch-thumb]]:size-[18px] [&_[data-slot=switch-thumb]]:shadow-none",
+                  "data-[state=checked]:[&_[data-slot=switch-thumb]]:translate-x-[16px]",
                   "data-[state=unchecked]:[&_[data-slot=switch-thumb]]:translate-x-[2px]",
                 )}
               />
+              <AnimatePresence initial={false}>
+                {multiMode ? (
+                  <motion.input
+                    key="multi-tag"
+                    type="text"
+                    value={multiTag}
+                    onChange={(e) =>
+                      setMultiTag(e.target.value.slice(0, 18))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter")
+                        (e.target as HTMLInputElement).blur()
+                    }}
+                    aria-label="Booking tag"
+                    placeholder="Tag"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={motionSafe(transitionSoft)}
+                    className={cn(
+                      "h-8 w-[7.25rem] rounded-[8px] border-0 bg-[#f2f2f7] px-2.5",
+                      "text-[15px] tracking-[-0.022em] text-neutral-950",
+                      "placeholder:text-[#8e8e93]",
+                      "outline-none focus-visible:bg-[#e8e8ed]",
+                    )}
+                  />
+                ) : null}
+              </AnimatePresence>
             </div>
           ) : null}
 
@@ -981,25 +1000,34 @@ export function DailyBoard({
             <ChevronRight className="size-4" strokeWidth={1.5} />
           </button>
 
-          {!isViewingToday ? (
-            <>
-              <span
-                aria-hidden
-                className="mx-1.5 h-3.5 w-px shrink-0 bg-[var(--hairline-strong)]"
-              />
-              <button
-                type="button"
-                onClick={() => setDate(today)}
-                className={cn(
-                  "h-8 rounded-full px-3 text-[12px] font-normal tracking-[-0.02em] text-neutral-500",
-                  "transition-colors duration-200 hover:bg-black/[0.04] hover:text-black",
-                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
-                )}
+          <AnimatePresence initial={false}>
+            {!isViewingToday ? (
+              <motion.span
+                key="jump-today"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={motionSafe(transitionSoft)}
+                className="flex overflow-hidden"
               >
-                Today
-              </button>
-            </>
-          ) : null}
+                <span
+                  aria-hidden
+                  className="mx-1.5 h-3.5 w-px shrink-0 self-center bg-[var(--hairline-strong)]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setDate(today)}
+                  className={cn(
+                    "h-8 rounded-full px-3 text-[12px] font-normal tracking-[-0.02em] text-neutral-500",
+                    "transition-colors duration-200 hover:bg-black/[0.04] hover:text-black",
+                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
+                  )}
+                >
+                  Today
+                </button>
+              </motion.span>
+            ) : null}
+          </AnimatePresence>
           </div>
         </div>
       </div>

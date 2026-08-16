@@ -35,6 +35,7 @@ import {
   updateTeacherCredentials,
 } from "@/lib/actions"
 import { isRemotePlatformEnabled } from "@/lib/data/durability"
+import { useOnlineUserIds } from "@/lib/staff/presence"
 import { SCHOOL_EMAIL_DOMAIN } from "@/lib/auth/school-domain"
 import { splitDisplayName } from "@/lib/profile/display-name"
 import {
@@ -122,6 +123,7 @@ export function StaffPanel({
   const router = useRouter()
   const googleMode = isRemotePlatformEnabled()
   const today = format(new Date(), "yyyy-MM-dd")
+  const onlineIds = useOnlineUserIds()
 
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<FilterId>("all")
@@ -715,6 +717,7 @@ export function StaffPanel({
                   const active = resolvedSelectedId === user.id
                   const verified = isVerifiedStaff(user)
                   const status = m?.status ?? "ok"
+                  const online = onlineIds.has(user.id)
                   return (
                     <li key={user.id}>
                       <button
@@ -729,7 +732,7 @@ export function StaffPanel({
                       >
                         <StaffAvatar
                           user={user}
-                          online={status === "active"}
+                          online={online}
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-1.5">
@@ -768,6 +771,7 @@ export function StaffPanel({
               <StaffDetail
                 user={selected}
                 metrics={selectedMetrics}
+                online={onlineIds.has(selected.id)}
                 cartMap={cartMap}
                 verifyBusy={busyKey === `verify:${selected.id}`}
                 emailCopied={copiedEmail === selected.email}
@@ -1049,6 +1053,7 @@ export function StaffPanel({
 function StaffDetail({
   user,
   metrics,
+  online = false,
   cartMap,
   verifyBusy,
   emailCopied,
@@ -1060,6 +1065,7 @@ function StaffDetail({
 }: {
   user: User
   metrics: StaffMetrics
+  online?: boolean
   cartMap: Map<string, Cart>
   verifyBusy?: boolean
   emailCopied?: boolean
@@ -1083,7 +1089,7 @@ function StaffDetail({
             user={user}
             size="lg"
             verified={verified}
-            online={metrics.status === "active"}
+            online={online}
           />
           <div className="min-w-0 flex-1">
             <h3 className="flex min-w-0 items-center gap-1.5 text-[15px] font-medium text-neutral-950">
@@ -1445,7 +1451,7 @@ function StaffAvatar({
       ) : null}
       {online ? (
         <span
-          aria-label="Active today"
+          aria-label="Online"
           className={cn(
             "absolute rounded-full bg-emerald-500 ring-2 ring-white",
             size === "lg"
