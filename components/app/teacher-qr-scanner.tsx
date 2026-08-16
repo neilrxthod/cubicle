@@ -29,7 +29,6 @@ import {
   getNextPeriod,
   getPeriodSchedule,
   getSchoolDate,
-  SCHOOL_TIMEZONE,
 } from "@/lib/calendar/period-schedule";
 import { isLocalDevRuntime } from "@/lib/data/durability";
 import { usePlatformStore } from "@/lib/data/platform-store";
@@ -159,23 +158,6 @@ type MobileView =
   | "admin-reports"
   | "admin-staff";
 
-function firstName(user: SessionUser) {
-  return user.firstName || user.name.split(/\s+/)[0] || "there";
-}
-
-function schoolDayLabel(now = new Date()) {
-  const weekday = new Intl.DateTimeFormat("en-US", {
-    timeZone: SCHOOL_TIMEZONE,
-    weekday: "long",
-  }).format(now);
-  const rest = new Intl.DateTimeFormat("en-US", {
-    timeZone: SCHOOL_TIMEZONE,
-    month: "long",
-    day: "numeric",
-  }).format(now);
-  return { weekday, rest };
-}
-
 function TeacherScanHome({
   user,
   onScan,
@@ -188,7 +170,6 @@ function TeacherScanHome({
   const { bookings, issues, swapRequests, carts } = usePlatformStore();
   const today = getSchoolDate();
   const period = getCurrentPeriod() ?? getNextPeriod();
-  const day = schoolDayLabel();
 
   const mineToday = bookings
     .filter(
@@ -220,151 +201,115 @@ function TeacherScanHome({
     return booking?.teacherId === user.id;
   }).length;
 
+  const teacherRows: HomeRowItem[] = [
+    ...(nowCart
+      ? [
+          {
+            label: "Now",
+            detail: nowCart.name,
+            onClick: () => onOpen("bookings"),
+          },
+        ]
+      : []),
+    {
+      label: "Bookings",
+      detail: bookingCount ? String(bookingCount) : undefined,
+      onClick: () => onOpen("bookings"),
+    },
+    { label: "Schedule", onClick: () => onOpen("schedule") },
+    {
+      label: "Issues",
+      detail: issueCount ? String(issueCount) : undefined,
+      onClick: () => onOpen("issues"),
+    },
+    {
+      label: "Shares",
+      detail: shareCount ? String(shareCount) : undefined,
+      onClick: () => onOpen("shares"),
+    },
+    {
+      label: "Swaps",
+      detail: swapCount ? String(swapCount) : undefined,
+      onClick: () => onOpen("swaps"),
+    },
+  ];
+
+  const adminRows: HomeRowItem[] = [
+    { label: "Inventory", onClick: () => onOpen("admin-carts") },
+    { label: "QR Codes", onClick: () => onOpen("admin-labels") },
+    { label: "Reservations", onClick: () => onOpen("admin-bookings") },
+    { label: "Reports", onClick: () => onOpen("admin-reports") },
+    { label: "Staff", onClick: () => onOpen("admin-staff") },
+  ];
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-[#f2f2f7]">
-      <header className="flex items-center justify-between gap-3 px-5 pt-[max(1.15rem,env(safe-area-inset-top))]">
-        <CubicleWordmark size="sm" href={null} className="font-bold" />
-        <LocalPerspectiveSwitch user={user} />
+      <header className="shrink-0 pt-[env(safe-area-inset-top,0px)]">
+        <div className="flex h-11 items-center justify-between px-4">
+          <CubicleWordmark size="sm" href={null} />
+          <LocalPerspectiveSwitch user={user} />
+        </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-[22.5rem] flex-1 flex-col overflow-y-auto px-5 pb-4 pt-6">
-        <p className="text-[13px] font-medium uppercase tracking-[0.14em] text-neutral-400">
-          {day.weekday}
-        </p>
-        <h1 className="mt-0.5 text-[34px] font-semibold leading-none tracking-[-0.04em] text-neutral-950">
-          {day.rest}
-        </h1>
-        <p className="mt-2 text-[15px] text-neutral-500">
-          {period
-            ? `${getPeriodSchedule(period).label} · ${getPeriodSchedule(period).start}–${getPeriodSchedule(period).end}`
-            : `Hi, ${firstName(user)}`}
-        </p>
-
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-8 pt-2">
         <button
           type="button"
           onClick={onScan}
           className={cn(
-            "mt-7 flex w-full items-center gap-3.5 rounded-[12px] bg-neutral-950 px-3.5 py-3.5 text-left text-white",
+            "flex h-12 w-full items-center justify-center gap-2 rounded-[10px] bg-neutral-950 text-white",
+            "text-[17px] font-semibold tracking-[-0.02em]",
             "transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
             "active:scale-[0.985]",
           )}
         >
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-white/10">
-            <QrCode className="size-6" strokeWidth={1.75} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[17px] font-semibold tracking-[-0.02em]">
-              Scan Cubicle code
-            </span>
-            <span className="mt-0.5 block text-[13px] text-white/55">
-              Cart or laptop seal
-            </span>
-          </span>
-          <ChevronRight className="size-5 shrink-0 text-white/35" strokeWidth={2} />
+          <QrCode className="size-[18px]" strokeWidth={1.75} />
+          Scan
         </button>
 
-        {nowBooking && nowCart ? (
-          <button
-            type="button"
-            onClick={() => onOpen("bookings")}
-            className="mt-3.5 flex w-full items-center justify-between rounded-[12px] bg-white px-4 py-3.5 text-left active:bg-neutral-50"
-          >
-            <span className="min-w-0">
-              <span className="block text-[12px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-                Now
-              </span>
-              <span className="mt-0.5 block truncate text-[17px] font-semibold tracking-[-0.02em] text-neutral-950">
-                {nowCart.name}
-              </span>
-              <span className="mt-0.5 block text-[13px] text-neutral-400">
-                {nowBooking.period}
-                {nowCart.location ? ` · ${nowCart.location}` : ""}
-              </span>
-            </span>
-            <ChevronRight className="size-5 text-neutral-300" strokeWidth={2} />
-          </button>
-        ) : null}
+        <HomeGroup className="mt-6" rows={teacherRows} />
 
-        <div className="mt-3.5 flex flex-col gap-3">
-          <HomeGroup
-            rows={[
-              {
-                label: "Bookings",
-                detail: bookingCount ? String(bookingCount) : undefined,
-                onClick: () => onOpen("bookings"),
-              },
-              { label: "Schedule", onClick: () => onOpen("schedule") },
-              {
-                label: "Issues",
-                detail: issueCount ? String(issueCount) : undefined,
-                onClick: () => onOpen("issues"),
-              },
-            ]}
-          />
-          <HomeGroup
-            rows={[
-              {
-                label: "Shares",
-                detail: shareCount ? String(shareCount) : undefined,
-                onClick: () => onOpen("shares"),
-              },
-              {
-                label: "Swaps",
-                detail: swapCount ? String(swapCount) : undefined,
-                onClick: () => onOpen("swaps"),
-              },
-            ]}
-          />
-          {user.role === "admin" ? (
-            <HomeGroup
-              rows={[
-                {
-                  label: "Inventory",
-                  onClick: () => onOpen("admin-carts"),
-                },
-                {
-                  label: "QR codes",
-                  onClick: () => onOpen("admin-labels"),
-                },
-                {
-                  label: "Reservations",
-                  onClick: () => onOpen("admin-bookings"),
-                },
-                {
-                  label: "Reports",
-                  onClick: () => onOpen("admin-reports"),
-                },
-                {
-                  label: "Staff",
-                  onClick: () => onOpen("admin-staff"),
-                },
-              ]}
-            />
-          ) : null}
-        </div>
+        {user.role === "admin" ? (
+          <HomeGroup title="Admin" className="mt-7" rows={adminRows} />
+        ) : null}
       </main>
     </div>
   );
 }
 
+type HomeRowItem = {
+  label: string;
+  detail?: string;
+  onClick: () => void;
+};
+
 function HomeGroup({
+  title,
   rows,
+  className,
 }: {
-  rows: Array<{ label: string; detail?: string; onClick: () => void }>;
+  title?: string;
+  rows: HomeRowItem[];
+  className?: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-[12px] bg-white">
-      {rows.map((row, index) => (
-        <div key={row.label}>
-          {index > 0 ? <div className="ml-4 h-px bg-neutral-100" /> : null}
+    <section className={className}>
+      {title ? (
+        <h2 className="px-4 pb-1.5 text-[13px] font-normal text-neutral-400">
+          {title}
+        </h2>
+      ) : null}
+      <div className="overflow-hidden rounded-[10px] bg-white">
+        {rows.map((row, index) => (
           <HomeRow
+            key={row.label}
             label={row.label}
             detail={row.detail}
             onClick={row.onClick}
+            divided={index > 0}
           />
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -372,24 +317,35 @@ function HomeRow({
   label,
   detail,
   onClick,
+  divided,
 }: {
   label: string;
   detail?: string;
   onClick: () => void;
+  divided?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex h-[3.25rem] w-full items-center gap-3 px-4 text-left active:bg-neutral-50"
+      className={cn(
+        "relative flex h-11 w-full items-center gap-2 px-4 text-left active:bg-neutral-50",
+        divided &&
+          "before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-neutral-200/80",
+      )}
     >
       <span className="min-w-0 flex-1 text-[17px] tracking-[-0.02em] text-neutral-950">
         {label}
       </span>
       {detail ? (
-        <span className="tabular-nums text-[17px] text-neutral-400">{detail}</span>
+        <span className="shrink-0 tabular-nums text-[17px] text-neutral-400">
+          {detail}
+        </span>
       ) : null}
-      <ChevronRight className="size-5 text-neutral-300" strokeWidth={2} />
+      <ChevronRight
+        className="-mr-1 size-[18px] shrink-0 text-neutral-300"
+        strokeWidth={2}
+      />
     </button>
   );
 }

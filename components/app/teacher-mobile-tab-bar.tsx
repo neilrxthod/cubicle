@@ -17,9 +17,9 @@ export function TeacherMobileTabBar({
   return (
     <nav
       aria-label="App"
-      className="border-t border-neutral-200 bg-white px-4 pt-1.5 pb-[max(0.45rem,env(safe-area-inset-bottom))]"
+      className="border-t border-neutral-200/80 bg-white px-4 pt-1.5 pb-[max(0.45rem,env(safe-area-inset-bottom))]"
     >
-      <div className="mx-auto grid max-w-[22rem] grid-cols-3">
+      <div className="grid grid-cols-3">
         <TabButton
           label="Home"
           active={tab === "home"}
