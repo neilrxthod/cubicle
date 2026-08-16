@@ -207,6 +207,9 @@ const cellBase =
 const slotFace =
   "relative flex h-full w-full min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[5px]"
 
+/** Paused cart — pale system-yellow wash, not a saturated fill. */
+const pausedSlotFill = "bg-[#fff6e0] text-amber-400/80"
+
 /** Dominant face in the slot; cell height tracks so neighbors stay clear. */
 const SLOT_AVATAR =
   "size-11 shrink-0 rounded-full object-cover select-none sm:size-12"
@@ -1187,10 +1190,7 @@ export function DailyBoard({
                         <div key={period} className={cellBase}>
                           <div
                             title="Cart paused — not bookable"
-                            className={cn(
-                              slotFace,
-                              "bg-neutral-50 text-neutral-300",
-                            )}
+                            className={cn(slotFace, pausedSlotFill)}
                           >
                             <Wrench className="size-3.5" strokeWidth={1.25} />
                           </div>
@@ -1658,10 +1658,7 @@ export function DailyBoard({
                         <div key={period} className={cellBase}>
                           <div
                             title="Cart paused — not bookable"
-                            className={cn(
-                              slotFace,
-                              "bg-neutral-50 text-neutral-300",
-                            )}
+                            className={cn(slotFace, pausedSlotFill)}
                           >
                             <Wrench className="size-3.5" strokeWidth={1.25} />
                           </div>

@@ -1,7 +1,8 @@
 import * as qrCore from "qrcode/lib/core/qrcode.js";
 
-const QR_OPTS = { errorCorrectionLevel: "M" as const };
-const PRINT_MARGIN = 1;
+/** High ECC so the circular Cubicle seal still reads in the PWA scanner. */
+const QR_OPTS = { errorCorrectionLevel: "H" as const };
+const PRINT_MARGIN = 1.25;
 
 export type QrMatrix = {
   size: number;
@@ -36,34 +37,67 @@ export function qrMatrix(value: string): QrMatrix {
   return { size, dark };
 }
 
-/** Filled-rect SVG for print sheets. Ink is real paths, not an image URL. */
-export function qrPrintSvg(value: string): string {
+function inFinderBand(row: number, col: number, size: number): boolean {
+  const inTop = row < 8;
+  const inLeft = col < 8;
+  const inBottom = row >= size - 8;
+  const inRight = col >= size - 8;
+  return (inTop && inLeft) || (inTop && inRight) || (inBottom && inLeft);
+}
+
+function finderOrigins(size: number): Array<{ x: number; y: number }> {
+  return [
+    { x: 0, y: 0 },
+    { x: size - 7, y: 0 },
+    { x: 0, y: size - 7 },
+  ];
+}
+
+/**
+ * Cubicle seal — constellation of dots + bullseye finders.
+ * Standard QR bits underneath so our PWA scanner can still read them;
+ * the signed payload is useless in Camera / third-party QR apps.
+ */
+export function cubicleMarkSvg(
+  value: string,
+  sizeAttr: string = "100%",
+  margin: number = PRINT_MARGIN,
+): string {
   const { size, dark } = qrMatrix(value);
-  const dim = size + PRINT_MARGIN * 2;
+  const dim = size + margin * 2;
+  const ink = "#141414";
+  const paper = "#ffffff";
+
   const parts = [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${dim} ${dim}" width="96" height="96" shape-rendering="crispEdges">`,
-    `<rect width="${dim}" height="${dim}" fill="#ffffff"/>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${dim} ${dim}" width="${sizeAttr}" height="${sizeAttr}" shape-rendering="geometricPrecision">`,
+    `<rect width="${dim}" height="${dim}" fill="${paper}"/>`,
   ];
 
+  for (const origin of finderOrigins(size)) {
+    const x = origin.x + margin;
+    const y = origin.y + margin;
+    parts.push(
+      `<rect x="${x}" y="${y}" width="7" height="7" rx="2.05" fill="${ink}"/>`,
+      `<rect x="${x + 1.05}" y="${y + 1.05}" width="4.9" height="4.9" rx="1.45" fill="${paper}"/>`,
+      `<circle cx="${x + 3.5}" cy="${y + 3.5}" r="1.52" fill="${ink}"/>`,
+    );
+  }
+
   for (let row = 0; row < size; row++) {
-    let run = 0;
-    for (let col = 0; col <= size; col++) {
-      const on = col < size && dark[row]?.[col];
-      if (on) {
-        run += 1;
-        continue;
-      }
-      if (run > 0) {
-        const x = col - run + PRINT_MARGIN;
-        const y = row + PRINT_MARGIN;
-        parts.push(
-          `<rect x="${x}" y="${y}" width="${run}" height="1" fill="#000000"/>`,
-        );
-        run = 0;
-      }
+    for (let col = 0; col < size; col++) {
+      if (!dark[row]?.[col]) continue;
+      if (inFinderBand(row, col, size)) continue;
+      const cx = col + margin + 0.5;
+      const cy = row + margin + 0.5;
+      parts.push(`<circle cx="${cx}" cy="${cy}" r="0.38" fill="${ink}"/>`);
     }
   }
 
   parts.push("</svg>");
   return parts.join("");
+}
+
+/** Same Cubicle seal as the QR tab, sized for the label sheet. */
+export function qrPrintSvg(value: string): string {
+  return cubicleMarkSvg(value, "128", 2);
 }

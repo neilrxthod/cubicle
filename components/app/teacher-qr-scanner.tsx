@@ -232,10 +232,10 @@ function TeacherScanHome({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[17px] font-semibold tracking-[-0.02em]">
-              Scan QR code
+              Scan Cubicle code
             </span>
             <span className="mt-0.5 block text-[13px] text-white/55">
-              Cart or laptop label
+              Cart or laptop seal
             </span>
           </span>
           <ChevronRight className="size-5 shrink-0 text-white/35" strokeWidth={2} />
@@ -525,7 +525,7 @@ function TeacherScanCamera({
         ? "Camera is off. Turn it on in Settings."
         : cameraStatus === "unsupported"
           ? "Camera isn’t available on this device."
-          : "Align a Cubicle QR code in the frame";
+          : "Align a Cubicle seal in the frame";
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-black text-white">

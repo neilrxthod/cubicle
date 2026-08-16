@@ -10,7 +10,7 @@ import {
   laptopQrPayload,
   parseLaptopCodeList,
 } from "@/lib/labels/codes"
-import { qrMatrix } from "@/lib/labels/qr"
+import { cubicleMarkSvg } from "@/lib/labels/qr"
 import { sortCarts, type Cart } from "@/lib/types"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -28,16 +28,16 @@ type Preview = { type: "cart" } | { type: "laptop"; code: string }
 const EMPTY_CODES: string[] = []
 
 function QrMark({ value, className }: { value: string; className?: string }) {
-  const matrix = useMemo(() => {
+  const svg = useMemo(() => {
     if (!value) return null
     try {
-      return qrMatrix(value)
+      return cubicleMarkSvg(value)
     } catch {
       return null
     }
   }, [value])
 
-  if (!matrix) {
+  if (!svg) {
     return (
       <div
         aria-hidden
@@ -46,30 +46,13 @@ function QrMark({ value, className }: { value: string; className?: string }) {
     )
   }
 
-  const dim = matrix.size
-
   return (
     <div
       role="img"
-      aria-label="QR code"
-      className={cn("grid bg-white", className)}
-      style={{
-        gridTemplateColumns: `repeat(${dim}, minmax(0, 1fr))`,
-        gridTemplateRows: `repeat(${dim}, minmax(0, 1fr))`,
-      }}
-    >
-      {Array.from({ length: dim * dim }, (_, index) => {
-        const row = Math.floor(index / dim)
-        const col = index % dim
-        const on = Boolean(matrix.dark[row]?.[col])
-        return (
-          <span
-            key={index}
-            className={on ? "bg-neutral-950" : "bg-white"}
-          />
-        )
-      })}
-    </div>
+      aria-label="Cubicle seal"
+      className={cn("bg-white [&>svg]:block [&>svg]:size-full", className)}
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
   )
 }
 

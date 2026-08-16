@@ -166,15 +166,15 @@ export function openQrLabelsPdf(input: {
       text-align: center;
     }
     .qr {
-      width: 96px;
-      height: 96px;
-      margin: 0 auto 8px;
+      width: 128px;
+      height: 128px;
+      margin: 0 auto 10px;
     }
     .qr svg {
       display: block;
-      width: 96px;
-      height: 96px;
-      shape-rendering: crispEdges;
+      width: 128px;
+      height: 128px;
+      shape-rendering: geometricPrecision;
     }
     .mark {
       position: absolute;

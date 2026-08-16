@@ -69,6 +69,8 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  LayoutGrid,
+  LayoutList,
   Pencil,
   Plus,
 } from "lucide-react"
@@ -1308,6 +1310,7 @@ function BookingsTable({
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [reassigningBooking, setReassigningBooking] = useState<Booking | null>(null)
+  const [reassignTargetId, setReassignTargetId] = useState<string | null>(null)
   const [cancelingBooking, setCancelingBooking] = useState<Booking | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isReassigning, setIsReassigning] = useState(false)
@@ -1922,31 +1925,40 @@ function BookingsTable({
           ) : null}
         </div>
 
-        <div className="inline-flex h-8 items-center rounded-md border border-[var(--hairline-strong)] bg-white p-0.5">
-          <button
-            type="button"
-            onClick={() => setView("list")}
-            className={cn(
-              "rounded-[5px] px-2.5 text-[12px] font-medium transition-colors",
-              view === "list"
-                ? "bg-neutral-950 text-white"
-                : "text-neutral-400 hover:text-neutral-800",
-            )}
-          >
-            List
-          </button>
-          <button
-            type="button"
-            onClick={() => setView("board")}
-            className={cn(
-              "rounded-[5px] px-2.5 text-[12px] font-medium transition-colors",
-              view === "board"
-                ? "bg-neutral-950 text-white"
-                : "text-neutral-400 hover:text-neutral-800",
-            )}
-          >
-            Grid
-          </button>
+        <div
+          role="radiogroup"
+          aria-label="Reservation view"
+          className="inline-flex h-8 items-center rounded-md border border-[var(--hairline-strong)] bg-neutral-50 p-0.5"
+        >
+          {(
+            [
+              { id: "list" as const, label: "List", Icon: LayoutList },
+              { id: "board" as const, label: "Grid", Icon: LayoutGrid },
+            ] as const
+          ).map((opt) => {
+            const active = view === opt.id
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => setView(opt.id)}
+                className={cn(
+                  "inline-flex h-7 items-center gap-1.5 rounded-[5px] px-2.5",
+                  "text-[12px] font-medium tracking-[-0.01em]",
+                  "transition-[color,background-color,box-shadow] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-900/15",
+                  active
+                    ? "bg-white text-neutral-950 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                    : "text-neutral-400 hover:text-neutral-700",
+                )}
+              >
+                <opt.Icon className="size-3.5" strokeWidth={1.75} aria-hidden />
+                {opt.label}
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -2472,7 +2484,10 @@ function BookingsTable({
                             >
                               <DropdownMenuItem
                                 className="cursor-pointer gap-2 rounded-md text-[12.5px]"
-                                onClick={() => setReassigningBooking(b)}
+                                onClick={() => {
+                                  setReassignTargetId(null)
+                                  setReassigningBooking(b)
+                                }}
                               >
                                 <ArrowRightLeft className="size-3.5 text-neutral-400" />
                                 Reassign cart
@@ -2521,7 +2536,14 @@ function BookingsTable({
         />
       ) : null}
 
-      <Dialog open={!!reassigningBooking} onOpenChange={(open) => !open && setReassigningBooking(null)}>
+      <Dialog
+        open={!!reassigningBooking}
+        onOpenChange={(open) => {
+          if (open || isReassigning) return
+          setReassigningBooking(null)
+          setReassignTargetId(null)
+        }}
+      >
         <DialogContent className="flex max-h-[85vh] w-[95vw] flex-col overflow-hidden rounded-2xl border-border/60 p-0 shadow-2xl sm:max-w-xl">
           <div className="border-b border-border/70 px-6 py-5">
             <DialogHeader className="text-left">
@@ -2544,11 +2566,24 @@ function BookingsTable({
 
           <div className="flex-1 overflow-y-auto px-6 py-4">
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Available carts
+              {reassignTargetId ? "Confirm move" : "Available carts"}
               {isReassigning ? (
-                <span className="ml-2 normal-case tracking-normal text-muted-foreground">Moving...</span>
+                <span className="ml-2 normal-case tracking-normal text-muted-foreground">Moving…</span>
               ) : null}
             </p>
+            {reassigningBooking && reassignTargetId ? (
+              <p className="mb-3 text-[13px] leading-snug text-neutral-600">
+                Move {reassigningBooking.teacherName} from{" "}
+                <span className="font-medium text-neutral-950">
+                  {cartMap.get(reassigningBooking.cartId)?.name ?? "this cart"}
+                </span>{" "}
+                to{" "}
+                <span className="font-medium text-neutral-950">
+                  {cartMap.get(reassignTargetId)?.name ?? "the selected cart"}
+                </span>
+                ?
+              </p>
+            ) : null}
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {carts
                 .filter((c) => c.status === "active" && c.id !== reassigningBooking?.cartId)
@@ -2559,42 +2594,26 @@ function BookingsTable({
                       bk.date === reassigningBooking?.date &&
                       bk.period === reassigningBooking?.period,
                   )
+                  const selected = reassignTargetId === c.id
                   return (
                     <button
                       key={c.id}
                       type="button"
                       disabled={hasConflict || isReassigning}
-                      onClick={async () => {
-                        if (!reassigningBooking) return
-                        setIsReassigning(true)
-                        try {
-                          const res = await reassignBooking(
-                            reassigningBooking.id,
-                            c.id,
-                            { reason: "admin" },
-                          )
-                          if (!res.ok) {
-                            toast({
-                              title: "Could not move booking",
-                              description: res.error,
-                              variant: "destructive",
-                            })
-                          } else {
-                            toast({
-                              title: "Booking moved",
-                              description: c.name,
-                            })
-                            setReassigningBooking(null)
-                          }
-                        } finally {
-                          setIsReassigning(false)
-                        }
+                      onClick={() => {
+                        if (hasConflict) return
+                        setReassignTargetId((current) =>
+                          current === c.id ? null : c.id,
+                        )
                       }}
                       className={cn(
-                        "flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-[border-color,background-color,box-shadow]",
+                        "flex items-center justify-between rounded-xl border px-4 py-3 text-left",
+                        "transition-[border-color,background-color,box-shadow] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
                         hasConflict
                           ? "cursor-not-allowed border-transparent bg-neutral-50 opacity-50"
-                          : "border-border bg-white hover:border-neutral-400 hover:shadow-sm",
+                          : selected
+                            ? "border-neutral-950 bg-neutral-50 shadow-sm"
+                            : "border-border bg-white hover:border-neutral-400 hover:shadow-sm",
                       )}
                     >
                       <span>
@@ -2606,16 +2625,66 @@ function BookingsTable({
                           <span className="mt-0.5 block text-[11px] text-muted-foreground">Busy that period</span>
                         ) : null}
                       </span>
-                      {!hasConflict ? <ArrowRight className="size-4 text-muted-foreground" /> : null}
+                      {!hasConflict ? (
+                        <ArrowRight
+                          className={cn(
+                            "size-4",
+                            selected ? "text-neutral-950" : "text-muted-foreground",
+                          )}
+                        />
+                      ) : null}
                     </button>
                   )
                 })}
             </div>
           </div>
 
-          <div className="border-t border-border/70 px-6 py-4">
-            <Button variant="outline" className="w-full rounded-xl" onClick={() => setReassigningBooking(null)}>
+          <div className="flex items-center justify-end gap-2 border-t border-border/70 px-6 py-4">
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              disabled={isReassigning}
+              onClick={() => {
+                setReassigningBooking(null)
+                setReassignTargetId(null)
+              }}
+            >
               Cancel
+            </Button>
+            <Button
+              className="rounded-xl bg-neutral-950 text-white hover:bg-neutral-800"
+              disabled={!reassignTargetId || isReassigning}
+              onClick={async () => {
+                if (!reassigningBooking || !reassignTargetId) return
+                const target = carts.find((cart) => cart.id === reassignTargetId)
+                if (!target) return
+                setIsReassigning(true)
+                try {
+                  const res = await reassignBooking(
+                    reassigningBooking.id,
+                    target.id,
+                    { reason: "admin" },
+                  )
+                  if (!res.ok) {
+                    toast({
+                      title: "Could not move booking",
+                      description: res.error,
+                      variant: "destructive",
+                    })
+                    return
+                  }
+                  toast({
+                    title: "Booking moved",
+                    description: target.name,
+                  })
+                  setReassigningBooking(null)
+                  setReassignTargetId(null)
+                } finally {
+                  setIsReassigning(false)
+                }
+              }}
+            >
+              {isReassigning ? "Moving…" : "Confirm move"}
             </Button>
           </div>
         </DialogContent>
