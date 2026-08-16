@@ -14,6 +14,7 @@ import { AnimatedCancelButton } from "@/components/animated-cancel-button"
 import { cancelBooking } from "@/lib/actions"
 import { getSessionSnapshot } from "@/lib/auth/session"
 import { toast } from "@/hooks/use-toast"
+import { bookingClassLabel } from "@/lib/booking/slot-rules"
 import { getBookingPurpose, type Booking, type Cart } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -45,7 +46,7 @@ export function ManageBookingDialog({
   })()
 
   const purpose = getBookingPurpose(booking)
-  const classLabel = booking.className?.trim()
+  const classLabel = bookingClassLabel(booking)
   const subjectLabel = booking.subject?.trim()
   const notesLabel = booking.notes?.trim()
   const isTaggedPurpose = purpose && purpose.id !== "class"
@@ -53,7 +54,12 @@ export function ManageBookingDialog({
   const detailParts = [
     booking.teacherName?.trim(),
     isTaggedPurpose ? null : classLabel,
-    isTaggedPurpose ? null : subjectLabel,
+    isTaggedPurpose ||
+    !subjectLabel ||
+    subjectLabel.toLowerCase() === "class" ||
+    subjectLabel.toLowerCase() === classLabel.toLowerCase()
+      ? null
+      : subjectLabel,
     purpose?.id === "other" && notesLabel && notesLabel !== purpose.label
       ? notesLabel
       : null,

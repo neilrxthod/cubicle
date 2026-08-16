@@ -173,12 +173,22 @@ export function canTeacherBookSlot(input: {
   return { ok: true };
 }
 
+/** Board / table placeholder until a Class booking is given a real name. */
+export const GENERIC_CLASS_LABEL = "N/A yet";
+
+export function isGenericClassValue(
+  value: string | undefined | null,
+): boolean {
+  const v = (value ?? "").trim().toLowerCase();
+  return !v || v === "class" || v === "n/a yet" || v === "n/a";
+}
+
 /** Visible class / subject — generic Class bookings stay unlabeled until set. */
 export function bookingClassLabel(
   booking: Pick<Booking, "className" | "subject">,
 ): string {
   const custom = (booking.className ?? booking.subject ?? "").trim();
-  if (!custom || custom.toLowerCase() === "class") return "N/A Yet";
+  if (isGenericClassValue(custom)) return GENERIC_CLASS_LABEL;
   return custom;
 }
 

@@ -151,7 +151,7 @@ export function BookDialog({
     const otherNote = custom.trim();
 
     if (purposeId === "class") {
-      if (teachingSubject) {
+      if (session?.role !== "admin" && teachingSubject) {
         formData.set("subject", teachingSubject);
         formData.set("className", teachingSubject);
       } else {

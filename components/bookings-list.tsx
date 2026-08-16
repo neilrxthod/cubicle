@@ -4,6 +4,7 @@ import { useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { format, isToday, isTomorrow, parseISO } from "date-fns"
+import { bookingClassLabel } from "@/lib/booking/slot-rules"
 import type { Booking, Cart } from "@/lib/types"
 import { cancelBooking } from "@/lib/actions"
 import { Spinner } from "@/components/ui/spinner"
@@ -72,11 +73,17 @@ export function BookingsList({
                 ? `With ${b.teacherName}`
                 : `Shared with ${b.sharedWithName.trim()}`
               : null
+            const classLabel = bookingClassLabel(b)
+            const subjectLabel = b.subject?.trim()
             const detail = [
               dayLabel(dt),
               b.period,
-              b.className?.trim(),
-              b.subject?.trim(),
+              classLabel,
+              subjectLabel &&
+              subjectLabel.toLowerCase() !== "class" &&
+              subjectLabel.toLowerCase() !== classLabel.toLowerCase()
+                ? subjectLabel
+                : null,
               shareBit,
             ]
               .filter(Boolean)

@@ -10,6 +10,7 @@ import {
   AvatarImage,
 } from "@/components/ui/avatar";
 import { cancelBooking } from "@/lib/actions";
+import { bookingClassLabel } from "@/lib/booking/slot-rules";
 import {
   getPeriodSchedule,
   getSchoolDate,
@@ -267,7 +268,7 @@ function ReservationRow({
   onOpen: () => void;
 }) {
   const paused = cart?.status === "maintenance";
-  const subject = booking.className?.trim() || booking.subject?.trim();
+  const subject = bookingClassLabel(booking);
 
   return (
     <li className={first ? undefined : "border-t border-neutral-100"}>
@@ -346,7 +347,7 @@ function ReservationSheet({
 }) {
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
-  const subject = booking.className?.trim() || booking.subject?.trim();
+  const subject = bookingClassLabel(booking);
   const shared =
     booking.sharedWithId === viewerId
       ? `With ${booking.teacherName}`

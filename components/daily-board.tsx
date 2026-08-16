@@ -55,7 +55,9 @@ import {
 } from "@/lib/types"
 import {
   bookingBoardTagText,
+  bookingClassLabel,
   canTeacherBookSlot,
+  isGenericClassValue,
   slotLimitNoticeFromError,
   DEFAULT_ADMIN_MULTI_TAG,
   type SlotLimitNotice,
@@ -206,6 +208,31 @@ const cellBase =
 /** Slot fill inside the white strip. */
 const slotFace =
   "relative flex h-full w-full min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[5px]"
+
+function slotTagClassName(input: {
+  canRename: boolean
+  purposeTag?: string | null
+  tagText: string
+  onDark: boolean
+  purposeTagClass?: string
+  purposeTagClassOnDark?: string
+}) {
+  const placeholder = isGenericClassValue(input.tagText)
+  return cn(
+    "absolute top-1 right-1 z-[3] max-w-[calc(100%-6px)]",
+    "rounded px-1 py-px text-[8.5px] font-semibold tracking-[0.04em]",
+    "whitespace-nowrap",
+    placeholder ? "normal-case" : "uppercase",
+    input.canRename ? "cursor-text select-none" : "pointer-events-none",
+    input.purposeTag
+      ? input.onDark
+        ? input.purposeTagClassOnDark
+        : input.purposeTagClass
+      : input.onDark
+        ? "bg-white/30 text-white"
+        : "bg-neutral-700 text-white",
+  )
+}
 
 /** Paused cart — pale system-yellow wash, not a saturated fill. */
 const pausedSlotFill = "bg-[#fff6e0] text-amber-400/80"
@@ -1235,7 +1262,12 @@ export function DailyBoard({
                           booking.sharePendingName ||
                           "Colleague"
                         : undefined
-                      const classLabel = booking.className?.trim()
+                      const classLabel = bookingClassLabel(booking)
+                      const titleClass = isGenericClassValue(
+                        booking.className ?? booking.subject,
+                      )
+                        ? ""
+                        : classLabel
                       const purpose = getBookingPurpose(booking)
                       const purposeTag = purpose?.tag
                       const boardTag = bookingBoardTagText(
@@ -1270,12 +1302,12 @@ export function DailyBoard({
                       const title = inviteForMe
                         ? `${personName} invited you to share this cart`
                         : isInvolved
-                          ? `${classLabel || "Your booking"}${purposeBit}${shareBit} — click to manage`
+                          ? `${titleClass || "Your booking"}${purposeBit}${shareBit} — click to manage`
                           : hasPendingSwap
-                            ? `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — swap pending`
+                            ? `${titleClass || personName} · ${personName}${purposeBit}${shareBit} — swap pending`
                             : isAdmin
-                              ? `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — swap or delete`
-                              : `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — hover to swap`
+                              ? `${titleClass || personName} · ${personName}${purposeBit}${shareBit} — swap or delete`
+                              : `${titleClass || personName} · ${personName}${purposeBit}${shareBit} — hover to swap`
                       const deleting = deletingBookingId === booking.id
                       const inviteBusy =
                         shareInviteBusy?.id === booking.id
@@ -1348,20 +1380,14 @@ export function DailyBoard({
                                     setRenamingBookingId(booking.id)
                                   }
                                 }}
-                                className={cn(
-                                  "absolute top-1 right-1 z-[2]",
-                                  "rounded px-1 py-px text-[8.5px] font-semibold uppercase tracking-[0.04em]",
-                                  canRenameTag
-                                    ? "cursor-text select-none"
-                                    : "pointer-events-none",
-                                  purpose?.tag
-                                    ? isInvolved || inviteForMe
-                                      ? purpose.tagClassOnDark
-                                      : purpose.tagClass
-                                    : isInvolved || inviteForMe
-                                      ? "bg-white/15 text-white"
-                                      : "bg-neutral-700 text-white",
-                                )}
+                                className={slotTagClassName({
+                                  canRename: canRenameTag,
+                                  purposeTag: purpose?.tag,
+                                  tagText: boardTag,
+                                  onDark: isInvolved || inviteForMe,
+                                  purposeTagClass: purpose?.tagClass,
+                                  purposeTagClassOnDark: purpose?.tagClassOnDark,
+                                })}
                               >
                                 {boardTag}
                               </span>
@@ -1703,7 +1729,12 @@ export function DailyBoard({
                           booking.sharePendingName ||
                           "Colleague"
                         : undefined
-                      const classLabel = booking.className?.trim()
+                      const classLabel = bookingClassLabel(booking)
+                      const titleClass = isGenericClassValue(
+                        booking.className ?? booking.subject,
+                      )
+                        ? ""
+                        : classLabel
                       const purpose = getBookingPurpose(booking)
                       const purposeTag = purpose?.tag
                       const boardTag = bookingBoardTagText(
@@ -1738,12 +1769,12 @@ export function DailyBoard({
                       const title = inviteForMe
                         ? `${personName} invited you to share this cart`
                         : isInvolved
-                          ? `${classLabel || "Your booking"}${purposeBit}${shareBit} — click to manage`
+                          ? `${titleClass || "Your booking"}${purposeBit}${shareBit} — click to manage`
                           : hasPendingSwap
-                            ? `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — swap pending`
+                            ? `${titleClass || personName} · ${personName}${purposeBit}${shareBit} — swap pending`
                             : isAdmin
-                              ? `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — swap or delete`
-                              : `${classLabel || personName} · ${personName}${purposeBit}${shareBit} — hover to swap`
+                              ? `${titleClass || personName} · ${personName}${purposeBit}${shareBit} — swap or delete`
+                              : `${titleClass || personName} · ${personName}${purposeBit}${shareBit} — hover to swap`
                       const deleting = deletingBookingId === booking.id
                       const inviteBusy =
                         shareInviteBusy?.id === booking.id
@@ -1816,20 +1847,14 @@ export function DailyBoard({
                                     setRenamingBookingId(booking.id)
                                   }
                                 }}
-                                className={cn(
-                                  "absolute top-1 right-1 z-[2]",
-                                  "rounded px-1 py-px text-[8.5px] font-semibold uppercase tracking-[0.04em]",
-                                  canRenameTag
-                                    ? "cursor-text select-none"
-                                    : "pointer-events-none",
-                                  purpose?.tag
-                                    ? isInvolved || inviteForMe
-                                      ? purpose.tagClassOnDark
-                                      : purpose.tagClass
-                                    : isInvolved || inviteForMe
-                                      ? "bg-white/15 text-white"
-                                      : "bg-neutral-700 text-white",
-                                )}
+                                className={slotTagClassName({
+                                  canRename: canRenameTag,
+                                  purposeTag: purpose?.tag,
+                                  tagText: boardTag,
+                                  onDark: isInvolved || inviteForMe,
+                                  purposeTagClass: purpose?.tagClass,
+                                  purposeTagClassOnDark: purpose?.tagClassOnDark,
+                                })}
                               >
                                 {boardTag}
                               </span>

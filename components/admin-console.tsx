@@ -4142,18 +4142,19 @@ function DailyBoardLite({ bookings, carts }: { bookings: Booking[]; carts: Cart[
                       />
                     )
                   }
+                  const classLabel = bookingClassLabel(b)
                   return (
                     <div
                       key={p}
                       className="min-h-14 border-r border-border/70 p-1.5 last:border-r-0"
-                      title={`${b.teacherName}${b.className ? ` - ${b.className}` : ""}`}
+                      title={`${b.teacherName} · ${classLabel}`}
                     >
                       <div className="flex h-full flex-col justify-center rounded-lg bg-neutral-100 px-2.5 py-1.5">
                         <span className="truncate text-[12px] font-semibold text-foreground">
-                          {b.className?.trim() || b.teacherName}
+                          {classLabel}
                         </span>
                         <span className="truncate text-[11px] text-muted-foreground">
-                          {b.className?.trim() ? b.teacherName : b.subject?.trim() || "Reserved"}
+                          {b.teacherName}
                         </span>
                       </div>
                     </div>
