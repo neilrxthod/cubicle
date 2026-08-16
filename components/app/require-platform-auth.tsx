@@ -254,7 +254,7 @@ export function RequirePlatformAuth({
       return;
     }
 
-    if (session.role === "teacher" && isIosOrAndroid) {
+    if (isIosOrAndroid) {
       return;
     }
 
@@ -283,7 +283,7 @@ export function RequirePlatformAuth({
     return <LoadingScreen />;
   }
 
-  if (session.role === "teacher" && isIosOrAndroid) {
+  if (isIosOrAndroid) {
     return (
       <PlatformBootstrap>
         <TeacherQrScanner user={toPlatformSession(session)} />

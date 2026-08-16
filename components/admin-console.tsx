@@ -105,7 +105,8 @@ import {
 import { LiquidMetalButton } from "@/components/ui/liquid-metal"
 import { openCorporatePdf } from "@/lib/export/corporate-pdf"
 
-type Tab = "carts" | "labels" | "bookings" | "staff" | "reports"
+export type AdminConsoleTab = "carts" | "labels" | "bookings" | "staff" | "reports"
+type Tab = AdminConsoleTab
 
 function isDateInRange(date: Date, range: DateRange | undefined) {
   if (!range?.from) return true
@@ -159,6 +160,8 @@ export function AdminConsole({
   issues,
   slotRestrictions = [],
   swapRequests = [],
+  initialTab = "carts",
+  hideChrome = false,
 }: {
   carts: Cart[]
   bookings: Booking[]
@@ -167,9 +170,11 @@ export function AdminConsole({
   slotRestrictions?: SlotRestriction[]
   bookingPolicy?: BookingPolicy
   swapRequests?: SwapRequest[]
+  initialTab?: Tab
+  hideChrome?: boolean
 }) {
   const router = useRouter()
-  const [tab, setTab] = useState<Tab>("carts")
+  const [tab, setTab] = useState<Tab>(initialTab)
   const [range] = useState<DateRange | undefined>()
   const [clearTarget, setClearTarget] = useState<ClearDataTarget | null>(null)
   // Reports / booking filters: teachers (include revoked so history still labels).
@@ -202,6 +207,7 @@ export function AdminConsole({
 
   return (
     <div className="flex min-w-0 w-full flex-col gap-4">
+      {hideChrome ? null : (
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <nav
           className="board-scroll inline-flex h-9 w-full max-w-full items-center gap-0.5 overflow-y-hidden rounded-lg border border-[var(--hairline-strong)] bg-white p-0.5 shadow-[var(--shadow-surface)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:w-fit"
@@ -282,6 +288,7 @@ export function AdminConsole({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      )}
 
       {tab === "carts" ? (
         <CartsGrid carts={carts} bookings={bookings} users={users} />

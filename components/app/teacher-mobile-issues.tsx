@@ -20,12 +20,15 @@ export function TeacherMobileIssues({
 
   const mine = useMemo(() => {
     return issues
-      .filter((issue) => issue.reportedById === user.id)
+      .filter(
+        (issue) =>
+          user.role === "admin" || issue.reportedById === user.id,
+      )
       .sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
-  }, [issues, user.id]);
+  }, [issues, user.id, user.role]);
 
   const open = mine.filter((issue) => issue.status === "open");
   const resolved = mine.filter((issue) => issue.status === "resolved");
@@ -49,12 +52,19 @@ export function TeacherMobileIssues({
         }
       />
       <main className="flex flex-1 flex-col gap-7 overflow-y-auto px-5 pb-8 pt-4">
-        <IssueGroup title="Open" issues={open} empty="No open issues" cartName={cartName} />
+        <IssueGroup
+          title="Open"
+          issues={open}
+          empty="No open issues"
+          cartName={cartName}
+          showReporter={user.role === "admin"}
+        />
         <IssueGroup
           title="Resolved"
           issues={resolved}
           empty="No resolved issues"
           cartName={cartName}
+          showReporter={user.role === "admin"}
         />
       </main>
       {reportOpen ? (
@@ -69,11 +79,13 @@ function IssueGroup({
   issues,
   empty,
   cartName,
+  showReporter = false,
 }: {
   title: string;
   issues: Issue[];
   empty: string;
   cartName: (id: string) => string;
+  showReporter?: boolean;
 }) {
   return (
     <section className="flex flex-col gap-2">
@@ -109,6 +121,12 @@ function IssueGroup({
                 {severityLabel(issue.severity)}
                 <span className="text-neutral-200"> · </span>
                 {format(parseISO(issue.createdAt), "MMM d")}
+                {showReporter && issue.reporterName ? (
+                  <>
+                    <span className="text-neutral-200"> · </span>
+                    {issue.reporterName}
+                  </>
+                ) : null}
               </p>
             </li>
           ))}

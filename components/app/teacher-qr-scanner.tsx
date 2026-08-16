@@ -4,6 +4,7 @@ import { Suspense, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { format, parseISO } from "date-fns";
 import { ChevronLeft, ChevronRight, QrCode } from "lucide-react";
+import { AdminMobileSection } from "@/components/app/admin-mobile-section";
 import { LocalPerspectiveSwitch } from "@/components/app/local-perspective-switch";
 import { TeacherMobileBookings } from "@/components/app/teacher-mobile-bookings";
 import { TeacherMobileIssues } from "@/components/app/teacher-mobile-issues";
@@ -165,7 +166,12 @@ type MobileView =
   | "issues"
   | "shares"
   | "swaps"
-  | "profile";
+  | "profile"
+  | "admin-carts"
+  | "admin-labels"
+  | "admin-bookings"
+  | "admin-reports"
+  | "admin-staff";
 
 function TeacherScanHome({
   user,
@@ -198,7 +204,9 @@ function TeacherScanHome({
     bookingInvolvesUser(booking, user.id),
   ).length;
   const issueCount = issues.filter(
-    (issue) => issue.reportedById === user.id && issue.status === "open",
+    (issue) =>
+      issue.status === "open" &&
+      (user.role === "admin" || issue.reportedById === user.id),
   ).length;
   const shareCount = bookings.filter((booking) =>
     bookingHasShareInviteFor(booking, user.id),
@@ -304,6 +312,32 @@ function TeacherScanHome({
               },
             ]}
           />
+          {user.role === "admin" ? (
+            <HomeGroup
+              rows={[
+                {
+                  label: "Inventory",
+                  onClick: () => onOpen("admin-carts"),
+                },
+                {
+                  label: "QR codes",
+                  onClick: () => onOpen("admin-labels"),
+                },
+                {
+                  label: "Reservations",
+                  onClick: () => onOpen("admin-bookings"),
+                },
+                {
+                  label: "Reports",
+                  onClick: () => onOpen("admin-reports"),
+                },
+                {
+                  label: "Staff",
+                  onClick: () => onOpen("admin-staff"),
+                },
+              ]}
+            />
+          ) : null}
         </div>
       </main>
     </div>
@@ -358,7 +392,8 @@ function HomeRow({
 }
 
 /**
- * Teacher phone home — SCAN first, then camera (or local simulator).
+ * Phone app — SCAN first, then camera (or local simulator).
+ * Teachers and admins share this shell; admins also get inventory tools.
  */
 const PUSH_VIEWS = new Set<MobileView>([
   "bookings",
@@ -366,6 +401,11 @@ const PUSH_VIEWS = new Set<MobileView>([
   "issues",
   "shares",
   "swaps",
+  "admin-carts",
+  "admin-labels",
+  "admin-bookings",
+  "admin-reports",
+  "admin-staff",
 ]);
 
 export function TeacherQrScanner({ user }: { user: SessionUser }) {
@@ -408,6 +448,32 @@ export function TeacherQrScanner({ user }: { user: SessionUser }) {
               <TeacherMobileShares user={user} onBack={goHome} />
             ) : view === "swaps" ? (
               <TeacherMobileSwaps user={user} onBack={goHome} />
+            ) : view === "admin-carts" ? (
+              <AdminMobileSection
+                title="Inventory"
+                tab="carts"
+                onBack={goHome}
+              />
+            ) : view === "admin-labels" ? (
+              <AdminMobileSection
+                title="QR codes"
+                tab="labels"
+                onBack={goHome}
+              />
+            ) : view === "admin-bookings" ? (
+              <AdminMobileSection
+                title="Reservations"
+                tab="bookings"
+                onBack={goHome}
+              />
+            ) : view === "admin-reports" ? (
+              <AdminMobileSection
+                title="Reports"
+                tab="reports"
+                onBack={goHome}
+              />
+            ) : view === "admin-staff" ? (
+              <AdminMobileSection title="Staff" tab="staff" onBack={goHome} />
             ) : view === "profile" ? (
               <TeacherMobileSettings
                 user={user}
