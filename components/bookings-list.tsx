@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { format, isToday, isTomorrow, parseISO } from "date-fns"
 import type { Booking, Cart } from "@/lib/types"
 import { cancelBooking } from "@/lib/actions"
+import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
@@ -132,9 +133,16 @@ function CancelAction({
     <button
       type="button"
       disabled={pending}
+      aria-busy={pending}
+      aria-label={pending ? "Canceling booking" : "Cancel booking"}
       onClick={() =>
         startTransition(async () => {
+          const started = Date.now()
           const res = await cancelBooking(bookingId)
+          const remain = 1500 - (Date.now() - started)
+          if (remain > 0) {
+            await new Promise((resolve) => setTimeout(resolve, remain))
+          }
           if (res && "error" in res && res.error) {
             toast({
               title: "Could not cancel booking",
@@ -158,7 +166,11 @@ function CancelAction({
         "disabled:pointer-events-none disabled:opacity-40",
       )}
     >
-      {pending ? "…" : "Cancel booking"}
+      {pending ? (
+        <Spinner className="size-3.5" />
+      ) : (
+        "Cancel booking"
+      )}
     </button>
   )
 }

@@ -16,6 +16,7 @@ import {
 } from "@/lib/calendar/period-schedule";
 import { usePlatformStore } from "@/lib/data/platform-store";
 import { toast } from "@/hooks/use-toast";
+import { Spinner } from "@/components/ui/spinner";
 import {
   bookingInvolvesUser,
   type Booking,
@@ -356,10 +357,15 @@ function ReservationSheet({
 
   function handleCancel() {
     startTransition(async () => {
+      const started = Date.now();
       const res = await cancelBooking(
         booking.id,
         adminCancel ? { reason: "admin" } : undefined,
       );
+      const remain = 1500 - (Date.now() - started);
+      if (remain > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remain));
+      }
       if (res && "error" in res && res.error) {
         toast({
           title: "Could not cancel",
@@ -444,7 +450,11 @@ function ReservationSheet({
                     onClick={handleCancel}
                     className="h-12 border-l border-neutral-100 text-[17px] font-semibold text-red-600 active:bg-red-50 disabled:opacity-40"
                   >
-                    {pending ? "…" : "Cancel"}
+                    {pending ? (
+                      <Spinner className="mx-auto size-3.5 text-red-600" />
+                    ) : (
+                      "Cancel"
+                    )}
                   </button>
                 </div>
               ) : (

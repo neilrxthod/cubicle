@@ -7,6 +7,7 @@ import { TextMorph } from "torph/react";
 import * as AnimatedBorderButton from "@/components/ui/animated-border-button";
 import SuccessIcon from "@/components/ui/icons/success";
 import TrashIcon from "@/components/ui/icons/trash";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 type ActionResult =
@@ -85,8 +86,13 @@ export function AnimatedCancelButton({
     if (loading || success) return;
 
     setLoading(true);
+    const started = Date.now();
     try {
       const res = await onConfirm();
+      const remain = 1500 - (Date.now() - started);
+      if (remain > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remain));
+      }
       if (isErrorResult(res)) {
         onError?.(res.error);
         setLoading(false);
@@ -102,7 +108,7 @@ export function AnimatedCancelButton({
     }
   }
 
-  const label = success ? successLabel : loading ? "Canceling…" : idleLabel;
+  const label = success ? successLabel : idleLabel;
 
   return (
     <AnimatedBorderButton.Root
@@ -135,7 +141,11 @@ export function AnimatedCancelButton({
           />
         </motion.div>
       </AnimatePresence>
-      <TextMorph className="tabular-nums">{label}</TextMorph>
+      {loading ? (
+        <Spinner className="size-3.5" />
+      ) : (
+        <TextMorph className="tabular-nums">{label}</TextMorph>
+      )}
     </AnimatedBorderButton.Root>
   );
 }

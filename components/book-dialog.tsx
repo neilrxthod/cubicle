@@ -32,6 +32,7 @@ import {
 } from "@/lib/onboarding/storage";
 import { usePlatformStore } from "@/lib/data/platform-store";
 import { toast } from "@/hooks/use-toast";
+import { Spinner } from "@/components/ui/spinner";
 import {
   BOOKING_PURPOSES,
   getBookingPurposeOption,
@@ -171,7 +172,12 @@ export function BookDialog({
     }
 
     startTransition(async () => {
+      const started = Date.now();
       const res = await createBooking(formData);
+      const remain = 1500 - (Date.now() - started);
+      if (remain > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remain));
+      }
       if (res && "error" in res && res.error) {
         const limit = slotLimitNoticeFromError(res.error);
         if (limit) {
@@ -316,10 +322,16 @@ export function BookDialog({
           <button
             type="button"
             disabled={pending}
+            aria-busy={pending}
+            aria-label={pending ? "Booking" : "Book"}
             onClick={handleBook}
             className="inline-flex h-9 min-w-[5.5rem] items-center justify-center rounded-full bg-neutral-950 px-5 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {pending ? "Booking…" : "Book"}
+            {pending ? (
+              <Spinner className="size-3.5 text-white" />
+            ) : (
+              "Book"
+            )}
           </button>
         </div>
       </DialogContent>

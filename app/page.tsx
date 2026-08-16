@@ -84,24 +84,6 @@ function openIssueLoadByDay(
   });
 }
 
-/**
- * Day-over-day % only when the prior day has a real baseline.
- */
-function dayOverDayDiff(
-  current: number,
-  previous: number,
-  opts?: { upIsPositive?: boolean; decimals?: number },
-): StatItem["diff"] {
-  if (previous <= 0) return undefined;
-  const raw = ((current - previous) / previous) * 100;
-  const value = Math.round(Math.max(-999, Math.min(999, raw)) * 10) / 10;
-  return {
-    value,
-    decimals: opts?.decimals ?? 1,
-    upIsPositive: opts?.upIsPositive,
-  };
-}
-
 function HomeBoard({ user }: { user: SessionUser }) {
   const state = usePlatformStore();
   const searchParams = useSearchParams();
@@ -118,16 +100,6 @@ function HomeBoard({ user }: { user: SessionUser }) {
     const freeSlots = Math.max(capacity - todayBookings.length, 0);
     const utilization =
       Math.round((todayBookings.length / capacity) * 1000) / 10;
-
-    const yesterdayKey = format(subDays(parseISO(date), 1), "yyyy-MM-dd");
-    const yBooked = state.bookings.filter((b) => b.date === yesterdayKey).length;
-    const yMine = state.bookings.filter(
-      (b) =>
-        b.date === yesterdayKey &&
-        (b.teacherId === user.id || b.sharedWithId === user.id),
-    ).length;
-    const yFree = Math.max(activeCarts * 5 - yBooked, 0);
-    const yUtil = Math.round((yBooked / capacity) * 1000) / 10;
 
     // ——— Multi-day series from live platform store ———
     const bookedSpark = bookingCountsByDay(
@@ -153,12 +125,6 @@ function HomeBoard({ user }: { user: SessionUser }) {
       SPARK_DAYS,
     );
 
-    // Previous-day open issues for honest DoD when series has signal
-    const yIssues =
-      issueSpark.length >= 2
-        ? issueSpark[issueSpark.length - 2]!
-        : 0;
-
     // Monochrome sparks — Tesla product, not multi-color analytics.
     const spark = "rgb(23 23 23)";
 
@@ -169,7 +135,6 @@ function HomeBoard({ user }: { user: SessionUser }) {
         value: todayBookings.length,
         format: { kind: "number" },
         sparkline: { data: bookedSpark, color: spark },
-        diff: dayOverDayDiff(todayBookings.length, yBooked),
       },
       {
         key: "utilization",
@@ -177,7 +142,6 @@ function HomeBoard({ user }: { user: SessionUser }) {
         value: utilization,
         format: { kind: "percent", decimals: 1, basis: "unit" },
         sparkline: { data: utilSpark, color: spark },
-        diff: dayOverDayDiff(utilization, yUtil),
       },
       {
         key: "yours",
@@ -185,7 +149,6 @@ function HomeBoard({ user }: { user: SessionUser }) {
         value: mine.length,
         format: { kind: "number" },
         sparkline: { data: mineSpark, color: spark },
-        diff: dayOverDayDiff(mine.length, yMine),
       },
       {
         key: "issues",
@@ -193,9 +156,6 @@ function HomeBoard({ user }: { user: SessionUser }) {
         value: openIssues,
         format: { kind: "number" },
         sparkline: { data: issueSpark, color: spark },
-        diff: dayOverDayDiff(openIssues, yIssues, {
-          upIsPositive: false,
-        }),
       },
       {
         key: "free",
@@ -203,7 +163,6 @@ function HomeBoard({ user }: { user: SessionUser }) {
         value: freeSlots,
         format: { kind: "number" },
         sparkline: { data: freeSpark, color: spark },
-        diff: dayOverDayDiff(freeSlots, yFree),
       },
     ];
   }, [state, date, user.id]);

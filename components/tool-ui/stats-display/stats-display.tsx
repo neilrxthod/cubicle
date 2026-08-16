@@ -187,10 +187,10 @@ function StatCell({
 
   return (
     <div
-      className="relative flex h-full min-h-[7.25rem] flex-col justify-between gap-3 px-4 py-4 sm:min-h-[7.75rem] sm:px-5 sm:py-5"
+      className="relative flex h-full min-h-[6.75rem] flex-col justify-between gap-2 px-3 py-3.5 sm:min-h-[7.25rem] sm:px-3.5 sm:py-4"
       style={{ animationDelay: `${index * 40}ms` }}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2">
         <span
           className={cn(
             "text-[10px] font-medium uppercase tracking-[0.16em]",
@@ -201,7 +201,7 @@ function StatCell({
         </span>
         {hasSparkline ? (
           <div
-            className="h-7 w-14 shrink-0 opacity-80 sm:h-8 sm:w-16"
+            className="h-6 w-12 shrink-0 opacity-70 sm:h-7 sm:w-14"
             title={`14-day trend (${sparkData[0]} → ${sparkData[sparkData.length - 1]})`}
           >
             <Sparkline
@@ -217,8 +217,8 @@ function StatCell({
         ) : null}
       </div>
 
-      <div className="flex flex-wrap items-end gap-x-2.5 gap-y-1">
-        <span className="text-[1.875rem] font-light leading-none tracking-[-0.04em] text-white sm:text-[2.125rem]">
+      <div className="flex flex-wrap items-end gap-x-1.5 gap-y-0.5">
+        <span className="text-[2.75rem] font-extralight leading-none tracking-[-0.07em] text-white tabular-nums sm:text-[3.15rem] lg:text-[3.4rem]">
           <FormattedValue
             value={stat.value}
             format={stat.format}
