@@ -51,28 +51,36 @@ export function useQrCamera({
   const onCodeRef = useRef(onCode);
   const [status, setStatus] = useState<QrCameraStatus>("idle");
 
-  pausedRef.current = paused;
-  onCodeRef.current = onCode;
+  if (!enabled && status !== "idle") {
+    setStatus("idle");
+  } else if (enabled && status === "idle") {
+    setStatus("starting");
+  }
 
   useEffect(() => {
-    if (!enabled) {
-      setStatus("idle");
-      return;
-    }
+    pausedRef.current = paused;
+  }, [paused]);
+
+  useEffect(() => {
+    onCodeRef.current = onCode;
+  }, [onCode]);
+
+  useEffect(() => {
+    if (!enabled) return;
 
     let cancelled = false;
     let stream: MediaStream | null = null;
     let raf = 0;
     let lastAttempt = 0;
     let decoding = false;
+    let video: HTMLVideoElement | null = null;
 
     async function start() {
       if (!navigator.mediaDevices?.getUserMedia) {
-        setStatus("unsupported");
+        if (!cancelled) setStatus("unsupported");
         return;
       }
 
-      setStatus("starting");
       try {
         stream = await getRearCameraStream();
       } catch (error) {
@@ -91,7 +99,7 @@ export function useQrCamera({
         return;
       }
 
-      const video = videoRef.current;
+      video = videoRef.current;
       if (!video) {
         stream.getTracks().forEach((track) => track.stop());
         return;
@@ -114,7 +122,7 @@ export function useQrCamera({
         raf = requestAnimationFrame(tick);
         if (pausedRef.current || decoding) return;
         if (now - lastAttempt < 140) return;
-        if (video.readyState < 2) return;
+        if (!video || video.readyState < 2) return;
         lastAttempt = now;
         decoding = true;
         void decodeVideoFrame(video)
@@ -135,7 +143,6 @@ export function useQrCamera({
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
-      const video = videoRef.current;
       if (video) video.srcObject = null;
       stream?.getTracks().forEach((track) => track.stop());
     };

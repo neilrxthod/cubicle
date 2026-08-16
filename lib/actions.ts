@@ -38,7 +38,6 @@ import {
   dbCreateCart,
   dbDeleteCart,
   dbReorderCarts,
-  dbWipeOperationalData,
   dbClearPlatformData,
   dbSetCartStatus,
   dbSyncBookingTeacherName,

@@ -26,7 +26,6 @@ import { fileToAvatarDataUrl } from "@/lib/profile/image";
 import { isVerifiedStaff } from "@/lib/staff/employment";
 import type { SessionUser } from "@/lib/types";
 import { toast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
 
 const NAME_MAX = 80;
 
@@ -60,7 +59,9 @@ export function TeacherMobileSettings({
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
   const [notifyEmail, setNotifyEmail] = useState(user.notifyEmail ?? true);
   const [notifyIssues, setNotifyIssues] = useState(user.notifyIssues ?? true);
-  const [allowIssueDelete, setAllowIssueDelete] = useState(false);
+  const [allowIssueDelete, setAllowIssueDelete] = useState(
+    () => getUiPreferences().allowIssueDelete === true,
+  );
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -72,22 +73,20 @@ export function TeacherMobileSettings({
   const canDelete =
     deleteConfirm.trim().toLowerCase() === user.email.toLowerCase();
 
-  useEffect(() => {
-    setAllowIssueDelete(getUiPreferences().allowIssueDelete === true);
-  }, []);
+  const userStamp = `${user.id}:${user.name}:${user.avatarUrl ?? ""}:${user.notifyEmail}:${user.notifyIssues}`;
+  const [seenUserStamp, setSeenUserStamp] = useState(userStamp);
+  if (!editingName && userStamp !== seenUserStamp) {
+    setSeenUserStamp(userStamp);
+    setName(user.name);
+    setAvatarUrl(user.avatarUrl);
+    setNotifyEmail(user.notifyEmail ?? true);
+    setNotifyIssues(user.notifyIssues ?? true);
+  }
 
   useEffect(() => {
     if (!editingName) return;
     nameRef.current?.focus();
   }, [editingName]);
-
-  useEffect(() => {
-    if (editingName) return;
-    setName(user.name);
-    setAvatarUrl(user.avatarUrl);
-    setNotifyEmail(user.notifyEmail ?? true);
-    setNotifyIssues(user.notifyIssues ?? true);
-  }, [user, editingName]);
 
   function payload() {
     return {

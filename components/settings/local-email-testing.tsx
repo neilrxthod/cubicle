@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   getLocalEmailPrefs,
   isValidLocalTestEmail,
@@ -20,24 +20,16 @@ import {
  * Local-only email sink controls. Hidden on production.
  */
 export function LocalEmailTestingSection() {
-  const [visible, setVisible] = useState(false);
-  const [prefs, setPrefs] = useState<LocalEmailPrefs>({
-    enabled: false,
-    testEmail: "",
-  });
-  const [draftEmail, setDraftEmail] = useState("");
+  const [visible] = useState(() => showLocalEmailTestingUi());
+  const [prefs, setPrefs] = useState<LocalEmailPrefs>(() =>
+    showLocalEmailTestingUi()
+      ? getLocalEmailPrefs()
+      : { enabled: false, testEmail: "" },
+  );
+  const [draftEmail, setDraftEmail] = useState(() =>
+    showLocalEmailTestingUi() ? getLocalEmailPrefs().testEmail : "",
+  );
   const [savedFlash, setSavedFlash] = useState(false);
-
-  useEffect(() => {
-    if (!showLocalEmailTestingUi()) {
-      setVisible(false);
-      return;
-    }
-    setVisible(true);
-    const next = getLocalEmailPrefs();
-    setPrefs(next);
-    setDraftEmail(next.testEmail);
-  }, []);
 
   if (!visible) return null;
 

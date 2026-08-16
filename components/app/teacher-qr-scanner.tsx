@@ -480,7 +480,7 @@ function TeacherScanCamera({
     setHit(next);
   }
 
-  const camera = useQrCamera({
+  const { videoRef, status: cameraStatus } = useQrCamera({
     enabled: !simulate,
     paused: Boolean(hit) || locking,
     onCode: acceptCode,
@@ -519,11 +519,11 @@ function TeacherScanCamera({
 
   const liveHint = simulate
     ? "Simulator · tap a label to scan"
-    : camera.status === "starting"
+    : cameraStatus === "starting"
       ? "Starting camera…"
-      : camera.status === "denied"
+      : cameraStatus === "denied"
         ? "Camera is off. Turn it on in Settings."
-        : camera.status === "unsupported"
+        : cameraStatus === "unsupported"
           ? "Camera isn’t available on this device."
           : "Align a Cubicle QR code in the frame";
 
@@ -531,7 +531,7 @@ function TeacherScanCamera({
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-black text-white">
       {!simulate ? (
         <video
-          ref={camera.videoRef}
+          ref={videoRef}
           className="absolute inset-0 size-full object-cover"
           playsInline
           muted

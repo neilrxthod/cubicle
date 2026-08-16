@@ -89,7 +89,9 @@ export function BookingsList({
               <li
                 key={b.id}
                 className={cn(
-                  "flex items-center gap-4 px-4 py-3.5 sm:px-5",
+                  "group flex items-center gap-4 px-4 py-3.5 sm:px-5",
+                  "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                  "hover:bg-black/[0.035] active:bg-black/[0.05]",
                   i > 0 && "border-t border-[var(--hairline)]",
                 )}
               >
@@ -97,7 +99,7 @@ export function BookingsList({
                   <p className="truncate text-[13px] font-medium tracking-[-0.01em] text-neutral-950">
                     {cart?.name ?? "Cart"}
                   </p>
-                  <p className="mt-0.5 truncate text-[12px] text-neutral-400">
+                  <p className="mt-0.5 truncate text-[12px] text-neutral-400 transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:text-neutral-500">
                     {format(dt, "MMM d, yyyy")} · {detail}
                   </p>
                 </div>
@@ -146,11 +148,13 @@ function CancelAction({
         })
       }
       className={cn(
-        "shrink-0 rounded-md px-2.5 py-1.5 text-[12.5px] font-medium text-neutral-400",
-        "transition-colors duration-150",
-        "hover:bg-neutral-100 hover:text-neutral-950",
-        "active:bg-neutral-100",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+        "shrink-0 rounded-md px-2.5 py-1.5 text-[12.5px] font-medium",
+        "text-neutral-300 group-hover:text-neutral-400",
+        "transition-[color,background-color] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        "hover:bg-red-50 hover:text-red-600",
+        "active:bg-red-100/80 active:text-red-700",
+        "focus-visible:bg-red-50 focus-visible:text-red-600",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/15",
         "disabled:pointer-events-none disabled:opacity-40",
       )}
     >

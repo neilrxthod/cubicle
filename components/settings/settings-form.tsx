@@ -60,7 +60,6 @@ export function SettingsForm({
   const fileRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const deleteConfirmRef = useRef<HTMLInputElement>(null);
-  const nameDraftRef = useRef(user.name);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [pending, startTransition] = useTransition();
@@ -76,12 +75,26 @@ export function SettingsForm({
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(user.avatarUrl);
   const [notifyEmail, setNotifyEmail] = useState(user.notifyEmail ?? true);
   const [notifyIssues, setNotifyIssues] = useState(user.notifyIssues ?? true);
-  const [allowIssueDelete, setAllowIssueDelete] = useState(false);
+  const [allowIssueDelete, setAllowIssueDelete] = useState(
+    () => getUiPreferences().allowIssueDelete === true,
+  );
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  nameDraftRef.current = name;
+  const userStamp = `${user.name}\0${user.avatarUrl ?? ""}\0${user.notifyEmail}\0${user.notifyIssues}`;
+  const [appliedUserStamp, setAppliedUserStamp] = useState(userStamp);
+  const localDirty =
+    name.trim() !== (user.name ?? "").trim() ||
+    notifyEmail !== (user.notifyEmail ?? true) ||
+    notifyIssues !== (user.notifyIssues ?? true);
+  if (!editingName && !localDirty && userStamp !== appliedUserStamp) {
+    setAppliedUserStamp(userStamp);
+    setName(user.name);
+    setAvatarUrl(user.avatarUrl);
+    setNotifyEmail(user.notifyEmail ?? true);
+    setNotifyIssues(user.notifyIssues ?? true);
+  }
 
   // Focus + select when entering name edit (no layout thrash)
   useEffect(() => {
@@ -95,33 +108,6 @@ export function SettingsForm({
     });
     return () => cancelAnimationFrame(id);
   }, [editingName]);
-
-  useEffect(() => {
-    setAllowIssueDelete(getUiPreferences().allowIssueDelete === true);
-  }, []);
-
-  // Sync from server only when the form is clean (never clobber a draft)
-  useEffect(() => {
-    if (editingName) return;
-    const localDirty =
-      name.trim() !== (user.name ?? "").trim() ||
-      notifyEmail !== (user.notifyEmail ?? true) ||
-      notifyIssues !== (user.notifyIssues ?? true);
-    if (localDirty) return;
-    setName(user.name);
-    setAvatarUrl(user.avatarUrl);
-    setNotifyEmail(user.notifyEmail ?? true);
-    setNotifyIssues(user.notifyIssues ?? true);
-  }, [
-    user.name,
-    user.avatarUrl,
-    user.notifyEmail,
-    user.notifyIssues,
-    editingName,
-    name,
-    notifyEmail,
-    notifyIssues,
-  ]);
 
   useEffect(() => {
     return () => {
@@ -265,7 +251,7 @@ export function SettingsForm({
   }
 
   function commitNameDraft() {
-    const next = nameDraftRef.current.trim().slice(0, NAME_MAX);
+    const next = name.trim().slice(0, NAME_MAX);
     setEditingName(false);
 
     if (!next) {

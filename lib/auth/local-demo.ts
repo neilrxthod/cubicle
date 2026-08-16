@@ -219,19 +219,6 @@ export function getLocalDemoAccounts(): DemoAccount[] {
   ];
 }
 
-/** A few seed staff appear online so presence dots can be judged locally. */
-export function getLocalDemoPreviewOnlineIds(): string[] {
-  if (!isLocalDemoMode()) return [];
-  return [
-    LOCAL_DEMO_ADMIN_ID,
-    LOCAL_DEMO_TEACHER_ID,
-    "local-seed-staff-jordan.lee",
-    "local-seed-staff-priya.patel",
-    "local-seed-staff-marcus.chen",
-    "local-seed-staff-amina.hassan",
-  ];
-}
-
 /**
  * Mark demo personas as finished with first-run setup so perspective
  * switches never trap you in the onboarding wizard.

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useMemo, useEffect, useRef } from "react"
+import { useState, useTransition, useMemo, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -475,6 +475,17 @@ function CartsGrid({
   const [exitingIds, setExitingIds] = useState<Set<string>>(new Set())
   const [, startTransition] = useTransition()
 
+  const liveCartIds = useMemo(() => new Set(carts.map((c) => c.id)), [carts])
+  if (exitingIds.size > 0) {
+    let changed = false
+    const pruned = new Set<string>()
+    for (const id of exitingIds) {
+      if (liveCartIds.has(id)) pruned.add(id)
+      else changed = true
+    }
+    if (changed) setExitingIds(pruned)
+  }
+
   const sortedCarts = useMemo(
     () =>
       [...carts]
@@ -482,23 +493,6 @@ function CartsGrid({
         .sort((a, b) => a.name.localeCompare(b.name)),
     [carts, exitingIds],
   )
-
-  // Drop exit markers once the server list no longer includes them
-  useEffect(() => {
-    if (exitingIds.size === 0) return
-    const live = new Set(carts.map((c) => c.id))
-    setExitingIds((prev) => {
-      let changed = false
-      const next = new Set(prev)
-      for (const id of prev) {
-        if (!live.has(id)) {
-          next.delete(id)
-          changed = true
-        }
-      }
-      return changed ? next : prev
-    })
-  }, [carts, exitingIds.size])
 
   function futureCount(cartId: string) {
     const today = format(new Date(), "yyyy-MM-dd")
@@ -837,6 +831,11 @@ function CartsGrid({
       </AnimatePresence>
 
       <CartEditorDialog
+        key={
+          editor
+            ? `${editor.mode}:${editor.mode === "edit" ? editor.cart.id : "new"}`
+            : "closed"
+        }
         open={!!editor}
         mode={editor?.mode ?? "create"}
         cart={editor?.mode === "edit" ? editor.cart : null}
@@ -898,15 +897,16 @@ function ClearDataDialog({
 }) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [errorFor, setErrorFor] = useState(target)
+  if (target !== errorFor) {
+    setErrorFor(target)
+    setError(null)
+  }
 
   const option = target
     ? CLEAR_DATA_OPTIONS.find((o) => o.id === target)
     : null
   const count = target ? counts[target] : 0
-
-  useEffect(() => {
-    if (target) setError(null)
-  }, [target])
 
   function confirm() {
     if (!target) return
@@ -1002,10 +1002,12 @@ function CartDeleteDialog({
 }) {
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
-
-  useEffect(() => {
-    if (cart) setError(null)
-  }, [cart])
+  const [errorForCartId, setErrorForCartId] = useState(cart?.id ?? null)
+  const cartId = cart?.id ?? null
+  if (cartId !== errorForCartId) {
+    setErrorForCartId(cartId)
+    setError(null)
+  }
 
   const open = !!cart
   const relatedBookings = cart
@@ -1116,26 +1118,17 @@ function CartEditorDialog({
   onClose: () => void
   onSaved: () => void
 }) {
-  const [name, setName] = useState("")
-  const [location, setLocation] = useState("")
-  const [laptopBrand, setLaptopBrand] = useState<LaptopBrand>("dell")
+  const [name, setName] = useState(
+    mode === "edit" && cart ? cart.name : "",
+  )
+  const [location, setLocation] = useState(
+    mode === "edit" && cart ? (cart.location ?? "") : "",
+  )
+  const [laptopBrand, setLaptopBrand] = useState<LaptopBrand>(
+    mode === "edit" && cart ? (cart.laptopBrand ?? "dell") : "dell",
+  )
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
-
-  // Reset fields when opening / switching target
-  useEffect(() => {
-    if (!open) return
-    if (mode === "edit" && cart) {
-      setName(cart.name)
-      setLocation(cart.location ?? "")
-      setLaptopBrand(cart.laptopBrand ?? "dell")
-    } else {
-      setName("")
-      setLocation("")
-      setLaptopBrand("dell")
-    }
-    setError(null)
-  }, [open, mode, cart])
 
   function submit() {
     setError(null)

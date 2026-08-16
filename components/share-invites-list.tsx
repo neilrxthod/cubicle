@@ -11,10 +11,12 @@ import {
   dismissShareDeclineNotice,
 } from "@/lib/actions"
 import { usePlatformStore } from "@/lib/data/platform-store"
+import { useUserPresence } from "@/lib/staff/presence"
+import { PresenceDot } from "@/components/presence-dot"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import {
-  holdInviteBusy,
+  withInviteBusy,
   inviteAcceptClassName,
   inviteDeclineClassName,
 } from "@/lib/ui/invite-actions"
@@ -38,28 +40,33 @@ function initials(name: string) {
 function Avatar({
   name,
   src,
+  userId,
 }: {
   name: string
   src?: string | null
+  userId?: string
 }) {
-  if (src) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src}
-        alt=""
-        referrerPolicy="no-referrer"
-        draggable={false}
-        className="size-10 shrink-0 rounded-full object-cover"
-      />
-    )
-  }
+  const presence = useUserPresence(userId)
   return (
-    <span
-      className="flex size-10 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[12px] font-medium text-neutral-600"
-      aria-hidden
-    >
-      {initials(name)}
+    <span className="relative shrink-0">
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt=""
+          referrerPolicy="no-referrer"
+          draggable={false}
+          className="size-10 rounded-full object-cover"
+        />
+      ) : (
+        <span
+          className="flex size-10 items-center justify-center rounded-full bg-neutral-100 text-[12px] font-medium text-neutral-600"
+          aria-hidden
+        >
+          {initials(name)}
+        </span>
+      )}
+      <PresenceDot status={presence} size="md" />
     </span>
   )
 }
@@ -129,47 +136,47 @@ export function ShareInvitesList({
 
   async function run(bookingId: string, action: InviteBusyAction) {
     setBusy({ id: bookingId, action })
-    const startedAt = Date.now()
     try {
-      const res =
-        action === "accept"
-          ? await acceptShareInvite(bookingId)
-          : action === "dismiss"
-            ? await dismissShareDeclineNotice(bookingId)
-            : await declineShareInvite(bookingId)
-      if (res && "error" in res && res.error) {
-        const limit = slotLimitNoticeFromError(res.error)
-        if (limit) {
-          setSlotLimit(limit)
+      await withInviteBusy(async () => {
+        const res =
+          action === "accept"
+            ? await acceptShareInvite(bookingId)
+            : action === "dismiss"
+              ? await dismissShareDeclineNotice(bookingId)
+              : await declineShareInvite(bookingId)
+        if (res && "error" in res && res.error) {
+          const limit = slotLimitNoticeFromError(res.error)
+          if (limit) {
+            setSlotLimit(limit)
+            return
+          }
+          toast({
+            title:
+              action === "accept"
+                ? "Could not accept"
+                : action === "cancel"
+                  ? "Could not cancel"
+                  : action === "dismiss"
+                    ? "Could not dismiss"
+                    : "Could not decline",
+            description: res.error,
+            variant: "destructive",
+          })
           return
         }
         toast({
           title:
             action === "accept"
-              ? "Could not accept"
+              ? "Share accepted"
               : action === "cancel"
-                ? "Could not cancel"
+                ? "Invite cancelled"
                 : action === "dismiss"
-                  ? "Could not dismiss"
-                  : "Could not decline",
-          description: res.error,
-          variant: "destructive",
+                  ? "Dismissed"
+                  : "Invite declined",
         })
-        return
-      }
-      toast({
-        title:
-          action === "accept"
-            ? "Share accepted"
-            : action === "cancel"
-              ? "Invite cancelled"
-              : action === "dismiss"
-                ? "Dismissed"
-                : "Invite declined",
+        router.refresh()
       })
-      router.refresh()
     } finally {
-      await holdInviteBusy(startedAt)
       setBusy(null)
     }
   }
@@ -205,7 +212,7 @@ export function ShareInvitesList({
                 thisBusy && "opacity-55",
               )}
             >
-              <Avatar name={name} src={avatarSrc} />
+              <Avatar name={name} src={avatarSrc} userId={booking.teacherId} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] leading-snug tracking-[-0.01em] text-neutral-950">
                   <span className="font-semibold">{name}</span>
@@ -288,7 +295,11 @@ export function ShareInvitesList({
             )}
           >
             <div className="flex min-w-0 flex-1 items-center gap-3">
-              <Avatar name={name} src={avatarSrc} />
+              <Avatar
+                name={name}
+                src={avatarSrc}
+                userId={booking.shareDeclinedById}
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] leading-snug tracking-[-0.01em] text-neutral-950">
                   <span className="font-semibold">{name}</span>
@@ -343,7 +354,11 @@ export function ShareInvitesList({
             )}
           >
             <div className="flex min-w-0 flex-1 items-center gap-3">
-              <Avatar name={invitee} src={inviteeAvatar} />
+              <Avatar
+                name={invitee}
+                src={inviteeAvatar}
+                userId={booking.sharePendingId}
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] leading-snug tracking-[-0.01em] text-neutral-950">
                   <span className="font-normal text-neutral-500">

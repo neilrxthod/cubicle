@@ -102,7 +102,9 @@ function BookingGroup({
               <li
                 key={booking.id}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3.5",
+                  "group flex items-center gap-3 px-4 py-3.5",
+                  "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                  "hover:bg-black/[0.035] active:bg-black/[0.05]",
                   index > 0 && "border-t border-neutral-100",
                 )}
               >
@@ -152,7 +154,13 @@ function CancelBooking({ id }: { id: string }) {
           toast({ title: "Booking canceled" });
         })
       }
-      className="shrink-0 text-[15px] font-medium text-red-600 disabled:opacity-40"
+      className={cn(
+        "shrink-0 rounded-md px-2 py-1 text-[15px] font-medium text-red-600",
+        "transition-[color,background-color] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        "hover:bg-red-50 hover:text-red-700",
+        "active:bg-red-100/80",
+        "disabled:opacity-40",
+      )}
     >
       {pending ? "…" : "Cancel"}
     </button>

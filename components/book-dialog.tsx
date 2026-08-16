@@ -24,7 +24,8 @@ import { createBooking } from "@/lib/actions";
 import { slotLimitNoticeFromError } from "@/lib/booking/slot-rules";
 import type { SlotLimitNotice } from "@/lib/booking/slot-rules";
 import { getSessionSnapshot } from "@/lib/auth/session";
-import { useOnlineUserIds } from "@/lib/staff/presence";
+import { usePresenceMap, type PresenceStatus } from "@/lib/staff/presence";
+import { PresenceDot } from "@/components/presence-dot";
 import {
   getOnboarding,
   isAssignmentComplete,
@@ -68,7 +69,7 @@ export function BookDialog({
 
   const session = getSessionSnapshot();
   const purpose = getBookingPurposeOption(purposeId);
-  const onlineIds = useOnlineUserIds();
+  const presenceByUser = usePresenceMap();
 
   useEffect(() => {
     onOpened?.();
@@ -286,8 +287,12 @@ export function BookDialog({
               onQueryChange={setShareQuery}
               colleagues={visibleColleagues}
               shareWithId={shareWithId}
-              youOnline={Boolean(session?.id && onlineIds.has(session.id))}
-              onlineIds={onlineIds}
+              youPresence={
+                session?.id
+                  ? (presenceByUser.get(session.id) ?? "offline")
+                  : "offline"
+              }
+              presenceByUser={presenceByUser}
               pending={pending}
               showSearch={colleagues.length > 6}
               empty={
@@ -357,8 +362,8 @@ function ShareColleagueGrid({
   onQueryChange,
   colleagues,
   shareWithId,
-  youOnline,
-  onlineIds,
+  youPresence,
+  presenceByUser,
   pending,
   showSearch,
   empty,
@@ -369,8 +374,8 @@ function ShareColleagueGrid({
   onQueryChange: (value: string) => void;
   colleagues: StaffUser[];
   shareWithId: string | null;
-  youOnline: boolean;
-  onlineIds: Set<string>;
+  youPresence: PresenceStatus;
+  presenceByUser: Map<string, PresenceStatus>;
   pending: boolean;
   showSearch: boolean;
   empty: boolean;
@@ -381,7 +386,7 @@ function ShareColleagueGrid({
     <ShareIconButton
       selected={shareWithId === null}
       disabled={pending}
-      online={youOnline}
+      presence={youPresence}
       label="Just me"
       onClick={onJustMe}
       face={
@@ -450,7 +455,7 @@ function ShareColleagueGrid({
                   key={u.id}
                   selected={selected}
                   disabled={pending}
-                  online={onlineIds.has(u.id)}
+                  presence={presenceByUser.get(u.id) ?? "offline"}
                   label={u.name}
                   onClick={() => onToggle(u.id)}
                   face={<ShareFace user={u} />}
@@ -476,7 +481,7 @@ function initials(name: string) {
 function ShareIconButton({
   selected,
   disabled,
-  online = false,
+  presence = "offline",
   label,
   onClick,
   face,
@@ -484,7 +489,7 @@ function ShareIconButton({
 }: {
   selected: boolean;
   disabled?: boolean;
-  online?: boolean;
+  presence?: PresenceStatus;
   label: string;
   onClick: () => void;
   face: ReactNode;
@@ -509,11 +514,8 @@ function ShareIconButton({
         <span className="block size-11 overflow-hidden rounded-full">
           {face}
         </span>
-        {online && !selected ? (
-          <span
-            aria-label="Online"
-            className="absolute right-0 bottom-0 size-2.5 rounded-full bg-emerald-500 ring-2 ring-white"
-          />
+        {!selected ? (
+          <PresenceDot status={presence} size="md" />
         ) : null}
         {selected ? (
           <span className="absolute -right-px -bottom-px flex size-[18px] items-center justify-center rounded-full bg-neutral-950 ring-[2px] ring-white">

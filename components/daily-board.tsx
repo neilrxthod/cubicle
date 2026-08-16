@@ -136,6 +136,8 @@ import {
   inviteChipDeclineClassName,
 } from "@/lib/ui/invite-actions"
 import { usePlatformStore } from "@/lib/data/platform-store"
+import { useUserPresence } from "@/lib/staff/presence"
+import { PresenceDot } from "@/components/presence-dot"
 import { CartBrandMark } from "@/components/admin/laptop-brand-toggle"
 import { InviteActionBusy } from "@/components/ui/invite-action-busy"
 
@@ -159,10 +161,10 @@ const CART_DROP_ANIMATION: DropAnimation = {
  * never over the period header above.
  */
 function createRestrictToElement(
-  elementRef: { current: HTMLElement | null },
+  getElement: () => HTMLElement | null,
 ): Modifier {
   return ({ transform, draggingNodeRect }) => {
-    const bounds = elementRef.current?.getBoundingClientRect()
+    const bounds = getElement()?.getBoundingClientRect()
     if (!bounds || !draggingNodeRect) {
       return { ...transform, x: 0 }
     }
@@ -226,6 +228,7 @@ function SlotPfp({
   onDark,
   stacked,
   className,
+  userId,
 }: {
   name: string
   src?: string | null
@@ -234,25 +237,23 @@ function SlotPfp({
   /** Compact size for dual-share stack */
   stacked?: boolean
   className?: string
+  userId?: string
 }) {
+  const presence = useUserPresence(userId)
   const sizeClass = stacked ? SLOT_AVATAR_STACK : SLOT_AVATAR
-  if (src) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src}
-        alt=""
-        referrerPolicy="no-referrer"
-        draggable={false}
-        className={cn(
-          sizeClass,
-          stacked && (onDark ? "ring-white/25" : "ring-white"),
-          className,
-        )}
-      />
-    )
-  }
-  return (
+  const face = src ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      referrerPolicy="no-referrer"
+      draggable={false}
+      className={cn(
+        sizeClass,
+        stacked && (onDark ? "ring-white/25" : "ring-white"),
+      )}
+    />
+  ) : (
     <span
       aria-hidden
       className={cn(
@@ -265,10 +266,20 @@ function SlotPfp({
           ? "bg-white/15 text-white"
           : "bg-neutral-900/10 text-neutral-600",
         stacked && (onDark ? "ring-white/25" : "ring-white"),
-        className,
       )}
     >
       {slotInitials(name)}
+    </span>
+  )
+
+  return (
+    <span className={cn("relative inline-flex shrink-0", className)}>
+      {face}
+      <PresenceDot
+        status={presence}
+        size={stacked ? "sm" : "md"}
+        className={onDark ? "ring-neutral-950" : undefined}
+      />
     </span>
   )
 }
@@ -277,18 +288,29 @@ function SlotPfp({
 function SlotPeople({
   primaryName,
   primarySrc,
+  primaryId,
   shareName,
   shareSrc,
+  shareId,
   onDark,
 }: {
   primaryName: string
   primarySrc?: string | null
+  primaryId?: string
   shareName?: string
   shareSrc?: string | null
+  shareId?: string
   onDark?: boolean
 }) {
   if (!shareName) {
-    return <SlotPfp name={primaryName} src={primarySrc} onDark={onDark} />
+    return (
+      <SlotPfp
+        name={primaryName}
+        src={primarySrc}
+        onDark={onDark}
+        userId={primaryId}
+      />
+    )
   }
   return (
     <span className="relative inline-flex items-center pr-2">
@@ -297,6 +319,7 @@ function SlotPeople({
         src={primarySrc}
         onDark={onDark}
         stacked
+        userId={primaryId}
         className="relative z-[1]"
       />
       <SlotPfp
@@ -304,6 +327,7 @@ function SlotPeople({
         src={shareSrc}
         onDark={onDark}
         stacked
+        userId={shareId}
         className="relative z-[2] -ml-3"
       />
     </span>
@@ -386,7 +410,7 @@ export function DailyBoard({
   const [boardCarts, setBoardCarts] = useState(() => sortCarts(carts))
   const boardCartsRef = useRef(boardCarts)
   /** Cart rows only (excludes period header). */
-  const cartListRef = useRef<HTMLDivElement | null>(null)
+  const [cartListEl, setCartListEl] = useState<HTMLDivElement | null>(null)
   const orderAtDragStart = useRef<string>("")
   const cartsAtDragStart = useRef<Cart[]>([])
   const [activeCartId, setActiveCartId] = useState<string | null>(null)
@@ -406,8 +430,8 @@ export function DailyBoard({
 
   /** No horizontal drag; never cross the black Cart/P1–P5 header. */
   const cartDndModifiers = useMemo(
-    () => [restrictToVerticalAxis, createRestrictToElement(cartListRef)],
-    [],
+    () => [restrictToVerticalAxis, createRestrictToElement(() => cartListEl)],
+    [cartListEl],
   )
 
   const sensors = useSensors(
@@ -424,10 +448,15 @@ export function DailyBoard({
     boardCartsRef.current = boardCarts
   }, [boardCarts])
 
-  useEffect(() => {
-    if (activeCartId || reorderBusy) return
-    setBoardCarts(sortCarts(carts))
-  }, [carts, activeCartId, reorderBusy])
+  const incomingCarts = useMemo(() => sortCarts(carts), [carts])
+  const incomingCartKey = incomingCarts
+    .map((cart) => `${cart.id}:${cart.name}:${cart.sortOrder ?? ""}`)
+    .join("|")
+  const [syncedCartKey, setSyncedCartKey] = useState(incomingCartKey)
+  if (!activeCartId && !reorderBusy && incomingCartKey !== syncedCartKey) {
+    setSyncedCartKey(incomingCartKey)
+    setBoardCarts(incomingCarts)
+  }
 
   async function persistCartOrder(next: Cart[]) {
     const ids = next.map((c) => c.id)
@@ -1130,7 +1159,7 @@ export function DailyBoard({
                   strategy={verticalListSortingStrategy}
                 >
                   <div
-                    ref={cartListRef}
+                    ref={setCartListEl}
                     className="relative isolate"
                     data-cart-list
                   >
@@ -1390,8 +1419,10 @@ export function DailyBoard({
                               <SlotPeople
                                 primaryName={personName}
                                 primarySrc={avatarSrc}
+                                primaryId={booking.teacherId}
                                 shareName={shareName}
                                 shareSrc={shareSrc}
+                                shareId={booking.sharedWithId}
                                 onDark={isInvolved || inviteForMe}
                               />
                             </span>
@@ -1859,8 +1890,10 @@ export function DailyBoard({
                               <SlotPeople
                                 primaryName={personName}
                                 primarySrc={avatarSrc}
+                                primaryId={booking.teacherId}
                                 shareName={shareName}
                                 shareSrc={shareSrc}
+                                shareId={booking.sharedWithId}
                                 onDark={isInvolved || inviteForMe}
                               />
                             </span>

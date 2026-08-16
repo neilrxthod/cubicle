@@ -14,6 +14,16 @@ export async function holdInviteBusy(startedAt: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, remaining));
 }
 
+/** Run an invite action and keep the busy spinner up for a minimum beat. */
+export async function withInviteBusy<T>(fn: () => Promise<T>): Promise<T> {
+  const startedAt = Date.now();
+  try {
+    return await fn();
+  } finally {
+    await holdInviteBusy(startedAt);
+  }
+}
+
 const motion =
   "transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50";
 

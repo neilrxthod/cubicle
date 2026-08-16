@@ -32,7 +32,7 @@ type IssueDeleteButtonProps = {
 };
 
 const btn =
-  "h-7 rounded-md px-2 text-[12.5px] font-medium tracking-[-0.01em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10 disabled:pointer-events-none disabled:opacity-40";
+  "h-7 rounded-md px-2 text-[12.5px] font-medium tracking-[-0.01em] transition-[color,background-color] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10 disabled:pointer-events-none disabled:opacity-40";
 
 /**
  * Two-step delete: Delete → Confirm. No icons, no chrome.
@@ -110,7 +110,7 @@ export function IssueDeleteButton({
         onClick={() => setArmed(true)}
         className={cn(
           btn,
-          "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900",
+          "text-neutral-500 hover:bg-red-50 hover:text-red-600 active:bg-red-100/80",
           className,
         )}
       >
@@ -138,7 +138,7 @@ export function IssueDeleteButton({
         onClick={() => void runDelete()}
         className={cn(
           btn,
-          "text-red-600 hover:bg-red-50 hover:text-red-700",
+          "text-red-600 hover:bg-red-50 hover:text-red-700 active:bg-red-100/80",
           "focus-visible:ring-red-600/15",
         )}
       >

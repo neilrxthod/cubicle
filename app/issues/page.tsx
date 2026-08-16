@@ -364,10 +364,13 @@ function IssuesView({ user }: { user: SessionUser }) {
                           }
                           className={cn(
                             "h-7 rounded-md px-2 text-[12.5px] font-medium tracking-[-0.01em]",
-                            "text-neutral-600 transition-colors",
-                            "hover:bg-neutral-50 hover:text-neutral-950",
+                            "text-neutral-600",
+                            "transition-[color,background-color] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
                             "disabled:pointer-events-none disabled:opacity-40",
+                            isOpen
+                              ? "hover:bg-emerald-50 hover:text-emerald-700 active:bg-emerald-100/80"
+                              : "hover:bg-neutral-100 hover:text-neutral-950 active:bg-neutral-200/70",
                           )}
                         >
                           {busy ? "…" : isOpen ? "Resolve" : "Reopen"}

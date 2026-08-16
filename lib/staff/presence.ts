@@ -1,26 +1,112 @@
 /**
- * Who is currently signed in (this browser, other tabs, optional remote).
- * Staff directory and share pickers use this for the green presence dot.
+ * Who is signed in right now — this tab, other Cubicle tabs, and remote peers.
+ * Staff directory and share pickers use this for the presence dot:
+ * green = viewing Cubicle, yellow = Cubicle open but another tab is focused,
+ * none = left / closed. You never see your own dot — only other people do.
  */
 
 import { useSyncExternalStore } from "react";
-import { getLocalDemoPreviewOnlineIds } from "@/lib/auth/local-demo";
-import { getSessionSnapshot } from "@/lib/auth/session";
+import { getSessionSnapshot, subscribeToSession } from "@/lib/auth/session";
 import { isRemotePlatformEnabled } from "@/lib/data/durability";
 
-const STORAGE_KEY = "cubicle_presence_v1";
+const STORAGE_KEY = "cubicle_presence_v2";
+const TAB_KEY = "cubicle_presence_tab";
 const CHANGE_EVENT = "cubicle_presence_change";
 const CHANNEL = "cubicle_presence_bc";
-const HEARTBEAT_MS = 12_000;
-const STALE_MS = 40_000;
 
-type PresenceMap = Record<string, number>;
+/** Keep-alive + UI prune — dots must flip in under a second. */
+const HEARTBEAT_MS = 400;
+const STALE_MS = 900;
+const STORE_KEEP_MS = 3_000;
+const UI_TICK_MS = 250;
 
-const remoteOnline = new Set<string>();
+export type PresenceStatus = "online" | "away" | "offline";
+type LiveStatus = "online" | "away";
+
+type PresenceEntry = {
+  userId: string;
+  tabId: string;
+  status: LiveStatus;
+  at: number;
+};
+
+type PresenceMap = Record<string, PresenceEntry>;
+
+const remoteByUser = new Map<string, PresenceEntry[]>();
 const listeners = new Set<() => void>();
+
+let selfLive: PresenceEntry | null = null;
+let memoryTabId = "";
+let cachedStatuses = new Map<string, PresenceStatus>();
+let cachedKey = "";
+let cachedOnline = new Set<string>();
+let cachedOnlineKey = "";
+let broadcast: BroadcastChannel | null = null;
 
 function now() {
   return Date.now();
+}
+
+function entryKey(userId: string, tabId: string) {
+  return `${userId}::${tabId}`;
+}
+
+function getTabId(): string {
+  if (memoryTabId) return memoryTabId;
+  const fallback = () =>
+    globalThis.crypto?.randomUUID?.() ??
+    `t-${Math.random().toString(36).slice(2, 10)}`;
+  if (typeof window === "undefined") {
+    memoryTabId = fallback();
+    return memoryTabId;
+  }
+  try {
+    const existing = sessionStorage.getItem(TAB_KEY);
+    if (existing) {
+      memoryTabId = existing;
+      return existing;
+    }
+    const id = fallback();
+    sessionStorage.setItem(TAB_KEY, id);
+    memoryTabId = id;
+    return id;
+  } catch {
+    memoryTabId = fallback();
+    return memoryTabId;
+  }
+}
+
+function isLiveStatus(value: unknown): value is LiveStatus {
+  return value === "online" || value === "away";
+}
+
+function parseEntry(key: string, value: unknown): PresenceEntry | null {
+  if (value && typeof value === "object") {
+    const row = value as Partial<PresenceEntry>;
+    if (
+      typeof row.userId === "string" &&
+      typeof row.tabId === "string" &&
+      isLiveStatus(row.status) &&
+      typeof row.at === "number"
+    ) {
+      return {
+        userId: row.userId,
+        tabId: row.tabId,
+        status: row.status,
+        at: row.at,
+      };
+    }
+  }
+  // v1 leftover: { [userId]: timestamp }
+  if (typeof value === "number" && !key.includes("::")) {
+    return {
+      userId: key,
+      tabId: "legacy",
+      status: "online",
+      at: value,
+    };
+  }
+  return null;
 }
 
 function readMap(): PresenceMap {
@@ -28,8 +114,14 @@ function readMap(): PresenceMap {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as PresenceMap;
-    return parsed && typeof parsed === "object" ? parsed : {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object") return {};
+    const next: PresenceMap = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      const entry = parseEntry(key, value);
+      if (entry) next[entryKey(entry.userId, entry.tabId)] = entry;
+    }
+    return next;
   } catch {
     return {};
   }
@@ -44,69 +136,200 @@ function writeMap(map: PresenceMap) {
   }
 }
 
-function prune(map: PresenceMap, at = now()): PresenceMap {
+function prune(map: PresenceMap, maxAge = STORE_KEEP_MS, at = now()): PresenceMap {
   const next: PresenceMap = {};
-  for (const [id, atMs] of Object.entries(map)) {
-    if (typeof atMs === "number" && at - atMs < STALE_MS) next[id] = atMs;
+  for (const [key, entry] of Object.entries(map)) {
+    if (entry && at - entry.at < maxAge) next[key] = entry;
   }
   return next;
+}
+
+function getBroadcast(): BroadcastChannel | null {
+  if (typeof window === "undefined") return null;
+  if (broadcast) return broadcast;
+  try {
+    broadcast = new BroadcastChannel(CHANNEL);
+  } catch {
+    broadcast = null;
+  }
+  return broadcast;
+}
+
+function notifyListeners() {
+  for (const fn of listeners) fn();
+}
+
+let notifyPending = false;
+
+/** Never flush into an in-progress React render (Next Router, etc.). */
+function scheduleNotify() {
+  if (notifyPending) return;
+  notifyPending = true;
+  const flush = () => {
+    notifyPending = false;
+    notifyListeners();
+  };
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(flush);
+  } else {
+    setTimeout(flush, 0);
+  }
 }
 
 function notify() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event(CHANGE_EVENT));
     try {
-      const bc = new BroadcastChannel(CHANNEL);
-      bc.postMessage({ t: now() });
-      bc.close();
+      getBroadcast()?.postMessage({ t: now() });
     } catch {
       // ignore
     }
   }
-  for (const fn of listeners) fn();
+  scheduleNotify();
 }
 
-function touch(userId: string) {
-  if (!userId) return;
+let sharedAttached = false;
+let sharedBc: BroadcastChannel | null = null;
+let sharedPoll = 0;
+let unsubSession: (() => void) | null = null;
+
+function attachShared() {
+  if (sharedAttached || typeof window === "undefined") return;
+  sharedAttached = true;
+  window.addEventListener("storage", scheduleNotify);
+  try {
+    sharedBc = new BroadcastChannel(CHANNEL);
+    sharedBc.onmessage = () => scheduleNotify();
+  } catch {
+    sharedBc = null;
+  }
+  sharedPoll = window.setInterval(scheduleNotify, UI_TICK_MS);
+  unsubSession = subscribeToSession(scheduleNotify);
+}
+
+function detachShared() {
+  if (!sharedAttached || typeof window === "undefined") return;
+  sharedAttached = false;
+  window.removeEventListener("storage", scheduleNotify);
+  window.clearInterval(sharedPoll);
+  sharedPoll = 0;
+  try {
+    sharedBc?.close();
+  } catch {
+    // ignore
+  }
+  sharedBc = null;
+  unsubSession?.();
+  unsubSession = null;
+}
+
+function upsertLocal(entry: PresenceEntry) {
   const map = prune(readMap());
-  map[userId] = now();
+  map[entryKey(entry.userId, entry.tabId)] = entry;
   writeMap(map);
-  notify();
 }
 
-function drop(userId: string) {
-  if (!userId) return;
-  const map = prune(readMap());
-  delete map[userId];
+function removeLocal(userId: string, tabId: string) {
+  const map = readMap();
+  delete map[entryKey(userId, tabId)];
   writeMap(map);
-  notify();
 }
 
-let cachedIds = new Set<string>();
-let cachedKey = "";
+function liveStatusFromDocument(): LiveStatus {
+  if (typeof document === "undefined") return "online";
+  return document.visibilityState === "visible" ? "online" : "away";
+}
+
+function rank(status: PresenceStatus): number {
+  if (status === "online") return 2;
+  if (status === "away") return 1;
+  return 0;
+}
+
+function collectEntries(): PresenceEntry[] {
+  const byKey = new Map<string, PresenceEntry>();
+  for (const entry of Object.values(readMap())) {
+    byKey.set(entryKey(entry.userId, entry.tabId), entry);
+  }
+  for (const entries of remoteByUser.values()) {
+    for (const entry of entries) {
+      byKey.set(entryKey(entry.userId, entry.tabId), entry);
+    }
+  }
+  if (selfLive) {
+    byKey.set(entryKey(selfLive.userId, selfLive.tabId), selfLive);
+  }
+  return [...byKey.values()];
+}
+
+function reduceStatuses(entries: PresenceEntry[], at = now()): Map<string, PresenceStatus> {
+  const best = new Map<string, PresenceStatus>();
+  for (const entry of entries) {
+    if (at - entry.at >= STALE_MS) continue;
+    const prev = best.get(entry.userId) ?? "offline";
+    if (rank(entry.status) > rank(prev)) {
+      best.set(entry.userId, entry.status);
+    }
+  }
+  return best;
+}
+
+function snapshotKey(map: Map<string, PresenceStatus>): string {
+  return [...map.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([id, status]) => `${id}:${status}`)
+    .join("\0");
+}
+
+export function getPresenceMap(): Map<string, PresenceStatus> {
+  const next = reduceStatuses(collectEntries());
+  // Never render your own status — peers still see it on their clients.
+  const selfId = getSessionSnapshot()?.id;
+  if (selfId) next.delete(selfId);
+  const key = `${selfId ?? ""}|${snapshotKey(next)}`;
+  if (key === cachedKey) return cachedStatuses;
+  cachedKey = key;
+  cachedStatuses = next;
+  return cachedStatuses;
+}
+
+export function getUserPresence(
+  userId: string | undefined | null,
+): PresenceStatus {
+  if (!userId) return "offline";
+  return getPresenceMap().get(userId) ?? "offline";
+}
 
 export function getOnlineUserIds(): Set<string> {
   const ids = new Set<string>();
-  const session = getSessionSnapshot();
-  if (session?.id) ids.add(session.id);
-
-  const at = now();
-  for (const [id, atMs] of Object.entries(prune(readMap(), at))) {
-    if (at - atMs < STALE_MS) ids.add(id);
+  for (const [id, status] of getPresenceMap()) {
+    if (status === "online") ids.add(id);
   }
-  for (const id of remoteOnline) ids.add(id);
-  for (const id of getLocalDemoPreviewOnlineIds()) ids.add(id);
-
   const key = [...ids].sort().join("\0");
-  if (key === cachedKey) return cachedIds;
-  cachedKey = key;
-  cachedIds = ids;
-  return cachedIds;
+  if (key === cachedOnlineKey) return cachedOnline;
+  cachedOnlineKey = key;
+  cachedOnline = ids;
+  return cachedOnline;
 }
 
 export function isUserOnline(userId: string | undefined | null): boolean {
-  if (!userId) return false;
-  return getOnlineUserIds().has(userId);
+  return getUserPresence(userId) === "online";
+}
+
+export function usePresenceMap(): Map<string, PresenceStatus> {
+  return useSyncExternalStore(
+    subscribePresence,
+    getPresenceMap,
+    () => cachedStatuses,
+  );
+}
+
+export function useUserPresence(
+  userId: string | undefined | null,
+): PresenceStatus {
+  const map = usePresenceMap();
+  if (!userId) return "offline";
+  return map.get(userId) ?? "offline";
 }
 
 export function useOnlineUserIds(): Set<string> {
@@ -119,111 +342,223 @@ export function useOnlineUserIds(): Set<string> {
 
 export function subscribePresence(onChange: () => void): () => void {
   listeners.add(onChange);
-  if (typeof window === "undefined") {
-    return () => {
-      listeners.delete(onChange);
-    };
-  }
-
-  const onLocal = () => onChange();
-  window.addEventListener(CHANGE_EVENT, onLocal);
-  window.addEventListener("storage", onLocal);
-
-  let bc: BroadcastChannel | null = null;
-  try {
-    bc = new BroadcastChannel(CHANNEL);
-    bc.onmessage = () => onChange();
-  } catch {
-    bc = null;
-  }
-
-  const poll = window.setInterval(onChange, HEARTBEAT_MS);
-
+  attachShared();
   return () => {
     listeners.delete(onChange);
-    window.removeEventListener(CHANGE_EVENT, onLocal);
-    window.removeEventListener("storage", onLocal);
-    window.clearInterval(poll);
-    try {
-      bc?.close();
-    } catch {
-      // ignore
-    }
+    if (listeners.size === 0) detachShared();
   };
 }
 
 /**
- * Mark this signed-in user as online until the tab unloads.
- * Safe to call often — one interval per mount.
+ * Mark this signed-in user online while the Cubicle tab is visible,
+ * away while another tab is focused, and gone when the tab closes.
  */
 export function startPresence(userId: string): () => void {
   if (typeof window === "undefined" || !userId) return () => {};
 
-  touch(userId);
-  const beat = window.setInterval(() => touch(userId), HEARTBEAT_MS);
+  const tabId = getTabId();
+  const remote = isRemotePlatformEnabled()
+    ? startRemotePresence(userId, tabId)
+    : { publish: () => {}, stop: () => {} };
 
-  const onVisible = () => {
-    if (document.visibilityState === "visible") touch(userId);
+  const publish = (status: LiveStatus) => {
+    const entry: PresenceEntry = {
+      userId,
+      tabId,
+      status,
+      at: now(),
+    };
+    selfLive = entry;
+    upsertLocal(entry);
+    remote.publish(status);
+    notify();
   };
-  document.addEventListener("visibilitychange", onVisible);
 
-  let stopRemote = () => {};
-  if (isRemotePlatformEnabled()) {
-    stopRemote = startRemotePresence(userId);
-  }
-
-  const onLeave = () => drop(userId);
-  window.addEventListener("pagehide", onLeave);
-
-  return () => {
-    window.clearInterval(beat);
-    document.removeEventListener("visibilitychange", onVisible);
-    window.removeEventListener("pagehide", onLeave);
-    stopRemote();
-    drop(userId);
-  };
-}
-
-function startRemotePresence(userId: string): () => void {
-  let cancelled = false;
-  let channel: { unsubscribe: () => void } | null = null;
-
-  void (async () => {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const ch = supabase.channel("staff-online", {
-        config: { presence: { key: userId } },
-      });
-      ch.on("presence", { event: "sync" }, () => {
-        remoteOnline.clear();
-        const state = ch.presenceState() as Record<string, unknown[]>;
-        for (const key of Object.keys(state)) remoteOnline.add(key);
-        notify();
-      });
-      ch.subscribe((status) => {
-        if (cancelled) return;
-        if (status === "SUBSCRIBED") {
-          void ch.track({ at: now() });
-        }
-      });
-      if (cancelled) {
-        void supabase.removeChannel(ch);
-        return;
-      }
-      channel = {
-        unsubscribe: () => {
-          void supabase.removeChannel(ch);
-        },
-      };
-    } catch {
-      // Presence is best-effort.
+  const beat = () => publish(liveStatusFromDocument());
+  const drop = () => {
+    if (selfLive?.userId === userId && selfLive.tabId === tabId) {
+      selfLive = null;
     }
-  })();
+    removeLocal(userId, tabId);
+    notify();
+  };
+
+  beat();
+  const interval = window.setInterval(beat, HEARTBEAT_MS);
+
+  const onVisibility = () => beat();
+  document.addEventListener("visibilitychange", onVisibility);
+  window.addEventListener("focus", onVisibility);
+  window.addEventListener("pageshow", onVisibility);
+
+  const onPageHide = (event: PageTransitionEvent) => {
+    if (event.persisted) {
+      publish("away");
+      return;
+    }
+    drop();
+    remote.stop();
+  };
+  window.addEventListener("pagehide", onPageHide);
+  window.addEventListener("beforeunload", drop);
 
   return () => {
-    cancelled = true;
-    channel?.unsubscribe();
-    remoteOnline.delete(userId);
+    window.clearInterval(interval);
+    document.removeEventListener("visibilitychange", onVisibility);
+    window.removeEventListener("focus", onVisibility);
+    window.removeEventListener("pageshow", onVisibility);
+    window.removeEventListener("pagehide", onPageHide);
+    window.removeEventListener("beforeunload", drop);
+    remote.stop();
+    drop();
   };
 }
+
+function parseRemoteMeta(
+  userId: string,
+  meta: unknown,
+  index: number,
+): PresenceEntry | null {
+  if (!meta || typeof meta !== "object") return null;
+  const row = meta as {
+    status?: unknown;
+    at?: unknown;
+    tab?: unknown;
+  };
+  const status = isLiveStatus(row.status) ? row.status : "online";
+  const at = typeof row.at === "number" ? row.at : now();
+  const tabId =
+    typeof row.tab === "string" && row.tab
+      ? row.tab
+      : `remote-${index}`;
+  return { userId, tabId, status, at };
+}
+
+function startRemotePresence(
+  userId: string,
+  tabId: string,
+): {
+  publish: (status: LiveStatus) => void;
+  stop: () => void;
+} {
+  let cancelled = false;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let channel: {
+    track: (payload: Record<string, unknown>) => Promise<unknown>;
+    untrack: () => Promise<unknown>;
+    unsubscribe: () => void;
+  } | null = null;
+  let lastStatus: LiveStatus = liveStatusFromDocument();
+
+  const applyRemoteState = (state: Record<string, unknown[]>) => {
+    remoteByUser.clear();
+    for (const [id, metas] of Object.entries(state)) {
+      const entries: PresenceEntry[] = [];
+      (metas ?? []).forEach((meta, index) => {
+        const entry = parseRemoteMeta(id, meta, index);
+        if (entry) entries.push(entry);
+      });
+      if (entries.length > 0) remoteByUser.set(id, entries);
+    }
+    notify();
+  };
+
+  const teardown = () => {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    if (channel) {
+      void channel.untrack();
+      channel.unsubscribe();
+      channel = null;
+    }
+  };
+
+  const connect = () => {
+    if (cancelled) return;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    void (async () => {
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const ch = supabase.channel("staff-online", {
+          config: { presence: { key: userId } },
+        });
+
+        const sync = () => {
+          applyRemoteState(ch.presenceState() as Record<string, unknown[]>);
+        };
+        ch.on("presence", { event: "sync" }, sync);
+        ch.on("presence", { event: "join" }, sync);
+        ch.on("presence", { event: "leave" }, sync);
+
+        ch.subscribe((status) => {
+          if (cancelled) return;
+          if (status === "SUBSCRIBED") {
+            void ch.track({
+              status: lastStatus,
+              at: now(),
+              tab: tabId,
+            });
+            return;
+          }
+          if (
+            status === "CHANNEL_ERROR" ||
+            status === "TIMED_OUT" ||
+            status === "CLOSED"
+          ) {
+            if (channel) {
+              channel.unsubscribe();
+              channel = null;
+            }
+            if (!reconnectTimer) {
+              reconnectTimer = setTimeout(connect, 400);
+            }
+          }
+        });
+
+        if (cancelled) {
+          void supabase.removeChannel(ch);
+          return;
+        }
+
+        channel = {
+          track: (payload) => ch.track(payload),
+          untrack: () => ch.untrack(),
+          unsubscribe: () => {
+            void supabase.removeChannel(ch);
+          },
+        };
+      } catch {
+        if (cancelled) return;
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connect, 800);
+      }
+    })();
+  };
+
+  connect();
+
+  return {
+    publish(status) {
+      lastStatus = status;
+      if (!channel) return;
+      void channel.track({ status, at: now(), tab: tabId });
+    },
+    stop() {
+      cancelled = true;
+      teardown();
+      const remaining = (remoteByUser.get(userId) ?? []).filter(
+        (entry) => entry.tabId !== tabId,
+      );
+      if (remaining.length > 0) remoteByUser.set(userId, remaining);
+      else remoteByUser.delete(userId);
+      notify();
+    },
+  };
+}
+

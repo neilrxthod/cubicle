@@ -8,6 +8,8 @@ import { acceptSwap, declineSwap } from "@/lib/actions"
 import { toast } from "@/hooks/use-toast"
 import { resolveOfferedBooking } from "@/lib/booking/swap-rules"
 import { usePlatformStore } from "@/lib/data/platform-store"
+import { useUserPresence } from "@/lib/staff/presence"
+import { PresenceDot } from "@/components/presence-dot"
 import { cn } from "@/lib/utils"
 import {
   inviteAcceptClassName,
@@ -26,28 +28,33 @@ function initials(name: string) {
 function Avatar({
   name,
   src,
+  userId,
 }: {
   name: string
   src?: string | null
+  userId?: string
 }) {
-  if (src) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src}
-        alt=""
-        referrerPolicy="no-referrer"
-        draggable={false}
-        className="size-10 shrink-0 rounded-full object-cover"
-      />
-    )
-  }
+  const presence = useUserPresence(userId)
   return (
-    <span
-      className="flex size-10 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[12px] font-medium text-neutral-600"
-      aria-hidden
-    >
-      {initials(name)}
+    <span className="relative shrink-0">
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt=""
+          referrerPolicy="no-referrer"
+          draggable={false}
+          className="size-10 rounded-full object-cover"
+        />
+      ) : (
+        <span
+          className="flex size-10 items-center justify-center rounded-full bg-neutral-100 text-[12px] font-medium text-neutral-600"
+          aria-hidden
+        >
+          {initials(name)}
+        </span>
+      )}
+      <PresenceDot status={presence} size="md" />
     </span>
   )
 }
@@ -189,9 +196,8 @@ export function SwapRequestsList({
         const peerName = isOutgoing
           ? booking.teacherName
           : req.requesterName
-        const peerAvatar = isOutgoing
-          ? avatarByUserId.get(booking.teacherId)
-          : avatarByUserId.get(req.requesterId)
+        const peerId = isOutgoing ? booking.teacherId : req.requesterId
+        const peerAvatar = avatarByUserId.get(peerId)
 
         // Compact route line: Cart A → Cart B (or handoff)
         const fromCart = isOutgoing
@@ -234,7 +240,7 @@ export function SwapRequestsList({
             )}
           >
             <div className="flex min-w-0 flex-1 items-center gap-3">
-              <Avatar name={peerName} src={peerAvatar} />
+              <Avatar name={peerName} src={peerAvatar} userId={peerId} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] leading-snug tracking-[-0.01em] text-neutral-950">
                   {headline}

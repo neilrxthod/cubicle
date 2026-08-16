@@ -35,7 +35,8 @@ import {
   updateTeacherCredentials,
 } from "@/lib/actions"
 import { isRemotePlatformEnabled } from "@/lib/data/durability"
-import { useOnlineUserIds } from "@/lib/staff/presence"
+import { usePresenceMap, type PresenceStatus } from "@/lib/staff/presence"
+import { PresenceDot } from "@/components/presence-dot"
 import { SCHOOL_EMAIL_DOMAIN } from "@/lib/auth/school-domain"
 import { splitDisplayName } from "@/lib/profile/display-name"
 import {
@@ -123,7 +124,7 @@ export function StaffPanel({
   const router = useRouter()
   const googleMode = isRemotePlatformEnabled()
   const today = format(new Date(), "yyyy-MM-dd")
-  const onlineIds = useOnlineUserIds()
+  const presenceByUser = usePresenceMap()
 
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<FilterId>("all")
@@ -717,7 +718,7 @@ export function StaffPanel({
                   const active = resolvedSelectedId === user.id
                   const verified = isVerifiedStaff(user)
                   const status = m?.status ?? "ok"
-                  const online = onlineIds.has(user.id)
+                  const presence = presenceByUser.get(user.id) ?? "offline"
                   return (
                     <li key={user.id}>
                       <button
@@ -732,7 +733,7 @@ export function StaffPanel({
                       >
                         <StaffAvatar
                           user={user}
-                          online={online}
+                          presence={presence}
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-1.5">
@@ -771,7 +772,7 @@ export function StaffPanel({
               <StaffDetail
                 user={selected}
                 metrics={selectedMetrics}
-                online={onlineIds.has(selected.id)}
+                presence={presenceByUser.get(selected.id) ?? "offline"}
                 cartMap={cartMap}
                 verifyBusy={busyKey === `verify:${selected.id}`}
                 emailCopied={copiedEmail === selected.email}
@@ -1053,7 +1054,7 @@ export function StaffPanel({
 function StaffDetail({
   user,
   metrics,
-  online = false,
+  presence = "offline",
   cartMap,
   verifyBusy,
   emailCopied,
@@ -1065,7 +1066,7 @@ function StaffDetail({
 }: {
   user: User
   metrics: StaffMetrics
-  online?: boolean
+  presence?: PresenceStatus
   cartMap: Map<string, Cart>
   verifyBusy?: boolean
   emailCopied?: boolean
@@ -1089,7 +1090,7 @@ function StaffDetail({
             user={user}
             size="lg"
             verified={verified}
-            online={online}
+            presence={presence}
           />
           <div className="min-w-0 flex-1">
             <h3 className="flex min-w-0 items-center gap-1.5 text-[15px] font-medium text-neutral-950">
@@ -1407,12 +1408,12 @@ function StaffAvatar({
   user,
   size = "md",
   verified = false,
-  online = false,
+  presence = "offline",
 }: {
   user: User
   size?: "md" | "lg"
   verified?: boolean
-  online?: boolean
+  presence?: PresenceStatus
 }) {
   const dim = size === "lg" ? "size-10 text-[12px]" : "size-8 text-[11px]"
   const badgeSize = size === "lg" ? "sm" : "xs"
@@ -1439,7 +1440,7 @@ function StaffAvatar({
   return (
     <span className="relative shrink-0">
       {face}
-      {verified && !online ? (
+      {verified && presence === "offline" ? (
         <span
           className={cn(
             "absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full bg-white ring-2 ring-white",
@@ -1449,17 +1450,10 @@ function StaffAvatar({
           <VerifiedBadge size={badgeSize} className="size-full" />
         </span>
       ) : null}
-      {online ? (
-        <span
-          aria-label="Online"
-          className={cn(
-            "absolute rounded-full bg-emerald-500 ring-2 ring-white",
-            size === "lg"
-              ? "bottom-0 right-0 size-2.5"
-              : "bottom-0 right-0 size-2",
-          )}
-        />
-      ) : null}
+      <PresenceDot
+        status={presence}
+        size={size === "lg" ? "md" : "sm"}
+      />
     </span>
   )
 }
