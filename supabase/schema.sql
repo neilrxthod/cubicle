@@ -112,6 +112,12 @@ create index if not exists bookings_share_pending_idx
   on public.bookings (share_pending_id)
   where share_pending_id is not null;
 
+alter table public.bookings
+  add column if not exists last_edited_by_id uuid references public.profiles (id) on delete set null,
+  add column if not exists last_edited_by_name text,
+  add column if not exists last_edited_by_avatar_url text,
+  add column if not exists last_edited_at timestamptz;
+
 -- Invitees cannot UPDATE another teacher's booking under RLS.
 -- Run booking-share-resolve.sql so teachers can accept / decline.
 

@@ -36,6 +36,8 @@ Run each file fully, wait for **Success**:
 | 9 | `cart-laptop-brand.sql` | Dell / Chromebook fleet on inventory carts |
 | 10 | `cart-laptop-codes.sql` | Laptop case codes for QR labels |
 
+Existing project that skipped later files: run **`repair-live.sql` once** (laptop codes + last-editor columns + swap accept/decline RPCs).
+
 **Durability:** App deploys never touch this data. See [`DATA_DURABILITY.md`](./DATA_DURABILITY.md).  
 Never `drop table` / `truncate` on a live school project without a backup.
 

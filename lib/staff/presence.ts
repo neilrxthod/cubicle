@@ -475,12 +475,16 @@ function startRemotePresence(
     }
   };
 
+  let connectGen = 0;
+
   const connect = () => {
     if (cancelled) return;
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
+    const gen = ++connectGen;
+    teardown();
     void (async () => {
       try {
         const { createClient } = await import("@/lib/supabase/client");
@@ -490,14 +494,19 @@ function startRemotePresence(
         });
 
         const sync = () => {
-          applyRemoteState(ch.presenceState() as Record<string, unknown[]>);
+          if (cancelled || gen !== connectGen) return;
+          const snapshot = ch.presenceState() as Record<string, unknown[]>;
+          queueMicrotask(() => {
+            if (cancelled || gen !== connectGen) return;
+            applyRemoteState(snapshot);
+          });
         };
+        // Sync already runs after join/leave diffs — extra listeners re-enter
+        // Phoenix trigger() and can overflow filterBindings.
         ch.on("presence", { event: "sync" }, sync);
-        ch.on("presence", { event: "join" }, sync);
-        ch.on("presence", { event: "leave" }, sync);
 
         ch.subscribe((status) => {
-          if (cancelled) return;
+          if (cancelled || gen !== connectGen) return;
           if (status === "SUBSCRIBED") {
             void ch.track({
               status: lastStatus,
@@ -506,22 +515,21 @@ function startRemotePresence(
             });
             return;
           }
-          if (
-            status === "CHANNEL_ERROR" ||
-            status === "TIMED_OUT" ||
-            status === "CLOSED"
-          ) {
-            if (channel) {
-              channel.unsubscribe();
-              channel = null;
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            if (!reconnectTimer) {
+              reconnectTimer = setTimeout(connect, 400);
             }
+            return;
+          }
+          if (status === "CLOSED" && channel) {
+            channel = null;
             if (!reconnectTimer) {
               reconnectTimer = setTimeout(connect, 400);
             }
           }
         });
 
-        if (cancelled) {
+        if (cancelled || gen !== connectGen) {
           void supabase.removeChannel(ch);
           return;
         }
@@ -534,7 +542,7 @@ function startRemotePresence(
           },
         };
       } catch {
-        if (cancelled) return;
+        if (cancelled || gen !== connectGen) return;
         if (reconnectTimer) clearTimeout(reconnectTimer);
         reconnectTimer = setTimeout(connect, 800);
       }
@@ -551,6 +559,7 @@ function startRemotePresence(
     },
     stop() {
       cancelled = true;
+      connectGen += 1;
       teardown();
       const remaining = (remoteByUser.get(userId) ?? []).filter(
         (entry) => entry.tabId !== tabId,

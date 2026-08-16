@@ -48,6 +48,8 @@ Run each file fully in the Supabase **SQL Editor** and wait for **Success** befo
 | 12 | `cart-laptop-brand.sql` | Dell / Chromebook fleet on inventory carts (`laptop_brand`) |
 | 13 | `cart-laptop-codes.sql` | Per-cart laptop case codes for QR labels (`laptop_codes`) |
 
+If an existing project is missing later pieces (swap accept RPC, laptop codes, last-editor columns), run **`repair-live.sql` once** instead of guessing which files were skipped.
+
 **Never** run ad-hoc `drop table` / `truncate` against a live school project without an approved backup and change window.
 
 ---

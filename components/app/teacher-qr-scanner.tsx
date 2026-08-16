@@ -5,6 +5,10 @@ import { AnimatePresence, motion } from "motion/react";
 import { format, parseISO } from "date-fns";
 import { ChevronLeft, ChevronRight, QrCode } from "lucide-react";
 import { AdminMobileSection } from "@/components/app/admin-mobile-section";
+import { MobileQrCodes } from "@/components/app/mobile-qr-codes";
+import { MobileReports } from "@/components/app/mobile-reports";
+import { MobileStaff } from "@/components/app/mobile-staff";
+import { MobileReservations } from "@/components/app/mobile-reservations";
 import { LocalPerspectiveSwitch } from "@/components/app/local-perspective-switch";
 import { TeacherMobileBookings } from "@/components/app/teacher-mobile-bookings";
 import { TeacherMobileIssues } from "@/components/app/teacher-mobile-issues";
@@ -15,7 +19,6 @@ import { TeacherMobileSwaps } from "@/components/app/teacher-mobile-swaps";
 import { TeacherMobileTabBar } from "@/components/app/teacher-mobile-tab-bar";
 import { CartBrandMark } from "@/components/admin/laptop-brand-toggle";
 import { CubicleWordmark } from "@/components/auth/wordmark";
-
 import { BookDialog } from "@/components/book-dialog";
 import { IssueDialog } from "@/components/issue-dialog";
 import { Button } from "@/components/ui/button";
@@ -141,6 +144,21 @@ function occupancy(
   );
 }
 
+type MobileView =
+  | "home"
+  | "scan"
+  | "bookings"
+  | "schedule"
+  | "issues"
+  | "shares"
+  | "swaps"
+  | "profile"
+  | "admin-carts"
+  | "admin-labels"
+  | "admin-bookings"
+  | "admin-reports"
+  | "admin-staff";
+
 function firstName(user: SessionUser) {
   return user.firstName || user.name.split(/\s+/)[0] || "there";
 }
@@ -157,21 +175,6 @@ function schoolDayLabel(now = new Date()) {
   }).format(now);
   return { weekday, rest };
 }
-
-type MobileView =
-  | "home"
-  | "scan"
-  | "bookings"
-  | "schedule"
-  | "issues"
-  | "shares"
-  | "swaps"
-  | "profile"
-  | "admin-carts"
-  | "admin-labels"
-  | "admin-bookings"
-  | "admin-reports"
-  | "admin-staff";
 
 function TeacherScanHome({
   user,
@@ -194,7 +197,7 @@ function TeacherScanHome({
     )
     .sort((a, b) => a.period.localeCompare(b.period));
   const nowBooking = period
-    ? mineToday.find((booking) => booking.period === period) ?? mineToday[0]
+    ? (mineToday.find((booking) => booking.period === period) ?? mineToday[0])
     : mineToday[0];
   const nowCart = nowBooking
     ? carts.find((cart) => cart.id === nowBooking.cartId)
@@ -455,25 +458,17 @@ export function TeacherQrScanner({ user }: { user: SessionUser }) {
                 onBack={goHome}
               />
             ) : view === "admin-labels" ? (
-              <AdminMobileSection
-                title="QR codes"
-                tab="labels"
-                onBack={goHome}
-              />
+              <MobileQrCodes onBack={goHome} />
             ) : view === "admin-bookings" ? (
-              <AdminMobileSection
-                title="Reservations"
-                tab="bookings"
+              <MobileReservations
+                user={user}
                 onBack={goHome}
+                scope="school"
               />
             ) : view === "admin-reports" ? (
-              <AdminMobileSection
-                title="Reports"
-                tab="reports"
-                onBack={goHome}
-              />
+              <MobileReports onBack={goHome} />
             ) : view === "admin-staff" ? (
-              <AdminMobileSection title="Staff" tab="staff" onBack={goHome} />
+              <MobileStaff onBack={goHome} />
             ) : view === "profile" ? (
               <TeacherMobileSettings
                 user={user}
