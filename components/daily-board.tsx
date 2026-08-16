@@ -385,6 +385,7 @@ export function DailyBoard({
   const [manageDialog, setManageDialog] = useState<Booking | null>(null)
   const [slotLimit, setSlotLimit] = useState<SlotLimitNotice | null>(null)
   const [datePickerOpen, setDatePickerOpen] = useState(false)
+  const [calendarMonth, setCalendarMonth] = useState(() => parseLocalYmd(date))
   const [deletingBookingId, setDeletingBookingId] = useState<string | null>(
     null,
   )
@@ -667,6 +668,7 @@ export function DailyBoard({
     }
     const url = new URL(window.location.href)
     url.searchParams.set("date", next)
+    setCalendarMonth(parseLocalYmd(next))
     router.push(url.pathname + url.search, { scroll: false })
   }
 
@@ -999,15 +1001,17 @@ export function DailyBoard({
               sideOffset={8}
               collisionPadding={12}
               avoidCollisions
+              onFocusOutside={(event) => event.preventDefault()}
             >
               <Calendar
                 mode="single"
                 selected={parseLocalYmd(date)}
-                defaultMonth={parseLocalYmd(date)}
+                month={calendarMonth}
+                onMonthChange={setCalendarMonth}
                 onSelect={(val) => {
                   if (!val) return
                   setDate(format(val, "yyyy-MM-dd"))
-                  setDatePickerOpen(false)
+                  setCalendarMonth(val)
                 }}
                 disabled={(day) => {
                   if (

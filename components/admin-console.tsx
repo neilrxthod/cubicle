@@ -26,6 +26,7 @@ import {
   CLEAR_DATA_OPTIONS,
   type ClearDataTarget,
 } from "@/lib/actions"
+import { bookingClassLabel } from "@/lib/booking/slot-rules"
 import { toast } from "@/hooks/use-toast"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -1689,11 +1690,13 @@ function BookingsTable({
           tone: "strong" as const,
         }
         const classCell = {
-          text: booking.className?.trim() || "—",
+          text: bookingClassLabel(booking),
           tone: "muted" as const,
         }
         const subjectCell = {
-          text: booking.subject?.trim() || "—",
+          text: booking.subject?.trim() && booking.subject.trim().toLowerCase() !== "class"
+            ? booking.subject.trim()
+            : bookingClassLabel(booking),
           tone: "muted" as const,
         }
         const teacherCell = {
@@ -2702,11 +2705,7 @@ function BookingsTable({
 
 /** Grade / class label for a booking — prefers className, falls back to subject tag. */
 function bookingGradeLabel(booking: Booking): string {
-  const classLabel = booking.className?.trim()
-  if (classLabel) return classLabel
-  const subject = booking.subject?.trim()
-  if (subject) return subject
-  return "—"
+  return bookingClassLabel(booking)
 }
 
 function formatBookingTimestamp(booking: Booking): { primary: string; secondary: string } {
@@ -3273,11 +3272,13 @@ function ReportsPanel({
             },
             { text: booking.teacherName, tone: "strong" as const },
             {
-              text: booking.className?.trim() || "—",
+              text: bookingClassLabel(booking),
               tone: "muted" as const,
             },
             {
-              text: booking.subject?.trim() || "—",
+              text: booking.subject?.trim() && booking.subject.trim().toLowerCase() !== "class"
+                ? booking.subject.trim()
+                : bookingClassLabel(booking),
               tone: "muted" as const,
             },
           ],

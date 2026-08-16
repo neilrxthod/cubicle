@@ -173,6 +173,15 @@ export function canTeacherBookSlot(input: {
   return { ok: true };
 }
 
+/** Visible class / subject — generic Class bookings stay unlabeled until set. */
+export function bookingClassLabel(
+  booking: Pick<Booking, "className" | "subject">,
+): string {
+  const custom = (booking.className ?? booking.subject ?? "").trim();
+  if (!custom || custom.toLowerCase() === "class") return "N/A Yet";
+  return custom;
+}
+
 /**
  * Short label shown on the board cell (purpose badge or custom multi tag).
  */
@@ -182,11 +191,7 @@ export function bookingBoardTagText(
 ): string | null {
   if (purposeTag) return purposeTag;
 
-  const custom = (booking.className ?? booking.subject ?? "").trim();
-  if (!custom) return null;
-  // Skip generic "Class" storage
-  if (custom.toLowerCase() === "class") return null;
-  // Short custom labels (multi-book renames)
+  const custom = bookingClassLabel(booking);
   if (custom.length <= 18) return custom;
   return custom.slice(0, 16);
 }
