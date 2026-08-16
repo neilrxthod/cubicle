@@ -65,7 +65,8 @@ export function TeacherMobileSettings({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [signOutArmed, setSignOutArmed] = useState(false);
+  const [signOutOpen, setSignOutOpen] = useState(false);
+  const [signOutStep, setSignOutStep] = useState<1 | 2>(1);
 
   const verified = isVerifiedStaff(user);
   const roleLabel = user.role === "admin" ? "Admin" : "Teacher";
@@ -212,7 +213,28 @@ export function TeacherMobileSettings({
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-[#f2f2f7] pt-[env(safe-area-inset-top,0px)]">
       {embedded ? (
-        <div className="h-3 shrink-0" aria-hidden />
+        <header className="sticky top-0 z-20 flex h-11 shrink-0 items-center justify-between bg-[#f2f2f7] px-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setSignOutStep(1);
+              setSignOutOpen(true);
+            }}
+            className="inline-flex items-center justify-center rounded-full bg-red-600 px-3 py-1 text-[15px] font-medium tracking-[-0.02em] text-white active:bg-red-700 disabled:opacity-40"
+          >
+            Sign Out
+          </button>
+          <h1 className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[17px] font-semibold tracking-[-0.02em] text-neutral-950">
+            Profile
+          </h1>
+          <div
+            className="inline-flex items-center justify-center rounded-full px-3 py-1 text-[15px] font-medium opacity-0"
+            aria-hidden
+          >
+            Sign Out
+          </div>
+        </header>
       ) : (
         <TeacherMobileNav title="Profile" onBack={onBack} />
       )}
@@ -371,35 +393,17 @@ export function TeacherMobileSettings({
         </Labeled>
 
         <Group>
-          {signOutArmed ? (
-            <div className="grid grid-cols-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setSignOutArmed(false)}
-                className="flex h-[2.75rem] items-center justify-center text-[17px] text-neutral-500 active:bg-neutral-50 disabled:opacity-40"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void signOutAction()}
-                className="flex h-[2.75rem] items-center justify-center text-[17px] font-medium text-red-600 active:bg-red-50 disabled:opacity-40"
-              >
-                Confirm
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setSignOutArmed(true)}
-              className="flex h-[2.75rem] w-full items-center justify-center text-[17px] text-red-600 active:bg-neutral-50 disabled:opacity-40"
-            >
-              Sign Out
-            </button>
-          )}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setSignOutStep(1);
+              setSignOutOpen(true);
+            }}
+            className="flex h-[2.75rem] w-full items-center justify-center text-[17px] text-red-600 active:bg-neutral-50 disabled:opacity-40"
+          >
+            Sign Out
+          </button>
         </Group>
 
         <SetupPreferences user={user} />
@@ -420,6 +424,57 @@ export function TeacherMobileSettings({
           </button>
         </Group>
       </main>
+
+      <Dialog
+        open={signOutOpen}
+        onOpenChange={(open) => {
+          setSignOutOpen(open);
+          if (!open) setSignOutStep(1);
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="gap-0 overflow-hidden rounded-2xl border border-black/[0.08] bg-white p-0 sm:max-w-[360px]"
+        >
+          <DialogHeader className="space-y-0 px-5 pb-3 pt-5 text-left">
+            <DialogTitle className="text-[17px] font-semibold tracking-[-0.02em]">
+              {signOutStep === 1 ? "Sign Out?" : "Are you sure?"}
+            </DialogTitle>
+            <DialogDescription className="mt-1 text-[13px] leading-relaxed text-neutral-500">
+              {signOutStep === 1
+                ? "You’ll need to sign in again to use Cubicle."
+                : "This ends your session on this device."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 px-5 pb-5 pt-1">
+            <DialogCancel
+              onClick={() => {
+                setSignOutOpen(false);
+                setSignOutStep(1);
+              }}
+            >
+              Cancel
+            </DialogCancel>
+            {signOutStep === 1 ? (
+              <button
+                type="button"
+                onClick={() => setSignOutStep(2)}
+                className="inline-flex h-9 items-center rounded-md bg-neutral-950 px-3.5 text-[15px] font-medium text-white"
+              >
+                Continue
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void signOutAction()}
+                className="inline-flex h-9 items-center rounded-md bg-red-600 px-3.5 text-[15px] font-medium text-white"
+              >
+                Sign Out
+              </button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={deleteOpen}

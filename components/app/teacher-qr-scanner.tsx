@@ -20,7 +20,6 @@ import { IssueDialog } from "@/components/issue-dialog";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
 import { useQrCamera } from "@/hooks/use-qr-camera";
-import { signOutAction } from "@/lib/actions";
 import {
   getCurrentPeriod,
   getNextPeriod,
@@ -631,18 +630,6 @@ function TeacherScanCamera({
           </div>
         ) : null}
       </div>
-
-      {!hit ? (
-        <div className="relative z-20 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-2 text-center">
-          <button
-            type="button"
-            onClick={() => void signOutAction()}
-            className="text-[13px] text-white/40 transition-colors hover:text-white/70"
-          >
-            Sign out
-          </button>
-        </div>
-      ) : null}
 
       <AnimatePresence>
       {hit ? (
