@@ -979,9 +979,8 @@ export function DailyBoard({
                 className={cn(
                   "inline-flex h-8 items-center gap-1.5 rounded-full px-3.5",
                   "text-[12px] font-medium tracking-[-0.02em] text-neutral-600",
-                  "transition-[transform,background-color,color,box-shadow] duration-150 ease-out",
+                  "transition-[background-color,color,box-shadow] duration-150 ease-out",
                   "hover:bg-neutral-950 hover:text-white hover:shadow-[0_3px_10px_rgba(0,0,0,0.16)]",
-                  "active:scale-[0.97] active:shadow-none",
                   "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
                 )}
               >
