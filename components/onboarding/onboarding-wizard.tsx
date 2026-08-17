@@ -15,7 +15,6 @@ import {
   Camera,
   Check,
   GraduationCap,
-  Loader2,
   Minus,
   Plus,
   Trash2,
@@ -49,6 +48,12 @@ import { usePlatformStore, mutate } from "@/lib/data/platform-store";
 import { updateProfile } from "@/lib/actions";
 import { setSession, getSession } from "@/lib/auth/session";
 import { toast } from "@/hooks/use-toast";
+import { prefersReducedMotion } from "@/lib/motion/platform";
+import {
+  OPEN_DEADLINE_MS,
+  OPEN_HOLD_MS,
+  ScheduleOpeningOverlay,
+} from "@/components/onboarding/schedule-opening-overlay";
 
 /**
  * Simple 2-step setup for cart booking only.
@@ -495,6 +500,10 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
   const notifyIssues = true;
 
   useEffect(() => {
+    router.prefetch("/");
+  }, [router]);
+
+  useEffect(() => {
     const t = window.setTimeout(() => {
       saveOnboardingDraft(
         {
@@ -597,13 +606,7 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
     if (pending) return;
     setPending(true);
     setError(null);
-
-    // Intentional 3–4s loading beat so “Opening…” feels deliberate, not stuck.
-    const OPEN_DELAY_MS = 3500;
-    const delay = (ms: number) =>
-      new Promise<void>((resolve) => {
-        window.setTimeout(resolve, ms);
-      });
+    const startedAt = Date.now();
 
     try {
       const cleaned = assignments
@@ -646,7 +649,6 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
         });
       }
 
-      // Best-effort profile sync during the loading animation (ignore failures).
       void updateProfile({
         name: user.name,
         department: nextDepartment,
@@ -657,17 +659,24 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
         notifyIssues,
       });
 
-      await delay(OPEN_DELAY_MS);
+      if (!prefersReducedMotion()) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, OPEN_HOLD_MS);
+        });
+      }
 
       const dest = onboardingHomeForRole(user.role, { firstRun: true });
       router.replace(dest);
 
-      // Hard fallback if soft navigation stalls on this page.
+      const remaining = Math.max(
+        0,
+        OPEN_DEADLINE_MS - (Date.now() - startedAt),
+      );
       window.setTimeout(() => {
         if (window.location.pathname.startsWith("/onboarding")) {
           window.location.assign(dest);
         }
-      }, 900);
+      }, remaining);
     } catch {
       setError("Could not finish setup. Try again.");
       setPending(false);
@@ -675,7 +684,13 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
   }
 
   return (
-    <div className="flex h-svh max-h-svh items-center justify-center overflow-hidden bg-[#ececef] p-3 sm:p-5 md:p-6">
+    <div
+      className="flex h-svh max-h-svh items-center justify-center overflow-hidden bg-[#ececef] p-3 sm:p-5 md:p-6"
+      aria-busy={pending}
+    >
+      <AnimatePresence>
+        {pending ? <ScheduleOpeningOverlay key="opening" /> : null}
+      </AnimatePresence>
       <input
         ref={fileRef}
         id="onboarding-photo"
@@ -694,6 +709,8 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
           "flex w-full max-w-[900px] overflow-hidden rounded-[1.75rem] border border-black/[0.06] bg-white",
           "h-[min(38rem,calc(100svh-1.5rem))] sm:h-[min(40rem,calc(100svh-2.5rem))]",
           "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_24px_48px_-12px_rgba(0,0,0,0.12)]",
+          "transition duration-300 ease-out",
+          pending && "pointer-events-none scale-[0.985] opacity-60",
         )}
       >
         <FeatureLaunchPanel />
@@ -935,10 +952,7 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
                     !canContinueFromStep && !pending && "opacity-40",
                   )}
                 >
-                  {pending ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : null}
-                  {pending ? "Opening…" : "Open schedule"}
+                  Open schedule
                 </button>
               )}
             </div>
