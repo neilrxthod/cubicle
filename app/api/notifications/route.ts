@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { format, parseISO } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isBrevoConfigured, sendEmail } from "@/lib/email/brevo";
+import { isLocalDevRuntime } from "@/lib/data/durability";
 import {
   localSubject,
   resolveDeliveryPlan,
@@ -34,13 +35,24 @@ type RequestBody = NotificationPayload & {
   localSink?: LocalEmailSink;
 };
 
+export const maxDuration = 60;
+
 /**
  * Authenticated (production) / local-sink notification dispatch via Brevo.
  *
  * Local: default no-send. Only when Settings testing toggle is on and a sink
  * email is set — and only if the server itself is in local runtime.
- * Production: real recipients; client sink is ignored.
+ * Production: real recipients; client sink is ignored. Dispatch runs after
+ * the HTTP response so booking flows are never blocked on SMTP.
  */
+export async function GET() {
+  return NextResponse.json({
+    configured: isBrevoConfigured(),
+    mode: isLocalDevRuntime() ? "local" : "production",
+    live: isBrevoConfigured() && !isLocalDevRuntime(),
+  });
+}
+
 export async function POST(request: Request) {
   if (!isBrevoConfigured()) {
     return NextResponse.json(
@@ -124,16 +136,14 @@ export async function POST(request: Request) {
     );
   }
 
-  try {
-    const result = await dispatchProduction(admin, actorId!, body);
-    return NextResponse.json(result);
-  } catch (err) {
-    console.error("[notifications]", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to send." },
-      { status: 500 },
-    );
-  }
+  after(async () => {
+    try {
+      await dispatchProduction(admin, actorId!, body);
+    } catch (err) {
+      console.error("[notifications]", err);
+    }
+  });
+  return NextResponse.json({ ok: true, queued: true });
 }
 
 function formatDateLabel(date: string): string {
@@ -277,17 +287,18 @@ async function sendRelocatedTo(
     localTesting,
   });
   const subject = localTesting ? localSubject(built.subject) : built.subject;
-  let sent = 0;
-  for (const to of recipients) {
-    const result = await sendEmail({
-      to,
-      subject,
-      html: built.html,
-      text: built.text,
-      tags: ["booking-relocated", payload.reason, ...(localTesting ? ["local-dev"] : [])],
-    });
-    if (result.ok && !result.skipped) sent += 1;
-  }
+  const results = await Promise.all(
+    recipients.map((to) =>
+      sendEmail({
+        to,
+        subject,
+        html: built.html,
+        text: built.text,
+        tags: ["booking-relocated", payload.reason, ...(localTesting ? ["local-dev"] : [])],
+      }),
+    ),
+  );
+  const sent = results.filter((result) => result.ok && !result.skipped).length;
   return { ok: true as const, sent };
 }
 
@@ -305,17 +316,18 @@ async function sendCancelledTo(
     localTesting,
   });
   const subject = localTesting ? localSubject(built.subject) : built.subject;
-  let sent = 0;
-  for (const to of recipients) {
-    const result = await sendEmail({
-      to,
-      subject,
-      html: built.html,
-      text: built.text,
-      tags: ["booking-cancelled", payload.reason, ...(localTesting ? ["local-dev"] : [])],
-    });
-    if (result.ok && !result.skipped) sent += 1;
-  }
+  const results = await Promise.all(
+    recipients.map((to) =>
+      sendEmail({
+        to,
+        subject,
+        html: built.html,
+        text: built.text,
+        tags: ["booking-cancelled", payload.reason, ...(localTesting ? ["local-dev"] : [])],
+      }),
+    ),
+  );
+  const sent = results.filter((result) => result.ok && !result.skipped).length;
   return { ok: true as const, sent };
 }
 
@@ -394,17 +406,18 @@ async function handleSwapExchange(
   admin: ReturnType<typeof createAdminClient>,
   payload: Extract<NotificationPayload, { type: "swap_exchange" }>,
 ) {
-  let sent = 0;
-  const a = await loadMailUser(admin, payload.teacherAId);
-  if (a) {
-    const r = await sendExchangeTo(a, payload, "A", false);
-    if (r.ok) sent += r.sent ?? 0;
-  }
-  const b = await loadMailUser(admin, payload.teacherBId);
-  if (b) {
-    const r = await sendExchangeTo(b, payload, "B", false);
-    if (r.ok) sent += r.sent ?? 0;
-  }
+  const [a, b] = await Promise.all([
+    loadMailUser(admin, payload.teacherAId),
+    loadMailUser(admin, payload.teacherBId),
+  ]);
+  const results = await Promise.all([
+    a ? sendExchangeTo(a, payload, "A", false) : null,
+    b ? sendExchangeTo(b, payload, "B", false) : null,
+  ]);
+  const sent = results.reduce(
+    (sum, result) => sum + (result?.ok ? (result.sent ?? 0) : 0),
+    0,
+  );
   return { ok: true as const, sent };
 }
 
@@ -412,25 +425,23 @@ async function handleSwapHandoff(
   admin: ReturnType<typeof createAdminClient>,
   payload: Extract<NotificationPayload, { type: "swap_handoff" }>,
 ) {
-  let sent = 0;
-  const owner = await loadMailUser(admin, payload.fromTeacherId);
-  if (owner) {
-    const r = await sendHandoffTo(owner, payload, "owner", false);
-    if (r.ok) sent += r.sent ?? 0;
-  }
-  const receiver = await loadMailUser(admin, payload.toTeacherId);
-  if (receiver) {
-    const r = await sendHandoffTo(receiver, payload, "receiver", false);
-    if (r.ok) sent += r.sent ?? 0;
-  }
-  const admins = await loadAdminRecipients(admin, [
-    payload.fromTeacherId,
-    payload.toTeacherId,
+  const [owner, receiver, admins] = await Promise.all([
+    loadMailUser(admin, payload.fromTeacherId),
+    loadMailUser(admin, payload.toTeacherId),
+    loadAdminRecipients(admin, [
+      payload.fromTeacherId,
+      payload.toTeacherId,
+    ]),
   ]);
-  for (const adminTo of admins) {
-    const r = await sendHandoffTo(adminTo, payload, "admin", false);
-    if (r.ok) sent += r.sent ?? 0;
-  }
+  const results = await Promise.all([
+    owner ? sendHandoffTo(owner, payload, "owner", false) : null,
+    receiver ? sendHandoffTo(receiver, payload, "receiver", false) : null,
+    ...admins.map((adminTo) => sendHandoffTo(adminTo, payload, "admin", false)),
+  ]);
+  const sent = results.reduce(
+    (sum, result) => sum + (result?.ok ? (result.sent ?? 0) : 0),
+    0,
+  );
   return { ok: true as const, sent };
 }
 
@@ -550,21 +561,22 @@ async function sendIssueEmail(opts: {
     ? localSubject(built.subject)
     : built.subject;
 
-  let sent = 0;
-  for (const row of opts.recipients) {
-    const result = await sendEmail({
-      to: row,
-      subject,
-      html: built.html,
-      text: built.text,
-      tags: [
-        "issue-report",
-        `severity-${severity}`,
-        ...(opts.subjectPrefix ? ["local-dev"] : []),
-      ],
-    });
-    if (result.ok && !result.skipped) sent += 1;
-  }
+  const results = await Promise.all(
+    opts.recipients.map((row) =>
+      sendEmail({
+        to: row,
+        subject,
+        html: built.html,
+        text: built.text,
+        tags: [
+          "issue-report",
+          `severity-${severity}`,
+          ...(opts.subjectPrefix ? ["local-dev"] : []),
+        ],
+      }),
+    ),
+  );
+  const sent = results.filter((result) => result.ok && !result.skipped).length;
 
   return { ok: true, sent };
 }

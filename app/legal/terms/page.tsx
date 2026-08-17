@@ -11,11 +11,13 @@ import {
   LEGAL_PRODUCT,
   LEGAL_SCHOOL_DOMAIN,
 } from "@/lib/legal/constants";
+import { publicPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = publicPageMetadata({
   title: "Terms of Service",
   description: `Terms governing use of ${LEGAL_PRODUCT} by authorized school staff.`,
-};
+  path: "/legal/terms",
+});
 
 export default function TermsPage() {
   return (

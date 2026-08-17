@@ -38,6 +38,10 @@ import {
 } from "@/components/settings/settings-section";
 import { SetupPreferences } from "@/components/settings/setup-preferences";
 import { LocalEmailTestingSection } from "@/components/settings/local-email-testing";
+import {
+  getEmailDispatchStatus,
+  type EmailDispatchStatus,
+} from "@/lib/email/status";
 
 const NAME_MAX = 80;
 
@@ -81,6 +85,9 @@ export function SettingsForm({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [emailStatus, setEmailStatus] = useState<EmailDispatchStatus | null>(
+    null,
+  );
 
   const userStamp = `${user.name}\0${user.avatarUrl ?? ""}\0${user.notifyEmail}\0${user.notifyIssues}`;
   const [appliedUserStamp, setAppliedUserStamp] = useState(userStamp);
@@ -112,6 +119,16 @@ export function SettingsForm({
   useEffect(() => {
     return () => {
       if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getEmailDispatchStatus().then((next) => {
+      if (!cancelled) setEmailStatus(next);
+    });
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -538,32 +555,57 @@ export function SettingsForm({
 
       <SetupPreferences user={user} />
 
-      <SettingsSection id="notifications" title="Email">
+      <SettingsSection id="notifications" title="Email notifications">
+        {emailStatus ? (
+          <>
+            <p
+              className={cn(
+                "px-4 py-3 text-[12.5px] leading-relaxed sm:px-5",
+                emailStatus.live
+                  ? "text-neutral-500"
+                  : emailStatus.configured
+                    ? "text-neutral-500"
+                    : "text-amber-800/80",
+              )}
+            >
+              {emailStatus.live
+                ? "Live on this deployment. Staff receive mail for the events you leave on below."
+                : emailStatus.configured
+                  ? "Provider is configured. Local testing still has to be enabled to send."
+                  : "Email is not configured on this deployment yet. Add BREVO_API_KEY and BREVO_SENDER_EMAIL on Vercel Production."}
+            </p>
+            <SettingsDivider />
+          </>
+        ) : null}
         <SettingsToggleRow
-          title="Account email"
-          description="Booking, profile, and access changes"
+          title="Schedule email"
+          description="Shares, swaps, booking moves, and cancellations"
           control={
             <Switch
               checked={notifyEmail}
               onCheckedChange={handleNotifyEmail}
               disabled={busy}
-              aria-label="Account email"
+              aria-label="Schedule email"
             />
           }
         />
-        <SettingsDivider />
-        <SettingsToggleRow
-          title="Issue email"
-          description="Status changes on issues you reported"
-          control={
-            <Switch
-              checked={notifyIssues}
-              onCheckedChange={handleNotifyIssues}
-              disabled={busy}
-              aria-label="Issue email"
+        {isAdmin ? (
+          <>
+            <SettingsDivider />
+            <SettingsToggleRow
+              title="Issue email"
+              description="When a teacher reports a cart issue"
+              control={
+                <Switch
+                  checked={notifyIssues}
+                  onCheckedChange={handleNotifyIssues}
+                  disabled={busy}
+                  aria-label="Issue email"
+                />
+              }
             />
-          }
-        />
+          </>
+        ) : null}
       </SettingsSection>
 
       <LocalEmailTestingSection />

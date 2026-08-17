@@ -29,6 +29,12 @@ export function LegalShell({
           <CubicleWordmark size="sm" href="/login" />
           <div className="flex items-center gap-1">
             <Link
+              href="/about"
+              className="hidden px-3 text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-400 transition-colors duration-200 hover:text-neutral-950 sm:inline"
+            >
+              About
+            </Link>
+            <Link
               href="/login"
               className="hidden px-3 text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-400 transition-colors duration-200 hover:text-neutral-950 sm:inline"
             >

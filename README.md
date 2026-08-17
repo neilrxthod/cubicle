@@ -51,7 +51,7 @@ Cubicle processes **staff operational data** (identity from Google Sign-In, book
 |---------|-------------|
 | **My bookings** | Upcoming and past reservations; cancel upcoming |
 | **Issues** | Severity-tagged equipment reports; open / resolved filters |
-| **Settings** | Profile, photo, email prefs; **teaching schedule** (subjects, grades, periods) |
+| **Settings** | Profile, photo, email notifications; **teaching schedule** (subjects, grades, periods) |
 | **Onboarding** | First-run photo + teaching load (or booking window for admins) |
 
 ### Admin console
@@ -81,6 +81,7 @@ Cubicle processes **staff operational data** (identity from Google Sign-In, book
 | **Realtime** | Multi-user board updates via Supabase Realtime |
 | **Durability** | Authoritative data in Supabase Postgres — deploys do not wipe school data |
 | **Copy** | Direct, low-ambiguity product labels (actions name the object and outcome) |
+| **Email** | Production Brevo notifications for shares, swaps, booking changes, and admin issue alerts |
 
 ---
 
@@ -110,6 +111,8 @@ In-product narrative: [https://mycubicle.app/legal/security](https://mycubicle.a
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
+BREVO_API_KEY
+BREVO_SENDER_EMAIL
 ```
 
 **Recommended on production:**
@@ -117,6 +120,7 @@ SUPABASE_SERVICE_ROLE_KEY
 ```text
 NEXT_PUBLIC_CUBICLE_REQUIRE_REMOTE=true
 NEXT_PUBLIC_SITE_URL=https://mycubicle.app
+BREVO_SENDER_NAME=Cubicle
 ```
 
 Spell **SUPABASE** correctly. Redeploy after any `NEXT_PUBLIC_*` change. Never commit `.env.local` or service-role keys.

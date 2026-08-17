@@ -104,6 +104,13 @@ export function AuthLayout({
           <footer className="shrink-0 pt-2">
             <p className="text-[11px] text-neutral-400">
               <Link
+                href="/about"
+                className="transition-colors hover:text-neutral-600"
+              >
+                About
+              </Link>
+              <span className="mx-1.5 text-neutral-300">·</span>
+              <Link
                 href="/legal"
                 className="transition-colors hover:text-neutral-600"
               >

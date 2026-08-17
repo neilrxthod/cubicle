@@ -7,8 +7,40 @@ import { TextMorph } from "torph/react";
 import * as AnimatedBorderButton from "@/components/ui/animated-border-button";
 import SuccessIcon from "@/components/ui/icons/success";
 import TrashIcon from "@/components/ui/icons/trash";
-import { Spinner } from "@/components/ui/spinner";
+import { motionSafe } from "@/lib/motion/platform";
 import { cn } from "@/lib/utils";
+
+const GLYPH_TRANSITION = {
+  type: "spring" as const,
+  duration: 0.34,
+  bounce: 0,
+};
+
+function CancelSpinner({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      className={cn("animate-spin", className)}
+      aria-hidden
+    >
+      <circle
+        cx="8"
+        cy="8"
+        r="5.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        className="opacity-25"
+      />
+      <path
+        d="M13.5 8a5.5 5.5 0 0 0-5.5-5.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 type ActionResult =
   | { ok: true }
@@ -109,6 +141,8 @@ export function AnimatedCancelButton({
   }
 
   const label = success ? successLabel : idleLabel;
+  const glyphClass = size === "medium" ? "size-5" : "size-4";
+  const phase = success ? "success" : loading ? "loading" : "idle";
 
   return (
     <AnimatedBorderButton.Root
@@ -120,32 +154,55 @@ export function AnimatedCancelButton({
       animateBorder={loading}
       showAnimatedBorder={loading || success}
       animatedBorderStyle={loading ? "dashed" : "solid"}
+      animatedBorderStrokeWidth={1}
       disabled={loading || success}
-      className={cn("min-w-[7.5rem]", className)}
+      className={cn("min-w-[7.5rem] disabled:opacity-100", className)}
+      style={{
+        transitionProperty: "color, background-color, border-color",
+        transitionDuration: "320ms",
+        transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
+      }}
       aria-busy={loading}
       aria-live="polite"
+      aria-label={
+        success ? successLabel : loading ? "Canceling booking" : idleLabel
+      }
     >
-      <AnimatePresence mode="popLayout" initial={false}>
-        <motion.div
-          key={success ? "success" : "cancel"}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <AnimatedBorderButton.Icon
-            as={success ? SuccessIcon : TrashIcon}
-            size={size}
-            className={cn(size === "medium" ? "size-5" : "size-4")}
-            aria-hidden
-          />
-        </motion.div>
-      </AnimatePresence>
-      {loading ? (
-        <Spinner className="size-3.5" />
-      ) : (
-        <TextMorph className="tabular-nums">{label}</TextMorph>
-      )}
+      <span
+        className={cn(
+          "relative inline-flex shrink-0 items-center justify-center overflow-hidden",
+          glyphClass,
+        )}
+      >
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.span
+            key={phase}
+            className="inline-flex items-center justify-center will-change-transform"
+            initial={{ opacity: 0, y: "-60%", filter: "blur(3px)" }}
+            animate={{ opacity: 1, y: "0%", filter: "blur(0px)" }}
+            exit={{ opacity: 0, y: "60%", filter: "blur(3px)" }}
+            transition={motionSafe(GLYPH_TRANSITION)}
+          >
+            {loading ? (
+              <CancelSpinner className={glyphClass} />
+            ) : (
+              <AnimatedBorderButton.Icon
+                as={success ? SuccessIcon : TrashIcon}
+                size={size}
+                className={glyphClass}
+                aria-hidden
+              />
+            )}
+          </motion.span>
+        </AnimatePresence>
+      </span>
+      <TextMorph
+        className="tabular-nums"
+        duration={320}
+        ease="cubic-bezier(0.16, 1, 0.3, 1)"
+      >
+        {label}
+      </TextMorph>
     </AnimatedBorderButton.Root>
   );
 }

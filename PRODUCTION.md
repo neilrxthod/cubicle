@@ -59,6 +59,9 @@ Do **not** enable that flag with production school keys unless you deliberately 
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Anon / publishable key |
 | `SUPABASE_SERVICE_ROLE_KEY` | **No** | Server only — allowlist checks / delete unauthorized users |
+| `BREVO_API_KEY` | **No** | Transactional email. Required for production notifications |
+| `BREVO_SENDER_EMAIL` | **No** | Verified sender, e.g. `noreply-mail@mycubicle.app` |
+| `BREVO_SENDER_NAME` | **No** | Optional display name (default: Cubicle) |
 
 - Spell **SUPABASE** correctly (not `SUBASE`).
 - Never prefix service role with `NEXT_PUBLIC_`.
@@ -81,6 +84,7 @@ Copy from `.env.local.example`.
 | 8 | `supabase/booking-share.sql` | Share / borrow second teacher on a slot |
 | 9 | `supabase/cart-laptop-brand.sql` | Dell / Chromebook fleet on inventory carts |
 | 10 | `supabase/cart-laptop-codes.sql` | Per-cart laptop case codes for QR labels |
+| 11 | `supabase/notify-email.sql` | Profile email notification toggles (idempotent) |
 
 **If Settings → Booking policy shows a schema-cache error about `max_slots_per_teacher_per_day`:** run file **7** in the Supabase SQL Editor, then save again.
 
@@ -168,6 +172,32 @@ Attached on Vercel; apex redirects to `www` and serves the Next app.
 5. Optional: set Vercel env `NEXT_PUBLIC_SITE_URL=https://mycubicle.com` and redeploy.
 
 SSL is issued by Vercel (no separate registrar cert).
+
+## Email notifications (production)
+
+Staff email is **on in production** whenever the three Brevo vars above are set on **Vercel → Production**. Local `next dev` still does not send to school inboxes unless Settings → Email (local testing) is enabled.
+
+| Event | Who is emailed | Toggle |
+|-------|----------------|--------|
+| Cart issue reported | Other admins | Settings → Issue email |
+| Share invite | Invitee | Settings → Schedule email |
+| Swap / handoff request or decision | Owner or requester | Settings → Schedule email |
+| Booking moved or cancelled by admin | That teacher | Settings → Schedule email |
+
+Sending is fire-and-forget (`after()` on `/api/notifications`). Booking and issue flows never wait on Brevo.
+
+### Turn it on (if mail is still silent)
+
+1. Vercel → Project → Settings → Environment Variables → **Production**:
+   - `BREVO_API_KEY`
+   - `BREVO_SENDER_EMAIL=noreply-mail@mycubicle.app`
+   - `BREVO_SENDER_NAME=Cubicle`
+2. Redeploy Production (env changes do not apply to an existing deployment).
+3. In Supabase SQL Editor, run `supabase/notify-email.sql` if an older project is missing `notify_email` / `notify_issues`.
+4. Settings → Email notifications should read **Live on this deployment**.
+5. Report a test issue or send a share invite from a real staff account.
+
+Without the API key, `/api/notifications` returns `{ skipped: true }` and no mail leaves the platform.
 
 ## BIMI (official logo next to Brevo emails)
 
@@ -260,7 +290,10 @@ Build must exit 0. Proxy (session refresh) should appear in the build output.
 - [ ] Settings: profile photo/name save; Google Calendar section; shortcuts (bookings / admin / sign out)
 - [ ] Sign out works
 - [ ] `/legal/*` pages load
+- [ ] `/about` loads and is indexable
 - [ ] `/signup` redirects to login
+- [ ] Settings → Email notifications shows **Live on this deployment**
+- [ ] Share invite or issue report delivers mail from `noreply-mail@mycubicle.app`
 
 ## Security checklist
 
@@ -270,7 +303,7 @@ Build must exit 0. Proxy (session refresh) should appear in the build output.
 - [ ] Rotate service role if it was ever leaked
 - [ ] Vercel production env only (no demo login flag)
 - [ ] Security headers enabled via `next.config.ts` (HSTS, frame deny, nosniff)
-- [ ] `robots.txt` disallows indexing; metadata `robots: noindex`
+- [ ] Authenticated app routes stay `noindex`; `/login`, `/about`, `/legal` are indexable
 
 ## Post-deploy ops
 

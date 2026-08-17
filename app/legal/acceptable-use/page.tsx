@@ -10,11 +10,13 @@ import {
   LEGAL_PRODUCT,
   LEGAL_SCHOOL_DOMAIN,
 } from "@/lib/legal/constants";
+import { publicPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = publicPageMetadata({
   title: "Acceptable Use Policy",
   description: `Rules for appropriate use of ${LEGAL_PRODUCT} by school staff.`,
-};
+  path: "/legal/acceptable-use",
+});
 
 export default function AcceptableUsePage() {
   return (

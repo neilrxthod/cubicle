@@ -10,11 +10,13 @@ import {
   LEGAL_PRODUCT,
   LEGAL_SCHOOL_DOMAIN,
 } from "@/lib/legal/constants";
+import { publicPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = publicPageMetadata({
   title: "Security & Data Safety",
   description: `Security controls and credential practices for ${LEGAL_PRODUCT}.`,
-};
+  path: "/legal/security",
+});
 
 export default function SecurityPage() {
   return (

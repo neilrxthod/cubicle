@@ -347,21 +347,25 @@ export function TeacherMobileSettings({
           ) : null}
         </Group>
 
-        <Labeled title="Notifications">
+        <Labeled title="Email notifications">
           <Group>
             <Toggle
-              label="Account Email"
+              label="Schedule Email"
               checked={notifyEmail}
               disabled={busy}
               onChange={(checked) => persistNotify(checked, notifyIssues)}
             />
-            <Hairline />
-            <Toggle
-              label="Issue Email"
-              checked={notifyIssues}
-              disabled={busy}
-              onChange={(checked) => persistNotify(notifyEmail, checked)}
-            />
+            {user.role === "admin" ? (
+              <>
+                <Hairline />
+                <Toggle
+                  label="Issue Email"
+                  checked={notifyIssues}
+                  disabled={busy}
+                  onChange={(checked) => persistNotify(notifyEmail, checked)}
+                />
+              </>
+            ) : null}
           </Group>
         </Labeled>
 

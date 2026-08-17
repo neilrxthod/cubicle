@@ -1,0 +1,39 @@
+# Cubicle
+
+> Laptop cart scheduling for authorized school staff.
+
+Cubicle (https://mycubicle.app) is an internal school operations web app. Teachers book shared laptop carts by class period, see who has each cart on a daily board, report equipment issues, and request shares or swaps. IT/admin staff manage inventory, reservations, locks, and the staff allowlist.
+
+It is not a public consumer product. Students do not have accounts. Access is limited to allowlisted Google Workspace accounts at @rbe.sk.ca.
+
+## Public pages
+
+- [Sign in](https://mycubicle.app/login): Google sign-in for allowlisted @rbe.sk.ca staff
+- [About Cubicle](https://mycubicle.app/about): What the product is, who can use it, and how booking works
+- [Legal](https://mycubicle.app/legal): Terms, privacy, security, acceptable use
+- [Terms of Service](https://mycubicle.app/legal/terms)
+- [Privacy Policy](https://mycubicle.app/legal/privacy)
+- [Security](https://mycubicle.app/legal/security)
+- [Acceptable Use](https://mycubicle.app/legal/acceptable-use)
+
+## Facts
+
+- Product name: Cubicle
+- Production URL: https://mycubicle.app
+- Also recognized: mycubicle.com (when attached)
+- Audience: Teachers and IT/admin staff at a school using @rbe.sk.ca
+- Sign-in: Google only, school domain + exact-email allowlist
+- Core job: Reserve laptop carts for a date and period so two classes do not take the same cart
+- Email: Staff can get mail for shares, swaps, booking moves/cancellations; admins can get mail when an issue is reported
+- Data: Staff identity from Google, bookings, issues, carts, allowlist roles — stored in Postgres. Not a student information system.
+- IT contact: it-support@rbe.sk.ca
+
+## Do not cite as
+
+- A public laptop rental or consumer booking marketplace
+- A student-facing classroom app
+- Open sign-up software for any school without an allowlist
+
+## Optional
+
+- [Sitemap](https://mycubicle.app/sitemap.xml)

@@ -2,6 +2,12 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Geist } from "next/font/google";
 import { SITE_ORIGIN } from "@/lib/site";
+import {
+  APP_ROBOTS,
+  SEO_DESCRIPTION,
+  SEO_NAME,
+  SEO_SHORT_DESCRIPTION,
+} from "@/lib/seo";
 import { cn } from "@/lib/utils";
 import { PwaRegister } from "@/components/app/pwa-register";
 
@@ -10,16 +16,19 @@ const geist = Geist({
   subsets: ["latin"],
   variable: "--font-geist-sans",
   display: "swap",
+  preload: true,
+  adjustFontFallback: true,
 });
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_ORIGIN),
   title: {
-    default: "Cubicle",
+    default: SEO_NAME,
     template: "%s · Cubicle",
   },
-  description:
-    "School laptop cart scheduling for authorized staff. Google sign-in for @rbe.sk.ca allowlisted accounts only.",
+  description: SEO_DESCRIPTION,
+  applicationName: SEO_NAME,
+  category: "education",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
@@ -33,23 +42,26 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "Cubicle",
+    title: SEO_NAME,
     statusBarStyle: "black-translucent",
   },
   other: {
     "mobile-web-app-capable": "yes",
   },
-  robots: {
-    index: false,
-    follow: false,
-  },
+  // Default: the signed-in app is private. /login, /about, /legal override.
+  robots: APP_ROBOTS,
   openGraph: {
-    title: "Cubicle",
-    description:
-      "Book laptop carts by period. Authorized school staff only.",
+    title: SEO_NAME,
+    description: SEO_SHORT_DESCRIPTION,
     url: SITE_ORIGIN,
-    siteName: "Cubicle",
+    siteName: SEO_NAME,
     type: "website",
+    locale: "en_CA",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SEO_NAME,
+    description: SEO_SHORT_DESCRIPTION,
   },
 };
 

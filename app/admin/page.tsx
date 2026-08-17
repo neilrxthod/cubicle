@@ -1,11 +1,25 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { DashboardFrame } from "@/components/app/dashboard-frame";
 import { PageShell } from "@/components/app/page-shell";
 import { RequirePlatformAuth } from "@/components/app/require-platform-auth";
-import { AdminConsole } from "@/components/admin-console";
 import { usePlatformStore } from "@/lib/data/platform-store";
 import type { SessionUser } from "@/lib/types";
+
+const AdminConsole = dynamic(
+  () =>
+    import("@/components/admin-console").then((module) => ({
+      default: module.AdminConsole,
+    })),
+  {
+    loading: () => (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="size-5 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
+      </div>
+    ),
+  },
+);
 
 export default function AdminPage() {
   return (

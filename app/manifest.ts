@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     id: "/",
     name: "Cubicle",
     short_name: "Cubicle",
-    description: "Scan labels and book laptop carts.",
+    description: "Book laptop carts by period. Authorized school staff only.",
     start_url: "/",
     scope: "/",
     display: "standalone",

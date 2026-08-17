@@ -11,11 +11,13 @@ import {
   LEGAL_PRODUCT,
   LEGAL_SCHOOL_DOMAIN,
 } from "@/lib/legal/constants";
+import { publicPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = publicPageMetadata({
   title: "Privacy Policy",
   description: `How ${LEGAL_PRODUCT} collects, uses, and protects personal information.`,
-};
+  path: "/legal/privacy",
+});
 
 export default function PrivacyPage() {
   return (

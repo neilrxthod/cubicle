@@ -6,11 +6,13 @@ import {
   LEGAL_LINKS,
   LEGAL_PRODUCT,
 } from "@/lib/legal/constants";
+import { publicPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = publicPageMetadata({
   title: "Legal",
   description: `Legal and compliance documents for ${LEGAL_PRODUCT}.`,
-};
+  path: "/legal",
+});
 
 export default function LegalIndexPage() {
   return (

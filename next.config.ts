@@ -54,7 +54,10 @@ const supabaseOrigin =
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  reactCompiler: true,
+  compress: true,
   images: {
+    formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {
         protocol: "https",
@@ -62,6 +65,13 @@ const nextConfig: NextConfig = {
         pathname: "/**",
       },
     ],
+  },
+  experimental: {
+    optimizePackageImports: ["motion", "@base-ui/react", "lucide-react"],
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
   },
   async headers() {
     return [
@@ -77,6 +87,25 @@ const nextConfig: NextConfig = {
             value: "no-cache, no-store, must-revalidate",
           },
           { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+      {
+        source: "/icons/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400, stale-while-revalidate=604800",
+          },
+        ],
+      },
+      {
+        source: "/llms.txt",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=3600, stale-while-revalidate=86400",
+          },
+          { key: "Content-Type", value: "text/plain; charset=utf-8" },
         ],
       },
       {

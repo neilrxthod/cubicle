@@ -158,7 +158,7 @@ function DashedBorderSvg({
             attributeName="stroke-dashoffset"
             from="0"
             to="-16"
-            dur="0.4s"
+            dur="0.75s"
             repeatCount="indefinite"
           />
         ) : null}

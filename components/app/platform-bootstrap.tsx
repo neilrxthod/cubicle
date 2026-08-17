@@ -24,10 +24,10 @@ import { RemoteRequiredScreen } from "@/components/app/remote-required-screen";
 
 /**
  * Safety-net poll while the tab is visible (missed Realtime events / sleep).
- * Kept tight (~1s) so multi-user boards feel live even if a websocket event drops.
+ * Live updates come from Realtime; this only covers a dropped websocket.
  * Overlapping pulls are coalesced via inFlight/queued below.
  */
-const VISIBLE_POLL_MS = 1_000;
+const VISIBLE_POLL_MS = 30_000;
 
 /**
  * Loads platform data from Supabase, then keeps it live via Realtime.

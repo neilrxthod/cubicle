@@ -14,11 +14,11 @@ const TAB_KEY = "cubicle_presence_tab";
 const CHANGE_EVENT = "cubicle_presence_change";
 const CHANNEL = "cubicle_presence_bc";
 
-/** Keep-alive + UI prune — dots must flip in under a second. */
-const HEARTBEAT_MS = 400;
-const STALE_MS = 900;
-const STORE_KEEP_MS = 3_000;
-const UI_TICK_MS = 250;
+/** Keep-alive + UI prune. Remote peers still flip within a few seconds. */
+const HEARTBEAT_MS = 2_000;
+const STALE_MS = 6_500;
+const STORE_KEEP_MS = 12_000;
+const UI_TICK_MS = 1_000;
 
 export type PresenceStatus = "online" | "away" | "offline";
 type LiveStatus = "online" | "away";

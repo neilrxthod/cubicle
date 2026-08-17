@@ -172,9 +172,13 @@ function notifyPlatformPeers() {
   }
 }
 
-function write(next: PlatformState) {
+function write(next: PlatformState, serialized?: string) {
+  const raw = serialized ?? JSON.stringify(next);
+  if (raw === cachedRaw) {
+    memory = next;
+    return;
+  }
   memory = next;
-  const raw = JSON.stringify(next);
   cachedRaw = raw;
   if (typeof window !== "undefined") {
     localStorage.setItem(platformStorageKey(), raw);
@@ -266,7 +270,12 @@ export function mutate(mutator: (draft: PlatformState) => void) {
  * Does not write to Postgres — only mirrors remote state for the UI.
  */
 export function replaceState(next: PlatformState) {
-  write(next);
+  const raw = JSON.stringify(next);
+  if (raw === cachedRaw) {
+    memory = next;
+    return;
+  }
+  write(next, raw);
 }
 
 /** Force in-memory + localStorage to a completely empty platform. */
