@@ -33,7 +33,37 @@ export type IssueSeverity = "low" | "medium" | "high";
 
 export type IssueStatus = "open" | "resolved";
 
-export type RestrictionCategory = "ap_exam" | "general" | "other";
+export type RestrictionCategory =
+  | "general"
+  | "ap_exam"
+  | "testing"
+  | "holiday"
+  | "event"
+  | "pd"
+  | "other";
+
+export type RestrictionTypeOption = {
+  id: RestrictionCategory;
+  label: string;
+  /** Short board badge */
+  tag: string;
+};
+
+export const RESTRICTION_TYPES: readonly RestrictionTypeOption[] = [
+  { id: "general", label: "General", tag: "Locked" },
+  { id: "ap_exam", label: "AP exam", tag: "AP" },
+  { id: "testing", label: "Testing", tag: "Test" },
+  { id: "holiday", label: "Holiday", tag: "Off" },
+  { id: "event", label: "Event", tag: "Event" },
+  { id: "pd", label: "PD day", tag: "PD" },
+  { id: "other", label: "Other", tag: "Locked" },
+] as const;
+
+export function getRestrictionType(
+  id: RestrictionCategory,
+): RestrictionTypeOption {
+  return RESTRICTION_TYPES.find((t) => t.id === id) ?? RESTRICTION_TYPES[0]!;
+}
 
 export type SessionUser = {
   id: string;

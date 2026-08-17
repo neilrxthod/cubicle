@@ -40,6 +40,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import {
+  getRestrictionType,
   sortCarts,
   type Booking,
   type BookingPolicy,
@@ -64,14 +65,9 @@ import {
 } from "@/lib/booking/slot-rules"
 
 function restrictionLabel(restriction: SlotRestriction): string {
-  if (restriction.category === "ap_exam") return "AP exam"
-  if (
-    restriction.category === "other" &&
-    (restriction.reason ?? "").toLowerCase().includes("holiday")
-  ) {
-    return restriction.reason?.trim() || "Holiday"
-  }
-  return restriction.reason?.trim() || "Locked"
+  const reason = restriction.reason?.trim()
+  if (reason) return reason
+  return getRestrictionType(restriction.category).label
 }
 
 const BookDialog = dynamic(() => import("./book-dialog").then((mod) => mod.BookDialog), {
@@ -102,6 +98,7 @@ import {
   reorderCarts,
   updateBookingLabel,
 } from "@/lib/actions"
+import { BoardBlockDialog } from "@/components/board-block-dialog"
 import {
   Calendar,
   calendarPopoverClassName,
@@ -424,6 +421,7 @@ export function DailyBoard({
   const [multiMode, setMultiMode] = useState(false)
   const [multiTag, setMultiTag] = useState(DEFAULT_ADMIN_MULTI_TAG)
   const multiBusy = useRef(false)
+  const [blockDialogOpen, setBlockDialogOpen] = useState(false)
   const [renamingBookingId, setRenamingBookingId] = useState<string | null>(
     null,
   )
@@ -814,12 +812,10 @@ export function DailyBoard({
     }
     const restriction = restrictionMap.get(`${cart.id}:${period}`)
     if (restriction && session.role !== "admin") {
+      const kind = getRestrictionType(restriction.category)
       toast({
-        title: restriction.category === "ap_exam" ? "AP exam" : "Restricted",
-        description:
-          restriction.category === "ap_exam"
-            ? "Reserved for AP exams."
-            : restriction.reason ?? "Locked by admin.",
+        title: kind.label,
+        description: restriction.reason ?? "Locked by admin.",
         variant: "destructive",
       })
       return
@@ -971,6 +967,27 @@ export function DailyBoard({
                   />
                 ) : null}
               </AnimatePresence>
+
+              <span
+                aria-hidden
+                className="hidden h-4 w-px shrink-0 bg-[var(--hairline-strong)] sm:block"
+              />
+
+              <button
+                type="button"
+                onClick={() => setBlockDialogOpen(true)}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded-full px-3.5",
+                  "text-[12px] font-medium tracking-[-0.02em] text-neutral-600",
+                  "transition-[transform,background-color,color,box-shadow] duration-150 ease-out",
+                  "hover:bg-neutral-950 hover:text-white hover:shadow-[0_3px_10px_rgba(0,0,0,0.16)]",
+                  "active:scale-[0.97] active:shadow-none",
+                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
+                )}
+              >
+                <Lock className="size-3" strokeWidth={1.75} />
+                Block
+              </button>
             </div>
           ) : null}
 
@@ -1535,14 +1552,9 @@ export function DailyBoard({
                           >
                             <Lock className="size-3" strokeWidth={1.25} />
                             <span className="text-[9px] font-medium uppercase tracking-[0.14em] text-neutral-400">
-                              {restriction?.category === "ap_exam"
-                                ? "AP"
-                                : restriction?.category === "other" &&
-                                    (restriction.reason ?? "")
-                                      .toLowerCase()
-                                      .includes("holiday")
-                                  ? "Off"
-                                  : "Locked"}
+                              {restriction
+                                ? getRestrictionType(restriction.category).tag
+                                : "Locked"}
                             </span>
                           </div>
                         </div>
@@ -2002,14 +2014,9 @@ export function DailyBoard({
                           >
                             <Lock className="size-3" strokeWidth={1.25} />
                             <span className="text-[9px] font-medium uppercase tracking-[0.14em] text-neutral-400">
-                              {restriction?.category === "ap_exam"
-                                ? "AP"
-                                : restriction?.category === "other" &&
-                                    (restriction.reason ?? "")
-                                      .toLowerCase()
-                                      .includes("holiday")
-                                  ? "Off"
-                                  : "Locked"}
+                              {restriction
+                                ? getRestrictionType(restriction.category).tag
+                                : "Locked"}
                             </span>
                           </div>
                         </div>
@@ -2113,6 +2120,14 @@ export function DailyBoard({
         notice={slotLimit}
         onClose={() => setSlotLimit(null)}
       />
+      {isAdmin ? (
+        <BoardBlockDialog
+          open={blockDialogOpen}
+          onOpenChange={setBlockDialogOpen}
+          carts={boardCarts}
+          activeDate={date}
+        />
+      ) : null}
 
       {/* Admin two-step delete: trash → confirm → remove */}
       <Dialog

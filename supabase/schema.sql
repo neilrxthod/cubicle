@@ -143,7 +143,15 @@ create table if not exists public.slot_restrictions (
   cart_id text not null references public.carts (id) on delete cascade,
   date date not null,
   period text not null check (period in ('P1', 'P2', 'P3', 'P4', 'P5')),
-  category text not null check (category in ('ap_exam', 'general', 'other')),
+  category text not null check (category in (
+    'general',
+    'ap_exam',
+    'testing',
+    'holiday',
+    'event',
+    'pd',
+    'other'
+  )),
   reason text,
   unique (cart_id, date, period)
 );
