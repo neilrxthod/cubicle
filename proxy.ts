@@ -1,12 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { proxySupabaseAuth } from "@/lib/auth/oauth-supabase-proxy";
 import { updateSession } from "@/lib/supabase/middleware";
 
 export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
-  // Same-origin Supabase proxy (OAuth authorize) — do not touch session cookies.
+  // Same-origin Supabase Auth proxy — hides *.supabase.co from Google.
   if (pathname.startsWith("/__supabase")) {
-    return NextResponse.next();
+    return proxySupabaseAuth(request);
   }
 
   // Supabase Site URL fallback can land OAuth on `/` with ?code=…
@@ -23,9 +24,9 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except static assets, images, and the
-     * same-origin Supabase OAuth proxy.
+     * Match all request paths except static assets and images.
+     * /__supabase is included so OAuth can hide *.supabase.co from Google.
      */
-    "/((?!_next/static|_next/image|favicon.ico|__supabase/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

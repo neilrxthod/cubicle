@@ -1,13 +1,13 @@
 /**
- * Same-origin reverse proxy for Supabase Auth (OAuth authorize hop).
+ * Same-origin reverse proxy for Supabase Auth (OAuth authorize + callback).
  *
- * Staff should never see `<project-ref>.supabase.co` in the address bar when
- * they click Continue with Google. Next.js rewrites `/__supabase/*` to the
- * real project URL server-side (see next.config.ts).
+ * Staff should never see `<project-ref>.supabase.co` in the address bar or on
+ * Google's "continue to …" account picker. `proxy.ts` forwards `/__supabase/*`
+ * to the project and rewrites Google's `redirect_uri` onto this origin.
  *
- * Note: After Google consent, Google still redirects to Supabase's registered
- * callback (`…supabase.co/auth/v1/callback`) before bouncing back to this app.
- * Hiding that hop requires a Supabase custom domain.
+ * Google Cloud must list:
+ *   {origin}/__supabase/auth/v1/callback
+ * as an Authorized redirect URI (keep the supabase.co callback too).
  */
 
 export const SUPABASE_SAME_ORIGIN_PROXY_PREFIX = "/__supabase";
