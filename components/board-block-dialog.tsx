@@ -10,7 +10,12 @@ import { Calendar as CalendarIcon, ChevronDown, Plus } from "lucide-react"
 import { batchRestrictSlots } from "@/lib/actions"
 import type { Cart, Period, RestrictionCategory } from "@/lib/types"
 import { PERIODS, RESTRICTION_TYPES } from "@/lib/types"
-import { fadeUpVariants, motionSafe, transitionFast } from "@/lib/motion/platform"
+import {
+  fadeUpVariants,
+  fadeVariants,
+  motionSafe,
+  transitionFast,
+} from "@/lib/motion/platform"
 import { cn } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import {
@@ -265,22 +270,23 @@ export function BoardBlockDialog({
                       type="button"
                       aria-label="Choose date"
                       className={cn(
-                        "flex h-9 w-full items-center gap-2 rounded-md border border-neutral-200 bg-white px-2.5",
+                        "inline-flex h-9 w-fit max-w-full items-center gap-2 rounded-md border border-neutral-200 bg-white px-2.5",
                         "text-left text-[13px] tabular-nums tracking-[-0.01em] text-neutral-950",
                         "transition-colors duration-150 ease-out",
                         "hover:border-neutral-300 hover:bg-neutral-50",
                         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
+                        "data-[state=open]:[&_svg.chevron]:rotate-180",
                       )}
                     >
                       <CalendarIcon
                         className="size-3.5 shrink-0 text-neutral-400"
                         strokeWidth={1.75}
                       />
-                      <span className="min-w-0 flex-1 truncate">
+                      <span className="min-w-0 truncate">
                         {dateSummary}
                       </span>
                       <ChevronDown
-                        className="size-3.5 shrink-0 text-neutral-400"
+                        className="chevron size-3.5 shrink-0 text-neutral-400 transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
                         strokeWidth={1.75}
                       />
                     </button>
@@ -396,7 +402,7 @@ export function BoardBlockDialog({
 
             <Col label="Type">
               <div
-                className="flex flex-wrap gap-1"
+                className="flex min-h-[3.75rem] flex-wrap content-start gap-1"
                 role="radiogroup"
                 aria-label="Type"
               >
@@ -413,13 +419,13 @@ export function BoardBlockDialog({
                         if (opt.id !== "other") setReason("")
                       }}
                       className={cn(
-                        "inline-flex h-7 items-center rounded-full px-2.5",
-                        "text-[12px] tracking-[-0.01em]",
-                        "transition-colors duration-150 ease-out",
+                        "inline-flex h-7 items-center rounded-full border px-2.5",
+                        "text-[12px] font-medium tracking-[-0.01em]",
+                        "select-none [-webkit-tap-highlight-color:transparent]",
                         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
                         on
-                          ? "bg-neutral-950 font-medium text-white"
-                          : "bg-white font-normal text-neutral-500 ring-1 ring-neutral-200 hover:text-neutral-800",
+                          ? "border-neutral-950 bg-neutral-950 text-white"
+                          : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-800",
                       )}
                     >
                       {opt.label}
@@ -433,7 +439,7 @@ export function BoardBlockDialog({
               {category === "other" ? (
                 <motion.div
                   key="note"
-                  variants={fadeUpVariants}
+                  variants={fadeVariants}
                   initial="initial"
                   animate="animate"
                   exit="exit"
