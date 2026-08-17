@@ -681,9 +681,12 @@ export async function dbClearPlatformData(
     | "all",
 ): Promise<{ error?: string }> {
   const supabase = client();
-  // PostgREST requires a filter — neq id "" matches every row with an id.
+  // PostgREST refuses an unfiltered DELETE. `id IS NOT NULL` matches every
+  // row and works for both text PKs (carts) and uuid PKs (bookings, etc.).
+  // `neq("id", "")` is invalid on uuid columns and surfaces as
+  // `invalid input syntax for type uuid: ""`.
   const wipe = async (table: string) => {
-    const { error } = await supabase.from(table).delete().neq("id", "");
+    const { error } = await supabase.from(table).delete().not("id", "is", null);
     return error?.message;
   };
 
@@ -702,9 +705,12 @@ export async function dbClearPlatformData(
   }
 
   if (target === "bookings") {
+    // Swaps reference bookings — clear them first in case ON DELETE CASCADE
+    // is missing on an older database.
+    const swapErr = await wipe("swap_requests");
+    if (swapErr) return { error: swapErr };
     const err = await wipe("bookings");
     if (err) return { error: err };
-    await wipe("swap_requests");
     return {};
   }
   if (target === "issues") {
