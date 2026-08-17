@@ -1,12 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isOurGoogleOAuthCallback } from "@/lib/auth/google-oauth";
 import { proxySupabaseAuth } from "@/lib/auth/oauth-supabase-proxy";
 import { updateSession } from "@/lib/supabase/middleware";
 
 export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
-  // Same-origin Supabase Auth proxy — hides *.supabase.co from Google.
   if (pathname.startsWith("/__supabase")) {
+    if (isOurGoogleOAuthCallback(request)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/google";
+      return NextResponse.redirect(url);
+    }
     return proxySupabaseAuth(request);
   }
 

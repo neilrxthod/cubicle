@@ -64,6 +64,8 @@ Do **not** enable that flag with production school keys unless you deliberately 
 | `BREVO_API_KEY` | **No** | Transactional email. Required for production notifications |
 | `BREVO_SENDER_EMAIL` | **No** | Verified sender, e.g. `noreply-mail@mycubicle.app` |
 | `BREVO_SENDER_NAME` | **No** | Optional display name (default: Cubicle) |
+| `GOOGLE_OAUTH_CLIENT_ID` | **No** | Same Web client as Supabase Google provider. Hides `*.supabase.co` on the account picker |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | **No** | Server only. Required with the client ID above |
 | `NEXT_PUBLIC_SITE_URL` | Yes | Canonical origin, e.g. `https://mycubicle.app` |
 | `NEXT_PUBLIC_CUBICLE_REQUIRE_REMOTE` | Yes | Set `true` on Production so the app never falls back to demo |
 
@@ -167,9 +169,24 @@ Dashboard: Project → **Authentication** → **URL Configuration**
   - `https://mycubicle.com/__supabase/auth/v1/callback`
   - `http://localhost:3000/__supabase/auth/v1/callback` (dev only)
   - `https://<project-ref>.supabase.co/auth/v1/callback` (keep as fallback)
-- The `mycubicle.app/__supabase/…` URIs are what hide
-  `bpfwgfecydqxbkdhobqb.supabase.co` on Google’s “continue to …” screen.
-  After adding them, staff see **mycubicle.app** instead.
+- The `mycubicle.app/__supabase/…` URIs hide
+  `*.supabase.co` on Google’s “continue to …” screen **only when**
+  first-party Google OAuth is configured (below). Do not rewrite
+  Google’s callback onto Cubicle without `GOOGLE_OAUTH_*` — that
+  produces “Sign-in was cancelled.”
+
+### Hide supabase.co on the Google account picker
+
+Add these **server-only** vars on Vercel Production (same client as
+Supabase → Authentication → Providers → Google):
+
+```text
+GOOGLE_OAUTH_CLIENT_ID=xxxxx.apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-...
+```
+
+Redeploy after setting them. Until they are set, Google sign-in still
+works via Supabase and may show `*.supabase.co` on the picker.
 - If app is **External + Testing**, add every staff Google account as Test users until published.
 
 Bell times on the schedule board come from `lib/calendar/period-schedule.ts` (`America/Regina`). Cubicle does **not** currently push bookings into Google Calendar — no Calendar API or extra OAuth scope is required.

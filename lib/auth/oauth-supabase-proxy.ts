@@ -45,28 +45,11 @@ export function rewriteGoogleRedirectUri(
     return location;
   }
 
+  // Never rewrite Google's redirect_uri. That code is bound to the URI
+  // Supabase registered (*.supabase.co). Changing it makes Google issue a
+  // code Supabase cannot exchange → /login?error=missing_code.
   if (isGoogleAccountsHost(url.hostname)) {
-    const redirectUri = url.searchParams.get("redirect_uri");
-    if (!redirectUri) return url.toString();
-    try {
-      const callback = new URL(redirectUri);
-      const project = new URL(projectOrigin);
-      const isProjectCallback =
-        callback.hostname.toLowerCase() === project.hostname.toLowerCase() &&
-        callback.pathname.includes("/auth/v1/callback");
-      const alreadyProxied = callback.pathname.startsWith(
-        SUPABASE_SAME_ORIGIN_PROXY_PREFIX,
-      );
-      if (isProjectCallback && !alreadyProxied) {
-        url.searchParams.set(
-          "redirect_uri",
-          `${publicOrigin}${SUPABASE_SAME_ORIGIN_PROXY_PREFIX}${callback.pathname}${callback.search}`,
-        );
-      }
-    } catch {
-      return url.toString();
-    }
-    return url.toString();
+    return location;
   }
 
   try {
@@ -86,8 +69,8 @@ function rewriteSetCookie(value: string): string {
 }
 
 /**
- * Forward /__supabase/* to the Supabase project and hide supabase.co from
- * Google's account chooser by swapping redirect_uri onto this origin.
+ * Forward /__supabase/* to the Supabase project (authorize hop).
+ * Do not change Google's redirect_uri — that breaks the code exchange.
  */
 export async function proxySupabaseAuth(
   request: NextRequest,
