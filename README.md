@@ -2,7 +2,7 @@
 
 **Authorized school staff platform for laptop-cart scheduling.**
 
-Cubicle is an internal operations tool for teachers and IT. It provides period-based cart booking, a shared daily board, equipment issue reporting, and admin fleet controls. Production access is limited to **allowlisted `@rbe.sk.ca` Google Workspace accounts** — not a public consumer product.
+Cubicle is an internal operations tool for teachers and IT. It provides period-based cart booking, a shared daily board, equipment issue reporting, QR labels, and admin fleet controls. Production access is limited to **allowlisted `@rbe.sk.ca` Google Workspace accounts** — not a public consumer product.
 
 | | |
 |---|---|
@@ -39,29 +39,49 @@ Cubicle processes **staff operational data** (identity from Google Sign-In, book
 
 | Feature | Description |
 |---------|-------------|
-| **Daily board** | Cart × period grid: free, yours, booked, restricted, paused |
+| **Daily board** | Cart × period grid: free, yours, booked, shared, restricted, paused |
 | **Stats strip** | Brand mesh metrics — booked, utilization, yours, issues, free |
 | **Book / cancel** | Reserve by date and period; cancel own bookings |
-| **Swaps** | Request another teacher’s slot; owner accepts or declines |
+| **Shares** | Invite a colleague onto a slot (dual avatars); invitee accepts or declines |
+| **Swaps** | Request another teacher’s slot; owner accepts or declines a two-way exchange |
+| **Presence** | Green dot on avatars when that staff member is signed in |
+| **Fleet marks** | Dell / Chromebook logos on carts; admin drag-and-drop row order |
 | **Verified staff** | Permanent employment may show a verification mark |
+| **Booking limits** | Admin-set max slots per teacher per day and how far ahead teachers may book |
 
 ### Teacher tools
 
 | Feature | Description |
 |---------|-------------|
 | **My bookings** | Upcoming and past reservations; cancel upcoming |
-| **Issues** | Severity-tagged equipment reports; open / resolved filters |
-| **Settings** | Profile, photo, email notifications; **teaching schedule** (subjects, grades, periods) |
+| **Issues** | Severity-tagged equipment reports; open / resolved filters; optional delete |
+| **Settings** | Profile, photo, email notifications, account deletion; **teaching schedule** (subjects, grades, periods) |
 | **Onboarding** | First-run photo + teaching load (or booking window for admins) |
+
+### Phone (iOS / Android)
+
+On iPhone, iPad, and Android the app opens a phone shell instead of the desktop board. Add to Home Screen for standalone PWA chrome (`manifest` + `public/sw.js`).
+
+| Surface | Description |
+|---------|-------------|
+| **Home** | Scan button plus bookings, schedule, issues, shares, swaps |
+| **Scan** | Camera reads cart and laptop QR labels printed from Admin → QR codes |
+| **Profile** | Settings and two-step sign-out |
+| **Admin (phone)** | Inventory, QR codes, reservations, reports, staff |
+
+Desktop browsers keep the full schedule board and header nav (Schedule, Bookings, Issues, Admin).
 
 ### Admin console
 
 | Tab | Description |
 |-----|-------------|
-| **Inventory** | Add / edit / delete carts (name + location); **Pause** / **Resume**; conflict dialog before pause; optional full operational reset |
-| **Reservations** | Filterable table; quick chips; LiquidMetal CSV/PDF export; reassign / delete |
+| **Inventory** | Add / edit / delete carts (name, location, Dell or Chromebook); **Pause** / **Resume**; conflict dialog before pause; drag-and-drop order; optional operational reset |
+| **QR codes** | Per-cart and per-laptop case codes; preview and print label PDFs |
+| **Reservations** | Filterable table; reassign / delete; LiquidMetal CSV/PDF export |
 | **Reports** | KPI strip, usage charts, issue mix; LiquidMetal export |
-| **Staff** | Allowlist invite/restore/remove; verified badge |
+| **Staff** | Allowlist invite / restore / remove; verified badge |
+
+Booking policy (advance window + max slots per teacher per day) lives in **Settings**, not a separate admin tab.
 
 ### Auth & setup
 
@@ -72,16 +92,18 @@ Cubicle processes **staff operational data** (identity from Google Sign-In, book
 | **Roles** | `teacher` or `admin` from allowlist / profile |
 | **Onboarding (production)** | **Once** after first successful auth |
 | **Onboarding (local `next dev`)** | Re-prompted after every sign-in for testing |
-| **Later edits** | Teaching schedule and booking window in **Settings** (no wizard re-run) |
+| **Later edits** | Teaching schedule and booking policy in **Settings** (no wizard re-run) |
+| **Account deletion** | Staff can delete their own account from Settings |
 
 ### Platform
 
 | Feature | Description |
 |---------|-------------|
-| **Realtime** | Multi-user board updates via Supabase Realtime |
+| **Realtime** | Multi-user board and presence updates via Supabase Realtime |
 | **Durability** | Authoritative data in Supabase Postgres — deploys do not wipe school data |
 | **Copy** | Direct, low-ambiguity product labels (actions name the object and outcome) |
 | **Email** | Production Brevo notifications for shares, swaps, booking changes, and admin issue alerts |
+| **SEO** | Public `/login`, `/about`, `/legal/*`; authenticated app routes stay `noindex` |
 
 ---
 
@@ -95,12 +117,13 @@ Cubicle is **not** open registration SaaS. Production enforces layered access:
 | IT allowlist | Exact email in Supabase `allowed_emails` |
 | Role assignment | `teacher` or `admin` from allowlist / profile |
 | Domain guard in DB | `restrict-domain.sql` rejects non-school allowlist rows |
-| Row Level Security | Postgres RLS on platform tables; browser uses anon key only |
+| Row Level Security | Postgres RLS on platform tables; browser uses the publishable / anon key only |
 | Service role | `SUPABASE_SERVICE_ROLE_KEY` server-only — never `NEXT_PUBLIC_` |
 | Demo login | Disabled unless `NEXT_PUBLIC_ENABLE_DEMO_LOGIN=true` (**never** on Vercel production) |
+| Camera | Phone scan uses the device camera; `Permissions-Policy` allows `camera=(self)` only |
 | Repository | Private GitHub project |
 
-Operator policy: [`SECURITY.md`](./SECURITY.md)  
+Operator policy: [`SECURITY.md`](./SECURITY.md)
 In-product narrative: [https://mycubicle.app/legal/security](https://mycubicle.app/legal/security)
 
 ### Production environment variables
@@ -109,7 +132,8 @@ In-product narrative: [https://mycubicle.app/legal/security](https://mycubicle.a
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY   # preferred (sb_publishable_…)
+# NEXT_PUBLIC_SUPABASE_ANON_KEY        # legacy JWT — still accepted if publishable is unset
 SUPABASE_SERVICE_ROLE_KEY
 BREVO_API_KEY
 BREVO_SENDER_EMAIL
@@ -123,7 +147,7 @@ NEXT_PUBLIC_SITE_URL=https://mycubicle.app
 BREVO_SENDER_NAME=Cubicle
 ```
 
-Spell **SUPABASE** correctly. Redeploy after any `NEXT_PUBLIC_*` change. Never commit `.env.local` or service-role keys.
+Copy the full template from [`.env.local.example`](./.env.local.example). Spell **SUPABASE** correctly. Redeploy after any `NEXT_PUBLIC_*` change. Never commit `.env.local` or service-role keys.
 
 ---
 
@@ -131,7 +155,7 @@ Spell **SUPABASE** correctly. Redeploy after any `NEXT_PUBLIC_*` change. Never c
 
 | Layer | Holds | On `git push` / Vercel redeploy |
 |-------|--------|----------------------------------|
-| **Supabase Postgres** | Bookings, carts, issues, staff, restrictions, profiles | **Unchanged** |
+| **Supabase Postgres** | Bookings, carts, issues, staff, restrictions, shares, laptop codes, profiles | **Unchanged** |
 | **Vercel** | Application code only | Replaced with new build |
 | **Browser** | Session + onboarding prefs cache | Not source of truth for bookings |
 
@@ -168,10 +192,12 @@ Cubicle is designed as an **internal staff tool**, not a student-facing learning
 | Layer | Technology |
 |-------|------------|
 | Application | Next.js 16 (App Router), React 19, TypeScript |
-| UI | Tailwind CSS, Radix / accessible primitives, Motion |
+| UI | Tailwind CSS 4, shadcn (Base UI + remaining Radix), Motion |
 | Auth | Supabase Auth · Google OAuth (Workspace) |
 | Data | Supabase Postgres · RLS · Realtime |
+| Email | Brevo transactional API |
 | Hosting | Vercel · `mycubicle.app` |
+| Phone | Web app manifest + service worker (standalone PWA) |
 | Timezone | America/Regina (bell schedule helpers) |
 
 ---
@@ -180,7 +206,7 @@ Cubicle is designed as an **internal staff tool**, not a student-facing learning
 
 ### Prerequisites
 
-- Node.js 18+ (LTS recommended)
+- Node.js 20+ (LTS recommended)
 - npm
 - Supabase project with schema applied and Google provider configured (for production-like auth)
 
@@ -192,11 +218,11 @@ cd cubicle
 npm install
 ```
 
-Create `.env.local` (never commit secrets):
+Create `.env.local` from [`.env.local.example`](./.env.local.example) (never commit secrets):
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
@@ -211,7 +237,19 @@ Run SQL in the Supabase SQL Editor **in order** (see [`supabase/README.md`](./su
 | 5 | `supabase/realtime.sql` | Live multi-user board |
 | 6 | `supabase/employment-type.sql` | Permanent / sub / temp + verified mark |
 | 7 | `supabase/profile-name-sync.sql` | Display-name fan-out to operational rows |
-| 8 | `supabase/booking-last-editor.sql` | Optional last-editor metadata on bookings |
+| 8 | `supabase/booking-last-editor.sql` | Last-editor metadata on bookings |
+| 9 | `supabase/swap-accept.sql` | Atomic two-way cart swap |
+| 10 | `supabase/booking-policy-max-slots.sql` | Max cart slots per teacher per day |
+| 11 | `supabase/booking-share.sql` | Share / borrow co-teacher on a slot |
+| 12 | `supabase/booking-share-resolve.sql` | Teachers can accept / decline a share invite |
+| 13 | `supabase/booking-share-declined.sql` | Owner notice when an invitee declines |
+| 14 | `supabase/cart-laptop-brand.sql` | Dell / Chromebook fleet on inventory carts |
+| 15 | `supabase/cart-laptop-codes.sql` | Per-cart laptop case codes for QR labels |
+| 16 | `supabase/cart-sort-order.sql` | Admin drag-and-drop cart order |
+| 17 | `supabase/issues-delete.sql` | Reporter / admin issue delete |
+| 18 | `supabase/notify-email.sql` | Profile email notification toggles |
+
+If an existing project skipped later files, run **`supabase/repair-live.sql` once** instead of guessing. For an official empty go-live, see [`supabase/SETUP.md`](./supabase/SETUP.md).
 
 Add real staff in **Table Editor → `allowed_emails`** (or Admin → Staff after first admin login). Use only `@rbe.sk.ca` addresses.
 
@@ -230,6 +268,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run start` | Serve production build |
 | `npm run lint` | ESLint |
 | `npm run version:bump` | Manual platform version bump (also runs on commit) |
+| `node --env-file=.env.local scripts/diagnose-supabase.mjs` | Live schema / RPC health check (no secrets printed) |
 
 **Local-only** demo picker (never enable on Vercel production):
 
@@ -254,28 +293,32 @@ Localhost keeps platform data in a browser sandbox by default (even if productio
 cubicle/
 ├── app/                      # Routes: board, admin, auth, legal, settings, onboarding
 ├── components/
-│   ├── admin/                # Pause-conflict dialog, admin-only UI
-│   ├── app/                  # Dashboard frame, auth gate, bootstrap
+│   ├── admin/                # QR labels, laptop brands, reports charts
+│   ├── app/                  # Dashboard frame, phone PWA shell, QR scanner
 │   ├── auth/                 # Login, wordmark, legal consent
 │   ├── legal/                # Legal shell + navigation
 │   ├── onboarding/           # First-run wizard
-│   ├── settings/             # Profile + setup preferences (teaching / booking window)
+│   ├── settings/             # Profile, email, booking policy / teaching load
 │   ├── tool-ui/              # Schedule stats display (brand mesh)
-│   ├── admin-console.tsx     # Inventory, reservations, reports, staff, restrictions
+│   ├── admin-console.tsx     # Inventory, QR codes, reservations, reports, staff
 │   └── ui/                   # Shared UI primitives
 ├── lib/
 │   ├── auth/                 # Session, allowlist, school domain, OAuth
+│   ├── booking/              # Slot and swap rules
 │   ├── calendar/             # Period schedule helpers (America/Regina)
 │   ├── data/                 # Platform store + durability guards
+│   ├── email/                # Brevo templates and dispatch
+│   ├── export/               # Corporate PDF + QR label PDF
+│   ├── labels/               # Cart / laptop QR payloads
 │   ├── legal/                # Legal constants and link map
 │   ├── onboarding/           # First-run prefs (localStorage); production one-time
-│   ├── staff/                # Employment / verified badge rules
+│   ├── staff/                # Employment / verified badge + live presence
 │   └── supabase/             # Clients, mappers, platform API, realtime
 ├── supabase/                 # SQL schema, seeds, operator docs
-├── scripts/                  # Platform version bump
+├── scripts/                  # Version bump + Supabase diagnose
 ├── PRODUCTION.md             # Ship checklist
 ├── SECURITY.md               # Vulnerability reporting + access model
-└── public/                   # Static assets
+└── public/                   # Icons, service worker, BIMI, llms.txt
 ```
 
 ---
@@ -284,8 +327,8 @@ cubicle/
 
 | Role | Access |
 |------|--------|
-| **Teacher** | Schedule board, book / cancel own slots, swaps, issues, my bookings, settings (including teaching schedule) |
-| **Admin / IT** | Teacher access + inventory pause/resume, reservations ops, reports, staff allowlist, slot restrictions, booking window |
+| **Teacher** | Schedule board, book / cancel own slots, shares, swaps, issues, my bookings, settings (including teaching schedule), phone Scan |
+| **Admin / IT** | Teacher access + inventory pause/resume, QR labels, reservations ops, reports, staff allowlist, booking policy |
 
 Permanent staff may show a **verified** indicator; substitute / temporary staff typically do not.
 
@@ -295,7 +338,7 @@ Permanent staff may show a **verified** indicator; substitute / temporary staff 
 
 1. Keep the GitHub repository **private**.
 2. Never commit environment files or service-role keys.
-3. Treat the browser anon key as public; rely on **RLS + domain + allowlist**.
+3. Treat the browser publishable / anon key as public; rely on **RLS + domain + allowlist**.
 4. Rotate `SUPABASE_SERVICE_ROLE_KEY` if it may have been exposed.
 5. Remove offboarded staff from `allowed_emails` promptly.
 6. Prefer least privilege on Google Cloud OAuth clients (Internal / Workspace where possible).

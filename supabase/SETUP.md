@@ -4,15 +4,16 @@ Do these steps **in order**. Skip any step you already finished.
 
 ## 1. Environment keys (local app)
 
-Your `.env.local` should look like:
+Copy [`.env.local.example`](../.env.local.example). The required names are:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...   # legacy JWT — still works if publishable is unset
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
 ```
 
-Get them from: **Project Settings → API**.  
+Get them from: **Project Settings → API**. Prefer the **publishable** key (`sb_publishable_…`).  
 Restart `npm run dev` after changing env vars.
 
 ---
@@ -25,18 +26,24 @@ Run each file fully, wait for **Success**:
 |------:|------|---------|
 | 1 | `schema.sql` | Tables, RLS, profile trigger |
 | 2 | `allowed-emails.sql` | Google allowlist + role |
-| 3 | `seed-carts.sql` | 22 carts + high-issue trigger (**safe re-run**; does not overwrite cart status) |
+| 3 | `seed-carts.sql` | Laptop carts (**safe re-run**; does not overwrite cart status) |
 | 4 | `restrict-domain.sql` | Only `@rbe.sk.ca` on allowlist |
-| 5 | `realtime.sql` | **Live multi-user board updates** |
+| 5 | `realtime.sql` | **Live multi-user board and presence** |
 | 6 | `employment-type.sql` | Permanent / sub / temp + blue tick |
-| 7 | `issues-delete.sql` | Allow reporters/admins to **delete issues** from Postgres |
-| 8 | `swap-accept.sql` | **Two-way cart swap accept** (owners can accept; both slots exchange) |
-| 8b | `booking-share.sql` | Share / borrow columns on bookings |
-| 8c | `booking-share-resolve.sql` | Teachers can accept / decline share invites |
-| 9 | `cart-laptop-brand.sql` | Dell / Chromebook fleet on inventory carts |
-| 10 | `cart-laptop-codes.sql` | Laptop case codes for QR labels |
+| 7 | `profile-name-sync.sql` | Display-name fan-out to operational rows |
+| 8 | `booking-last-editor.sql` | Last-editor metadata on bookings |
+| 9 | `swap-accept.sql` | **Two-way cart swap accept** (owners can accept; both slots exchange) |
+| 10 | `booking-policy-max-slots.sql` | Max cart slots per teacher per day |
+| 11 | `booking-share.sql` | Share / borrow columns on bookings |
+| 12 | `booking-share-resolve.sql` | Teachers can accept / decline share invites |
+| 13 | `booking-share-declined.sql` | Owner notice when an invitee declines |
+| 14 | `cart-laptop-brand.sql` | Dell / Chromebook fleet on inventory carts |
+| 15 | `cart-laptop-codes.sql` | Laptop case codes for QR labels |
+| 16 | `cart-sort-order.sql` | Admin drag-and-drop cart order |
+| 17 | `issues-delete.sql` | Allow reporters/admins to **delete issues** from Postgres |
+| 18 | `notify-email.sql` | Profile email notification toggles |
 
-Existing project that skipped later files: run **`repair-live.sql` once** (laptop codes + last-editor columns + swap accept/decline RPCs).
+Existing project that skipped later files: run **`repair-live.sql` once** (laptop codes + last-editor columns + swap accept/decline RPCs). Full index: [`README.md`](./README.md).
 
 **Durability:** App deploys never touch this data. See [`DATA_DURABILITY.md`](./DATA_DURABILITY.md).  
 Never `drop table` / `truncate` on a live school project without a backup.
@@ -61,9 +68,11 @@ Run `restrict-domain.sql` so the DB rejects non-school emails.
 Vercel env var names (exact spelling):
 ```
 NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 SUPABASE_SERVICE_ROLE_KEY
 ```
+
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` is accepted if the publishable key is not set.
 
 ---
 
@@ -73,45 +82,20 @@ SUPABASE_SERVICE_ROLE_KEY
 
 1. [APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials)
 2. **Create OAuth client ID** → **Web application**
-3. Authorized redirect URI (exact):
+3. Authorized redirect URIs (exact):
 
 ```text
+https://www.mycubicle.app/__supabase/auth/v1/callback
+https://mycubicle.app/__supabase/auth/v1/callback
+http://localhost:3000/__supabase/auth/v1/callback
 https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback
 ```
 
-(`YOUR_PROJECT_REF` is the subdomain in your Project URL.)
+The `mycubicle.app/__supabase/…` URIs hide `*.supabase.co` on Google’s account picker. Keep the supabase.co URI as fallback. (`YOUR_PROJECT_REF` is the subdomain in your Project URL.)
 
 4. Copy **Client ID** and **Client Secret**
 
-### Google Calendar sync (optional but recommended)
-
-Cubicle can push bookings to each teacher's Google Calendar (**Settings → Google Calendar**).
-
-1. In the **same Google Cloud project** as the OAuth client, enable **Google Calendar API**:
-   - [APIs & Services → Library → Google Calendar API](https://console.cloud.google.com/apis/library/calendar-json.googleapis.com) → **Enable**
-2. OAuth consent screen:
-   - Add scope: `https://www.googleapis.com/auth/calendar.events` (create/edit events on primary calendar only)
-   - For school-only Workspace: set app to **Internal** if the project is under the board Google Workspace (avoids “unverified app” friction)
-   - If **External + Testing**, add staff as test users
-3. Teachers open **Settings → Connect Google Calendar**, approve Calendar access, then book as usual
-
-**Without** enabling the API / scope, **Add to Calendar** buttons still work (opens Google’s “create event” template — no API).
-
-Bell times for calendar events: `lib/calendar/period-schedule.ts` (timezone `America/Regina`).
-
-#### Troubleshoot: `Error 400: access_not_configured`
-
-Google message: *“You can't access this app until an admin at your institution reviews and configures access for it.”*
-
-This is **not** a Cubicle code bug. School Google Workspace is blocking the Calendar OAuth scope.
-
-| Who | Fix |
-|-----|-----|
-| **You (developer)** | 1. Same Cloud project as Supabase Google OAuth → enable [Google Calendar API](https://console.cloud.google.com/apis/library/calendar-json.googleapis.com). 2. OAuth consent screen → **Edit app** → **Scopes** → add `https://www.googleapis.com/auth/calendar.events` → Save. 3. If consent is **Testing**, add your `@rbe.sk.ca` as a test user. 4. Prefer **User type: Internal** if the Cloud project is owned by the board Workspace. |
-| **Board Google admin** | Admin console → **Security** → **Access and data control** → **API controls** → **Manage third-party app access** (or App access control). Find the Cubicle OAuth client (by Client ID / name) → set to **Trusted** or allow **Calendar** scope. Until then, school accounts cannot grant Calendar. |
-| **Workaround now** | Use **Add to Calendar** on a booking (no extra OAuth). Regular Cubicle login is unaffected. |
-
-Copy Client ID from: Google Cloud → APIs & Services → Credentials → OAuth 2.0 Client (the one pasted into Supabase).
+Bell times used on the schedule board live in `lib/calendar/period-schedule.ts` (timezone `America/Regina`). Cubicle does **not** currently push bookings into Google Calendar.
 
 ### Supabase Dashboard
 
@@ -186,9 +170,10 @@ Google identity
 | Who may enter | `allowed_emails` |
 | Role | `allowed_emails.role` → `profiles.role` |
 | Employment / blue tick | `employment_type` (`permanent` = verified) — run `employment-type.sql` |
-| Carts, bookings, issues | Postgres tables + RLS |
+| Carts, bookings, issues, shares | Postgres tables + RLS |
+| Laptop brands / QR codes | `laptop_brand`, `laptop_codes` on `carts` |
 | Staff add (admin UI) | Inserts into `allowed_emails` |
-| Local demo without keys | localStorage seed (legacy) |
+| Local demo without keys | Browser sandbox (never production data) |
 
 ---
 

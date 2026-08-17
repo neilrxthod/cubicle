@@ -20,7 +20,7 @@ Optional sparklines show short multi-day trends for the same operational series.
 
 | Topic | Practice |
 |-------|----------|
-| **Source** | Live platform store / Supabase-backed bookings and issues for the signed-in school deployment |
+| **Source** | Live platform store / Supabase-backed bookings and issues for the signed-in school deployment (desktop schedule board) |
 | **Audience** | Allowlisted `@rbe.sk.ca` teachers and admins only |
 | **PII** | Values are counts and rates; avoid wiring free-text student notes into these tiles |
 | **Access** | Rendered inside the authenticated dashboard; not a public endpoint |

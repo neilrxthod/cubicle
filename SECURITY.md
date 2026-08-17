@@ -19,14 +19,15 @@ Always run the latest `main` deploy with current Supabase schema migrations appl
 2. **Allowlist** — exact email must exist in Supabase `allowed_emails`.
 3. **Roles** — `teacher` or `admin` from allowlist / profile.
 4. **Service role** — `SUPABASE_SERVICE_ROLE_KEY` is server-only; never prefix with `NEXT_PUBLIC_`.
-5. **RLS** — Postgres Row Level Security backs table access; the browser uses the anon key only.
+5. **RLS** — Postgres Row Level Security backs table access; the browser uses the publishable / anon key only.
 6. **Demo login** — disabled unless `NEXT_PUBLIC_ENABLE_DEMO_LOGIN=true` (must never be set on Vercel production).
+7. **Camera** — phone QR scan uses the device camera. `Permissions-Policy` allows `camera=(self)` only.
 
-More detail: [README — Access & security](./README.md#access--security-production), [PRODUCTION.md](./PRODUCTION.md), in-app `/legal/security`.
+More detail: [README — Access control & security](./README.md#access-control--security), [PRODUCTION.md](./PRODUCTION.md), in-app `/legal/security`.
 
 ## Data durability
 
-School bookings, carts, issues, staff, and restrictions live in **Supabase Postgres**. GitHub pushes and Vercel redeploys replace application code only — they do **not** wipe the database.
+School bookings, carts, laptop codes, issues, staff, shares, and restrictions live in **Supabase Postgres**. GitHub pushes and Vercel redeploys replace application code only — they do **not** wipe the database.
 
 See [`supabase/DATA_DURABILITY.md`](./supabase/DATA_DURABILITY.md).
 
@@ -60,6 +61,7 @@ If you believe you have found a security issue in Cubicle (auth bypass, data exp
 | Secret | Storage |
 |--------|---------|
 | `SUPABASE_SERVICE_ROLE_KEY` | Vercel / `.env.local` only |
+| `BREVO_API_KEY` | Vercel / `.env.local` only |
 | Google OAuth client secret | Supabase Auth provider config / Google Cloud |
 | Staff passwords | Not used for production Google sign-in |
 
@@ -76,4 +78,4 @@ If a secret may have been committed or shared:
 - [ ] Supabase Auth redirect URLs match production only (+ local for dev)
 - [ ] Google OAuth client restricted to school / internal consent where possible
 - [ ] Offboarded staff removed from `allowed_emails`
-- [ ] `restrict-domain.sql` and `employment-type.sql` applied
+- [ ] Later additive SQL applied (`restrict-domain.sql`, `employment-type.sql`, share / QR / notify files — see `supabase/README.md`)

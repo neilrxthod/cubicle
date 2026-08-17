@@ -8,7 +8,7 @@ School staff app for **mycubicle.app** (live on Vercel). **mycubicle.com** is su
 
 | Layer | Holds | On `git push` / Vercel redeploy |
 |-------|--------|----------------------------------|
-| **Supabase Postgres** | Bookings, carts, issues, staff, restrictions, profiles | **Unchanged** |
+| **Supabase Postgres** | Bookings, carts, issues, staff, shares, laptop codes, restrictions, profiles | **Unchanged** |
 | **Vercel** | Next.js UI + API only | Replaced with new build |
 | **Browser** | Session + temporary cache | Not the source of truth |
 
@@ -18,7 +18,8 @@ Full write-up: [`supabase/DATA_DURABILITY.md`](./supabase/DATA_DURABILITY.md)
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=          # legacy JWT — accepted if publishable is unset
 SUPABASE_SERVICE_ROLE_KEY=
 # Optional extra lock — refuses demo/local mode on this deploy
 NEXT_PUBLIC_CUBICLE_REQUIRE_REMOTE=true
@@ -57,11 +58,14 @@ Do **not** enable that flag with production school keys unless you deliberately 
 | Name | Public? | Notes |
 |------|---------|--------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Anon / publishable key |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes | Preferred public key (`sb_publishable_…`) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Legacy JWT — used only if publishable is unset |
 | `SUPABASE_SERVICE_ROLE_KEY` | **No** | Server only — allowlist checks / delete unauthorized users |
 | `BREVO_API_KEY` | **No** | Transactional email. Required for production notifications |
 | `BREVO_SENDER_EMAIL` | **No** | Verified sender, e.g. `noreply-mail@mycubicle.app` |
 | `BREVO_SENDER_NAME` | **No** | Optional display name (default: Cubicle) |
+| `NEXT_PUBLIC_SITE_URL` | Yes | Canonical origin, e.g. `https://mycubicle.app` |
+| `NEXT_PUBLIC_CUBICLE_REQUIRE_REMOTE` | Yes | Set `true` on Production so the app never falls back to demo |
 
 - Spell **SUPABASE** correctly (not `SUBASE`).
 - Never prefix service role with `NEXT_PUBLIC_`.
@@ -78,21 +82,34 @@ Copy from `.env.local.example`.
 | 2 | `supabase/allowed-emails.sql` | Allowlist + admin policies |
 | 3 | `supabase/seed-carts.sql` | Laptop carts |
 | 4 | `supabase/restrict-domain.sql` | DB enforces `@rbe.sk.ca` |
-| 5 | `supabase/realtime.sql` | Live multi-user board updates |
+| 5 | `supabase/realtime.sql` | Live multi-user board and presence |
 | 6 | `supabase/employment-type.sql` | Permanent / sub / temp + blue tick |
-| 7 | `supabase/booking-policy-max-slots.sql` | Max cart slots per teacher per day |
-| 8 | `supabase/booking-share.sql` | Share / borrow second teacher on a slot |
-| 9 | `supabase/cart-laptop-brand.sql` | Dell / Chromebook fleet on inventory carts |
-| 10 | `supabase/cart-laptop-codes.sql` | Per-cart laptop case codes for QR labels |
-| 11 | `supabase/notify-email.sql` | Profile email notification toggles (idempotent) |
+| 7 | `supabase/profile-name-sync.sql` | Display-name fan-out |
+| 8 | `supabase/booking-last-editor.sql` | Last-editor metadata on bookings |
+| 9 | `supabase/swap-accept.sql` | Atomic two-way cart swap |
+| 10 | `supabase/booking-policy-max-slots.sql` | Max cart slots per teacher per day |
+| 11 | `supabase/booking-share.sql` | Share / borrow second teacher on a slot |
+| 12 | `supabase/booking-share-resolve.sql` | Teachers can accept / decline a share invite |
+| 13 | `supabase/booking-share-declined.sql` | Owner notice when an invitee declines |
+| 14 | `supabase/cart-laptop-brand.sql` | Dell / Chromebook fleet on inventory carts |
+| 15 | `supabase/cart-laptop-codes.sql` | Per-cart laptop case codes for QR labels |
+| 16 | `supabase/cart-sort-order.sql` | Admin drag-and-drop cart order |
+| 17 | `supabase/issues-delete.sql` | Reporter / admin issue delete |
+| 18 | `supabase/notify-email.sql` | Profile email notification toggles (idempotent) |
 
-**If Settings → Booking policy shows a schema-cache error about `max_slots_per_teacher_per_day`:** run file **7** in the Supabase SQL Editor, then save again.
+If an existing project skipped later files, run **`supabase/repair-live.sql` once**.
 
-**If share/borrow fails or dual PFPs never save:** run file **8** (`booking-share.sql`).
+**If Settings → Booking policy shows a schema-cache error about `max_slots_per_teacher_per_day`:** run file **10** in the Supabase SQL Editor, then save again.
 
-**If Dell / Chromebook logos never appear on the daily board or Inventory:** run file **9** (`cart-laptop-brand.sql`), then edit each cart and set Dell or Chromebook. The UI cannot persist a brand until that column exists.
+**If share/borrow fails or dual avatars never save:** run file **11** (`booking-share.sql`).
 
-**If teachers cannot accept a share invite:** run `supabase/booking-share-resolve.sql`. Invitees are not the booking owner, so they cannot write the row until that function exists.
+**If teachers cannot accept a share invite:** run file **12** (`booking-share-resolve.sql`). Invitees are not the booking owner, so they cannot write the row until that function exists.
+
+**If Dell / Chromebook logos never appear on the daily board or Inventory:** run file **14** (`cart-laptop-brand.sql`), then edit each cart and set Dell or Chromebook. The UI cannot persist a brand until that column exists.
+
+**If QR labels have no laptop codes:** run file **15**, then Admin → QR codes.
+
+**If Inventory drag-and-drop order does not persist:** run file **16** (`cart-sort-order.sql`).
 
 Then seed real staff:
 
@@ -143,17 +160,19 @@ Dashboard: Project → **Authentication** → **URL Configuration**
   - `https://mycubicle.com`
   - `https://www.mycubicle.com`
   - `http://localhost:3000`
-- Authorized redirect URI (exact):
-  - `https://<project-ref>.supabase.co/auth/v1/callback`
+- Authorized redirect URIs (exact — **all** of these):
+  - `https://www.mycubicle.app/__supabase/auth/v1/callback`
+  - `https://mycubicle.app/__supabase/auth/v1/callback`
+  - `https://www.mycubicle.com/__supabase/auth/v1/callback`
+  - `https://mycubicle.com/__supabase/auth/v1/callback`
+  - `http://localhost:3000/__supabase/auth/v1/callback` (dev only)
+  - `https://<project-ref>.supabase.co/auth/v1/callback` (keep as fallback)
+- The `mycubicle.app/__supabase/…` URIs are what hide
+  `bpfwgfecydqxbkdhobqb.supabase.co` on Google’s “continue to …” screen.
+  After adding them, staff see **mycubicle.app** instead.
 - If app is **External + Testing**, add every staff Google account as Test users until published.
 
-### Google Calendar API (Settings → Connect)
-
-- Enable **Google Calendar API** on the OAuth Cloud project
-- Consent scope: `https://www.googleapis.com/auth/calendar.events`
-- Prefer **Internal** OAuth app under board Workspace for staff-only use
-- Teachers connect once in **Settings**; new bookings auto-create events when auto-sync is on
-- Fallback: **Add to Calendar** links work without API access
+Bell times on the schedule board come from `lib/calendar/period-schedule.ts` (`America/Regina`). Cubicle does **not** currently push bookings into Google Calendar — no Calendar API or extra OAuth scope is required.
 
 ## DNS (registrar → Vercel)
 
@@ -284,16 +303,21 @@ Build must exit 0. Proxy (session refresh) should appear in the build output.
 - [ ] Gmail blocked (`invalid_domain`)
 - [ ] Book a cart — booking persists after refresh
 - [ ] Two browsers: Teacher A books → Teacher B board updates (realtime.sql)
-- [ ] Admin → Inventory / Reservations / Reports / Staff / Restrictions
+- [ ] Presence: signed-in staff show a green dot on avatars
+- [ ] Share invite: invitee can accept / decline; board shows dual avatars
+- [ ] Swap request: owner accept is a two-way exchange
+- [ ] Admin → Inventory / QR codes / Reservations / Reports / Staff
+- [ ] Inventory: set Dell or Chromebook; pause shows conflict dialog if booked
+- [ ] QR codes: add a laptop code, print labels, scan on a phone
 - [ ] Staff: add allowlist email; permanent shows blue tick
-- [ ] Restrictions: lock / unlock slots; booked cells not cancelable there
-- [ ] Settings: profile photo/name save; Google Calendar section; shortcuts (bookings / admin / sign out)
+- [ ] Settings: profile photo/name save; booking policy (admin); teaching schedule (teacher)
+- [ ] Settings → Email notifications shows **Live on this deployment**
+- [ ] Share invite or issue report delivers mail from `noreply-mail@mycubicle.app`
+- [ ] Phone (iOS / Android): Home / Scan / Profile shell; admins see Inventory tools
 - [ ] Sign out works
 - [ ] `/legal/*` pages load
 - [ ] `/about` loads and is indexable
 - [ ] `/signup` redirects to login
-- [ ] Settings → Email notifications shows **Live on this deployment**
-- [ ] Share invite or issue report delivers mail from `noreply-mail@mycubicle.app`
 
 ## Security checklist
 
@@ -309,8 +333,9 @@ Build must exit 0. Proxy (session refresh) should appear in the build output.
 
 1. Prefer **Admin → Staff** to manage allowlist (not only SQL).
 2. Mark permanent vs substitute / temporary for blue-tick accuracy.
-3. Use **Restrictions** for AP / full-day locks; use **Reservations** for booking ops.
-4. Keep Google OAuth app verification status in mind for new test users.
+3. Set booking policy (advance window + max slots) in **Settings**.
+4. Print cart / laptop labels from **Admin → QR codes** before asking staff to scan on phones.
+5. Keep Google OAuth app verification status in mind for new test users.
 
 ## If something fails
 
@@ -322,3 +347,5 @@ Build must exit 0. Proxy (session refresh) should appear in the build output.
 | Board never updates live | Run `realtime.sql` + confirm Realtime enabled |
 | Redirect loop / auth_failed | Redirect URL mismatch Google ↔ Supabase ↔ Site URL |
 | Double booking still possible | Unique index on bookings must exist (`schema.sql`) |
+| Phone never opens the camera | Grant camera permission; CSP / Permissions-Policy allow `camera=(self)` |
+| QR scan does nothing | Confirm `cart-laptop-codes.sql` and that the printed payload is a Cubicle label |

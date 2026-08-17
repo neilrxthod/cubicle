@@ -17,11 +17,11 @@ This folder contains SQL migrations, seeds, and operator docs for a production-s
 
 | Principle | Practice |
 |-----------|----------|
-| **Least privilege** | Browser uses the anon key under **Row Level Security**. Service role stays server-only. |
+| **Least privilege** | Browser uses the publishable / anon key under **Row Level Security**. Service role stays server-only. |
 | **School identity** | Google OAuth restricted to `@rbe.sk.ca` plus exact-email allowlist. |
 | **No public signup** | Unauthorized users are rejected in the auth callback and cannot obtain a usable profile. |
 | **Deploy isolation** | `git push` / Vercel rebuild **never** truncates or drops production tables. |
-| **Staff operational data** | Bookings, issues, and allowlist entries are school records — treat as confidential. |
+| **Staff operational data** | Bookings, issues, laptop codes, and allowlist entries are school records — treat as confidential. |
 | **Student data** | Not a primary student information system. Avoid storing student PERs or sensitive identifiers unless required by division procedure. |
 | **Change control** | Run SQL in order on a known project; take a backup before destructive experiments (never on live without approval). |
 
@@ -37,20 +37,31 @@ Run each file fully in the Supabase **SQL Editor** and wait for **Success** befo
 | 2 | `allowed-emails.sql` | Staff allowlist + admin policies |
 | 3 | `seed-carts.sql` | Laptop cart inventory (**safe re-run**; does not overwrite cart status) |
 | 4 | `restrict-domain.sql` | Database enforces `@rbe.sk.ca` on allowlist inserts/updates |
-| 5 | `realtime.sql` | Realtime publication for multi-user board sync |
+| 5 | `realtime.sql` | Realtime publication for multi-user board and presence sync |
 | 6 | `employment-type.sql` | Permanent / substitute / temporary + verified staff indicator |
 | 7 | `profile-name-sync.sql` | Fan-out of display name to bookings, issues, swaps |
-| 8 | `booking-last-editor.sql` | Optional last-editor columns on bookings (audit-friendly) |
+| 8 | `booking-last-editor.sql` | Last-editor columns on bookings (audit-friendly) |
 | 9 | `swap-accept.sql` | Atomic two-way cart swap accept, offered cart column, owner RLS |
 | 10 | `booking-policy-max-slots.sql` | Admin max cart slots per teacher per day (`max_slots_per_teacher_per_day`) |
-| 11 | `booking-share.sql` | Share / borrow co-teacher on a booking (dual PFPs on board) |
-| 11b | `booking-share-resolve.sql` | Teachers can accept / decline a share invite (RPC) |
-| 12 | `cart-laptop-brand.sql` | Dell / Chromebook fleet on inventory carts (`laptop_brand`) |
-| 13 | `cart-laptop-codes.sql` | Per-cart laptop case codes for QR labels (`laptop_codes`) |
+| 11 | `booking-share.sql` | Share / borrow co-teacher on a booking (dual avatars on board) |
+| 12 | `booking-share-resolve.sql` | Teachers can accept / decline a share invite (RPC) |
+| 13 | `booking-share-declined.sql` | Owner notice when an invitee declines |
+| 14 | `cart-laptop-brand.sql` | Dell / Chromebook fleet on inventory carts (`laptop_brand`) |
+| 15 | `cart-laptop-codes.sql` | Per-cart laptop case codes for QR labels (`laptop_codes`) |
+| 16 | `cart-sort-order.sql` | Admin drag-and-drop cart order (`sort_order`) |
+| 17 | `issues-delete.sql` | Reporters and admins can delete issues |
+| 18 | `notify-email.sql` | Profile email notification toggles (`notify_email`, `notify_issues`) |
 
 If an existing project is missing later pieces (swap accept RPC, laptop codes, last-editor columns), run **`repair-live.sql` once** instead of guessing which files were skipped.
 
 **Never** run ad-hoc `drop table` / `truncate` against a live school project without an approved backup and change window.
+
+### Other SQL in this folder
+
+| File | When to use |
+|------|-------------|
+| `repair-live.sql` | Additive catch-up on a live project that skipped later migrations |
+| `clear-operational-data.sql` | Official empty go-live — wipes carts/bookings/issues/locks/swaps, **keeps** allowlisted staff |
 
 ---
 
@@ -75,15 +86,17 @@ Root project docs:
 
 | Path | Role |
 |------|------|
-| `lib/supabase/client.ts` | Browser client (anon key) |
+| `lib/supabase/client.ts` | Browser client (publishable / anon key) |
 | `lib/supabase/server.ts` | Server client (cookies / session) |
 | `lib/supabase/admin.ts` | Service role — allowlist reject / privileged writes only |
 | `lib/supabase/platform-api.ts` | Carts, bookings, issues, staff, restrictions |
 | `lib/supabase/realtime.ts` | Live board subscriptions |
 | `lib/supabase/mappers.ts` | Database row ↔ application types |
+| `lib/supabase/env.ts` | URL + publishable / anon key resolution |
 | `lib/auth/allowlist.ts` | Email allowlist checks |
 | `app/auth/callback` | OAuth callback + allowlist gate |
 | `app/auth/complete` | Session bridge to dashboard |
+| `scripts/diagnose-supabase.mjs` | Live table / column / RPC health check |
 
 When Supabase environment variables are set, the app loads and writes platform data through Postgres. On production hosts, missing keys **hard-stop** the app instead of showing empty demo seed data.
 
@@ -116,7 +129,8 @@ Offboard staff by deleting or disabling allowlist rows promptly so former employ
 | Name | Client-visible? | Use |
 |------|-----------------|-----|
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Authenticated browser access under RLS |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes | Preferred public key (`sb_publishable_…`) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Legacy JWT — used only if publishable is unset |
 | `SUPABASE_SERVICE_ROLE_KEY` | **No** | Server-only privileged operations |
 
 Never prefix the service role key with `NEXT_PUBLIC_`. Rotate immediately if leaked.
@@ -128,8 +142,8 @@ Never prefix the service role key with `NEXT_PUBLIC_`. Rotate immediately if lea
 | Class | Examples | Handling |
 |-------|----------|----------|
 | **Staff identity** | Name, school email, avatar URL from Google | Access-controlled; needed for auth and board clarity |
-| **Operational** | Bookings, cart status, restrictions, issues | School operational records; admin + relevant staff |
+| **Operational** | Bookings, cart status, laptop codes, restrictions, issues, shares | School operational records; admin + relevant staff |
 | **Access control** | `allowed_emails`, roles, employment type | IT-only configuration; audit offboarding |
-| **Secrets** | Service role, OAuth client secret | Vault / Vercel env / Supabase dashboard only |
+| **Secrets** | Service role, OAuth client secret, Brevo API key | Vault / Vercel env / Supabase dashboard only |
 
 For privacy wording shown to users, see production **Privacy Policy** at `/legal/privacy`.

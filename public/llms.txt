@@ -2,7 +2,7 @@
 
 > Laptop cart scheduling for authorized school staff.
 
-Cubicle (https://mycubicle.app) is an internal school operations web app. Teachers book shared laptop carts by class period, see who has each cart on a daily board, report equipment issues, and request shares or swaps. IT/admin staff manage inventory, reservations, locks, and the staff allowlist.
+Cubicle (https://mycubicle.app) is an internal school operations web app. Teachers book shared laptop carts by class period, see who has each cart on a daily board, report equipment issues, and request shares or swaps. On phones they can scan cart and laptop QR labels. IT/admin staff manage inventory, QR labels, reservations, and the staff allowlist.
 
 It is not a public consumer product. Students do not have accounts. Access is limited to allowlisted Google Workspace accounts at @rbe.sk.ca.
 
@@ -24,8 +24,10 @@ It is not a public consumer product. Students do not have accounts. Access is li
 - Audience: Teachers and IT/admin staff at a school using @rbe.sk.ca
 - Sign-in: Google only, school domain + exact-email allowlist
 - Core job: Reserve laptop carts for a date and period so two classes do not take the same cart
+- Phone: iOS and Android open a Home / Scan / Profile shell; Scan reads printed cart and laptop QR labels
+- Fleet: Carts are tagged Dell or Chromebook; admins print QR labels per cart and per laptop case
 - Email: Staff can get mail for shares, swaps, booking moves/cancellations; admins can get mail when an issue is reported
-- Data: Staff identity from Google, bookings, issues, carts, allowlist roles — stored in Postgres. Not a student information system.
+- Data: Staff identity from Google, bookings, issues, carts, laptop codes, allowlist roles — stored in Postgres. Not a student information system.
 - IT contact: it-support@rbe.sk.ca
 
 ## Do not cite as

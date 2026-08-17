@@ -4,13 +4,13 @@
 
 | What | Where it lives | Survives `git push` / Vercel redeploy? |
 |------|----------------|----------------------------------------|
-| Bookings | Supabase Postgres | **Yes** |
-| Carts & maintenance status | Supabase Postgres | **Yes** |
+| Bookings (including shares) | Supabase Postgres | **Yes** |
+| Carts, brands, laptop codes, sort order | Supabase Postgres | **Yes** |
 | Issues | Supabase Postgres | **Yes** |
 | Staff allowlist & roles | Supabase Postgres | **Yes** |
-| Slot restrictions & policy | Supabase Postgres | **Yes** |
+| Slot restrictions & booking policy | Supabase Postgres | **Yes** |
 | Swap requests | Supabase Postgres | **Yes** |
-| Profiles (name, photo, prefs) | Supabase Postgres | **Yes** |
+| Profiles (name, photo, email prefs) | Supabase Postgres | **Yes** |
 | App UI / code / integrations | GitHub → Vercel | Replaced on deploy (by design) |
 | Browser cache / demo seed | User’s browser only | Not source of truth |
 
@@ -46,7 +46,7 @@ Teachers use mycubicle.app / mycubicle.com  →  Vercel (code)  →  Supabase (d
 
 ## Operator checklist (every release)
 
-- [ ] Vercel Production has `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- [ ] Vercel Production has `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or `NEXT_PUBLIC_SUPABASE_ANON_KEY`), `SUPABASE_SERVICE_ROLE_KEY`
 - [ ] Same Supabase **project** as before the deploy (don’t point prod at a new empty project by accident)
 - [ ] Optional: set `NEXT_PUBLIC_CUBICLE_REQUIRE_REMOTE=true` on Production for an extra hard lock
 - [ ] After deploy: sign in → confirm today’s bookings still appear
