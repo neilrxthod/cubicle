@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Camera, Check, Loader2, LogOut, Pencil } from "lucide-react";
+import { Camera, Check, Loader2, LogOut } from "lucide-react";
 import {
   deleteAccountAction,
   updateProfile,
@@ -447,7 +447,7 @@ export function SettingsForm({
                   onClick={startEditName}
                   disabled={busy}
                   className={cn(
-                    "group/name relative inline-flex min-w-0 max-w-full items-center gap-1",
+                    "group/name inline-flex min-w-0 max-w-full items-center gap-1",
                     "text-left outline-none disabled:opacity-50",
                   )}
                   aria-label="Edit name"
@@ -466,22 +466,6 @@ export function SettingsForm({
                   {verified ? (
                     <VerifiedBadge size="sm" className="shrink-0" />
                   ) : null}
-                  <span
-                    className={cn(
-                      "pointer-events-none absolute top-1/2 left-full ml-1 -translate-y-1/2",
-                      "inline-flex size-5 items-center justify-center rounded-md",
-                      "text-neutral-400",
-                      "opacity-60 transition-[opacity,background-color,color] duration-150",
-                      "[@media(hover:hover)_and_(pointer:fine)]:opacity-0",
-                      "[@media(hover:hover)_and_(pointer:fine)]:group-hover/name:opacity-100",
-                      "group-focus-visible/name:opacity-100",
-                      "group-hover/name:bg-neutral-100 group-hover/name:text-neutral-700",
-                      "group-focus-visible/name:bg-neutral-100 group-focus-visible/name:text-neutral-700",
-                    )}
-                    aria-hidden
-                  >
-                    <Pencil className="size-3" strokeWidth={1.75} />
-                  </span>
                 </button>
               )}
             </div>
