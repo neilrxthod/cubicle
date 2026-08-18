@@ -45,6 +45,37 @@ function parseLocalYmd(ymd: string): Date {
   return new Date(y ?? 0, (m ?? 1) - 1, d ?? 1)
 }
 
+const TYPE_CHIP: Record<RestrictionCategory, { on: string; off: string }> = {
+  general: {
+    on: "border-neutral-950 bg-neutral-950 text-white",
+    off: "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-800",
+  },
+  ap_exam: {
+    on: "border-violet-600 bg-violet-600 text-white",
+    off: "border-violet-200 bg-violet-50 text-violet-700 hover:border-violet-300 hover:bg-violet-100",
+  },
+  testing: {
+    on: "border-sky-600 bg-sky-600 text-white",
+    off: "border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-300 hover:bg-sky-100",
+  },
+  holiday: {
+    on: "border-rose-600 bg-rose-600 text-white",
+    off: "border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100",
+  },
+  event: {
+    on: "border-amber-600 bg-amber-600 text-white",
+    off: "border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300 hover:bg-amber-100",
+  },
+  pd: {
+    on: "border-teal-600 bg-teal-600 text-white",
+    off: "border-teal-200 bg-teal-50 text-teal-700 hover:border-teal-300 hover:bg-teal-100",
+  },
+  other: {
+    on: "border-stone-600 bg-stone-600 text-white",
+    off: "border-stone-200 bg-stone-50 text-stone-600 hover:border-stone-300 hover:bg-stone-100",
+  },
+}
+
 function Col({
   label,
   htmlFor,
@@ -69,6 +100,17 @@ function Col({
   )
 }
 
+const SCOPE_CHIP = {
+  day: {
+    thumb: "bg-indigo-600",
+    off: "text-indigo-700 hover:text-indigo-950",
+  },
+  range: {
+    thumb: "bg-orange-600",
+    off: "text-orange-700 hover:text-orange-950",
+  },
+} as const
+
 function CapsuleSlider({
   value,
   onChange,
@@ -89,9 +131,10 @@ function CapsuleSlider({
       <span
         aria-hidden
         className={cn(
-          "absolute inset-y-[3px] left-[3px] w-[calc(50%-3px)] rounded-full bg-neutral-950",
+          "absolute inset-y-[3px] left-[3px] w-[calc(50%-3px)] rounded-full",
           "transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
           value === "range" ? "translate-x-full" : "translate-x-0",
+          SCOPE_CHIP[value].thumb,
         )}
       />
       {options.map((opt) => {
@@ -105,11 +148,10 @@ function CapsuleSlider({
             onClick={() => onChange(opt.id)}
             className={cn(
               "relative z-[1] inline-flex items-center justify-center rounded-full",
-              "text-[12.5px] tracking-[-0.01em]",
+              "text-[12.5px] font-medium tracking-[-0.01em]",
+              "select-none [-webkit-tap-highlight-color:transparent]",
               "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
-              on
-                ? "font-medium text-white"
-                : "font-normal text-neutral-500 hover:text-neutral-800",
+              on ? "text-white" : SCOPE_CHIP[opt.id].off,
             )}
           >
             {opt.label}
@@ -408,6 +450,7 @@ export function BoardBlockDialog({
               >
                 {RESTRICTION_TYPES.map((opt) => {
                   const on = category === opt.id
+                  const chip = TYPE_CHIP[opt.id]
                   return (
                     <button
                       key={opt.id}
@@ -423,9 +466,7 @@ export function BoardBlockDialog({
                         "text-[12px] font-medium tracking-[-0.01em]",
                         "select-none [-webkit-tap-highlight-color:transparent]",
                         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
-                        on
-                          ? "border-neutral-950 bg-neutral-950 text-white"
-                          : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-800",
+                        on ? chip.on : chip.off,
                       )}
                     >
                       {opt.label}
