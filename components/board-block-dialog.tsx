@@ -1,21 +1,14 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
-import { format } from "date-fns"
+import { eachDayOfInterval, format } from "date-fns"
 import type { DateRange } from "react-day-picker"
-import { AnimatePresence, motion } from "motion/react"
-import { Calendar as CalendarIcon, ChevronDown, Plus } from "lucide-react"
+import { Calendar as CalendarIcon, ChevronDown, Plus, Search, X } from "lucide-react"
 
 import { batchRestrictSlots } from "@/lib/actions"
 import type { Cart, Period, RestrictionCategory } from "@/lib/types"
-import { PERIODS, RESTRICTION_TYPES } from "@/lib/types"
-import {
-  fadeUpVariants,
-  fadeVariants,
-  motionSafe,
-  transitionFast,
-} from "@/lib/motion/platform"
+import { PERIODS, RESTRICTION_TYPES, sortCarts } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import {
@@ -76,6 +69,30 @@ const TYPE_CHIP: Record<RestrictionCategory, { on: string; off: string }> = {
   },
 }
 
+function formatPeriodList(selected: Set<Period>): string {
+  if (selected.size === 0) return "No periods"
+  if (selected.size === PERIODS.length) return "All periods"
+  const nums = PERIODS.filter((period) => selected.has(period)).map((period) =>
+    Number(period.slice(1)),
+  )
+  const ranges: string[] = []
+  let start = nums[0] ?? 0
+  let prev = start
+  for (let i = 1; i <= nums.length; i += 1) {
+    const next = nums[i]
+    if (next === prev + 1) {
+      prev = next
+      continue
+    }
+    ranges.push(start === prev ? `P${start}` : `P${start}–P${prev}`)
+    if (next != null) {
+      start = next
+      prev = next
+    }
+  }
+  return ranges.join(", ")
+}
+
 function Col({
   label,
   htmlFor,
@@ -84,7 +101,7 @@ function Col({
 }: {
   label: string
   htmlFor?: string
-  children: React.ReactNode
+  children: ReactNode
   className?: string
 }) {
   return (
@@ -126,7 +143,7 @@ function CapsuleSlider({
     <div
       role="tablist"
       aria-label="When"
-      className="relative grid h-8 grid-cols-2 rounded-full bg-neutral-100 p-[3px]"
+      className="relative grid h-8 w-[8.75rem] shrink-0 grid-cols-2 rounded-full bg-neutral-100 p-[3px]"
     >
       <span
         aria-hidden
@@ -175,7 +192,7 @@ export function BoardBlockDialog({
 }) {
   const router = useRouter()
   const activeCarts = useMemo(
-    () => carts.filter((cart) => cart.status !== "maintenance"),
+    () => sortCarts(carts.filter((cart) => cart.status !== "maintenance")),
     [carts],
   )
 
@@ -187,9 +204,13 @@ export function BoardBlockDialog({
   const [selectedPeriods, setSelectedPeriods] = useState<Set<Period>>(
     () => new Set(PERIODS),
   )
+  const [selectedCartIds, setSelectedCartIds] = useState<Set<string>>(
+    () => new Set(activeCarts.map((cart) => cart.id)),
+  )
   const [category, setCategory] = useState<RestrictionCategory>("general")
   const [reason, setReason] = useState("")
   const [weekdaysOnly, setWeekdaysOnly] = useState(true)
+  const [cartQuery, setCartQuery] = useState("")
   const [busy, setBusy] = useState<"restrict" | "available" | null>(null)
 
   function resetFromDate(ymd: string) {
@@ -197,9 +218,11 @@ export function BoardBlockDialog({
     setScope("day")
     setDateRange({ from: day, to: day })
     setSelectedPeriods(new Set(PERIODS))
+    setSelectedCartIds(new Set(activeCarts.map((cart) => cart.id)))
     setCategory("general")
     setReason("")
     setWeekdaysOnly(true)
+    setCartQuery("")
   }
 
   function handleOpenChange(next: boolean) {
@@ -218,18 +241,61 @@ export function BoardBlockDialog({
       : format(start, "EEE, MMM d")
     : "Select dates"
 
+  const chosenCarts = activeCarts.filter((cart) => selectedCartIds.has(cart.id))
+  const cartQueryNorm = cartQuery.trim().toLowerCase()
+  const visibleCarts = cartQueryNorm
+    ? activeCarts.filter((cart) =>
+        cart.name.toLowerCase().includes(cartQueryNorm),
+      )
+    : activeCarts
+
+  const dayCount = useMemo(() => {
+    if (!start) return 0
+    const to = end ?? start
+    if (start > to) return 0
+    return eachDayOfInterval({ start, end: to }).filter((day) => {
+      if (scope !== "range" || !weekdaysOnly) return true
+      const weekday = day.getDay()
+      return weekday !== 0 && weekday !== 6
+    }).length
+  }, [start, end, scope, weekdaysOnly])
+
+  const slotCount = chosenCarts.length * selectedPeriods.size * dayCount
+  const typeLabel =
+    RESTRICTION_TYPES.find((opt) => opt.id === category)?.label ?? "General"
+  const cartSummary =
+    chosenCarts.length === 1 ? "1 cart" : `${chosenCarts.length} carts`
+  const summaryLines = [
+    dateSummary,
+    `${formatPeriodList(selectedPeriods)} · ${cartSummary}`,
+    typeLabel,
+    slotCount > 0
+      ? `${slotCount} slot${slotCount === 1 ? "" : "s"}${
+          scope === "range" && weekdaysOnly ? " · weekdays" : ""
+        }`
+      : null,
+  ].filter(Boolean) as string[]
+
   const canApply =
     !busy &&
-    activeCarts.length > 0 &&
+    chosenCarts.length > 0 &&
     selectedPeriods.size > 0 &&
-    Boolean(start)
+    Boolean(start) &&
+    dayCount > 0
+
+  function toggleCart(cartId: string) {
+    const next = new Set(selectedCartIds)
+    if (next.has(cartId)) next.delete(cartId)
+    else next.add(cartId)
+    setSelectedCartIds(next)
+  }
 
   async function apply(action: "restrict" | "available") {
     if (!start || !canApply) return
     setBusy(action)
     try {
       const res = await batchRestrictSlots(
-        activeCarts.map((cart) => cart.id),
+        chosenCarts.map((cart) => cart.id),
         startYmd,
         endYmd || startYmd,
         Array.from(selectedPeriods),
@@ -291,105 +357,91 @@ export function BoardBlockDialog({
 
         <div className="border-t border-neutral-200 px-5 py-4">
           <FieldGroup className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-            <Col label="When">
-              <CapsuleSlider
-                value={scope}
-                onChange={(next) => {
-                  setScope(next)
-                  if (next === "day") {
-                    const day = parseLocalYmd(activeDate)
-                    setDateRange({ from: day, to: day })
-                  }
-                }}
-              />
-            </Col>
-
-            <Col label="Date">
-              <div className="flex min-h-8 flex-col gap-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label="Choose date"
-                      className={cn(
-                        "inline-flex h-9 w-fit max-w-full items-center gap-2 rounded-md border border-neutral-200 bg-white px-2.5",
-                        "text-left text-[13px] tabular-nums tracking-[-0.01em] text-neutral-950",
-                        "transition-colors duration-150 ease-out",
-                        "hover:border-neutral-300 hover:bg-neutral-50",
-                        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
-                        "data-[state=open]:[&_svg.chevron]:rotate-180",
-                      )}
-                    >
-                      <CalendarIcon
-                        className="size-3.5 shrink-0 text-neutral-400"
-                        strokeWidth={1.75}
-                      />
-                      <span className="min-w-0 truncate">
-                        {dateSummary}
-                      </span>
-                      <ChevronDown
-                        className="chevron size-3.5 shrink-0 text-neutral-400 transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
-                        strokeWidth={1.75}
-                      />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    className={calendarPopoverClassName}
-                    align="start"
-                    side="bottom"
-                    sideOffset={8}
-                    collisionPadding={12}
-                    avoidCollisions
-                  >
-                    {scope === "range" ? (
-                      <Calendar
-                        mode="range"
-                        selected={dateRange}
-                        onSelect={setDateRange}
-                        defaultMonth={start}
-                        numberOfMonths={1}
-                      />
-                    ) : (
-                      <Calendar
-                        mode="single"
-                        selected={start}
-                        onSelect={(day) => {
-                          if (!day) return
-                          setDateRange({ from: day, to: day })
-                        }}
-                        defaultMonth={start}
-                      />
-                    )}
-                  </PopoverContent>
-                </Popover>
-                <AnimatePresence initial={false}>
-                  {scope === "range" ? (
-                    <motion.label
-                      key="weekends"
-                      variants={fadeUpVariants}
-                      initial="initial"
-                      animate="animate"
-                      exit="exit"
-                      transition={motionSafe(transitionFast)}
-                      className="flex h-8 cursor-pointer items-center justify-between gap-2"
-                    >
-                      <span className="text-[12.5px] text-neutral-500">
-                        Skip weekends
-                      </span>
-                      <Switch
-                        checked={weekdaysOnly}
-                        onCheckedChange={setWeekdaysOnly}
+            <Col label="Date" className="sm:col-span-2">
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <CapsuleSlider
+                    value={scope}
+                    onChange={(next) => {
+                      setScope(next)
+                      if (next === "day") {
+                        const day = dateRange?.from ?? parseLocalYmd(activeDate)
+                        setDateRange({ from: day, to: day })
+                      }
+                    }}
+                  />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="Choose date"
                         className={cn(
-                          "h-[22px] w-[38px] shrink-0 shadow-none",
-                          "data-[state=checked]:bg-neutral-950 data-[state=unchecked]:bg-neutral-200",
-                          "[&_[data-slot=switch-thumb]]:size-[18px] [&_[data-slot=switch-thumb]]:shadow-none",
-                          "data-[state=checked]:[&_[data-slot=switch-thumb]]:translate-x-[16px]",
-                          "data-[state=unchecked]:[&_[data-slot=switch-thumb]]:translate-x-[2px]",
+                          "inline-flex h-8 w-fit max-w-full items-center gap-2 rounded-md border border-neutral-200 bg-white px-2.5",
+                          "text-left text-[13px] tabular-nums tracking-[-0.01em] text-neutral-950",
+                          "hover:border-neutral-300 hover:bg-neutral-50",
+                          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
+                          "data-[state=open]:[&_svg.chevron]:rotate-180",
                         )}
-                      />
-                    </motion.label>
-                  ) : null}
-                </AnimatePresence>
+                      >
+                        <CalendarIcon
+                          className="size-3.5 shrink-0 text-neutral-400"
+                          strokeWidth={1.75}
+                        />
+                        <span className="min-w-0 truncate">{dateSummary}</span>
+                        <ChevronDown
+                          className="chevron size-3.5 shrink-0 text-neutral-400 transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                          strokeWidth={1.75}
+                        />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className={calendarPopoverClassName}
+                      align="start"
+                      side="bottom"
+                      sideOffset={8}
+                      collisionPadding={12}
+                      avoidCollisions
+                    >
+                      {scope === "range" ? (
+                        <Calendar
+                          mode="range"
+                          selected={dateRange}
+                          onSelect={setDateRange}
+                          defaultMonth={start}
+                          numberOfMonths={1}
+                        />
+                      ) : (
+                        <Calendar
+                          mode="single"
+                          selected={start}
+                          onSelect={(day) => {
+                            if (!day) return
+                            setDateRange({ from: day, to: day })
+                          }}
+                          defaultMonth={start}
+                        />
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                {scope === "range" ? (
+                  <label className="flex h-8 w-fit cursor-pointer items-center gap-3">
+                    <span className="text-[12.5px] text-neutral-500">
+                      Skip weekends
+                    </span>
+                    <Switch
+                      checked={weekdaysOnly}
+                      onCheckedChange={setWeekdaysOnly}
+                      className={cn(
+                        "h-[22px] w-[38px] shrink-0 shadow-none",
+                        "data-[state=checked]:bg-neutral-950 data-[state=unchecked]:bg-neutral-200",
+                        "[&_[data-slot=switch-thumb]]:size-[18px] [&_[data-slot=switch-thumb]]:shadow-none",
+                        "data-[state=checked]:[&_[data-slot=switch-thumb]]:translate-x-[16px]",
+                        "data-[state=unchecked]:[&_[data-slot=switch-thumb]]:translate-x-[2px]",
+                      )}
+                    />
+                  </label>
+                ) : null}
               </div>
             </Col>
 
@@ -409,12 +461,12 @@ export function BoardBlockDialog({
                       onClick={() => togglePeriod(period)}
                       className={cn(
                         "group/period relative flex h-7 min-w-0 items-center justify-center rounded-full",
-                        "border border-dashed text-[12.5px] tabular-nums tracking-[-0.01em]",
-                        "transition-[background-color,border-color,color] duration-200 ease-out",
+                        "border text-[12.5px] font-medium tabular-nums tracking-[-0.01em]",
+                        "select-none [-webkit-tap-highlight-color:transparent]",
                         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
                         on
-                          ? "border-solid border-neutral-950 bg-neutral-950 font-medium text-white"
-                          : "border-neutral-400 bg-transparent font-normal text-neutral-500 hover:border-neutral-950",
+                          ? "border-solid border-neutral-950 bg-neutral-950 text-white"
+                          : "border-dashed border-neutral-400 bg-transparent text-neutral-500 hover:border-neutral-950",
                       )}
                     >
                       <span
@@ -476,33 +528,120 @@ export function BoardBlockDialog({
               </div>
             </Col>
 
-            <AnimatePresence initial={false}>
-              {category === "other" ? (
-                <motion.div
-                  key="note"
-                  variants={fadeVariants}
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                  transition={motionSafe(transitionFast)}
-                  className="min-w-0 sm:col-span-2"
-                >
-                  <Col label="Note" htmlFor="block-reason">
+            <Col label="Carts">
+              {activeCarts.length === 0 ? (
+                <p className="text-[12.5px] text-neutral-400">
+                  No active carts
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <div className="relative w-full max-w-[16rem]">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" />
                     <Input
-                      id="block-reason"
-                      value={reason}
-                      onChange={(event) => setReason(event.target.value)}
-                      placeholder="Optional"
-                      className={cn(
-                        "h-8 rounded-md border-neutral-200 bg-white px-2.5 shadow-none",
-                        "text-[13px] tracking-[-0.01em] placeholder:text-neutral-400",
-                        "focus-visible:ring-1 focus-visible:ring-black/15",
-                      )}
+                      value={cartQuery}
+                      onChange={(event) => setCartQuery(event.target.value)}
+                      placeholder="Filter carts…"
+                      aria-label="Filter carts"
+                      className="h-8 rounded-md border-neutral-200 bg-white pr-8 pl-8 text-[13px] shadow-none placeholder:text-neutral-400 focus-visible:ring-1 focus-visible:ring-black/15"
                     />
-                  </Col>
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
+                    {cartQuery ? (
+                      <button
+                        type="button"
+                        onClick={() => setCartQuery("")}
+                        className="absolute top-1/2 right-2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700"
+                        aria-label="Clear cart filter"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    ) : null}
+                  </div>
+                  {visibleCarts.length === 0 ? (
+                    <p className="text-[12.5px] text-neutral-400">
+                      No carts match
+                    </p>
+                  ) : (
+                    <div
+                      className="flex max-h-[5.75rem] flex-wrap content-start gap-1 overflow-y-auto"
+                      role="group"
+                      aria-label="Carts"
+                    >
+                      {visibleCarts.map((cart) => {
+                        const on = selectedCartIds.has(cart.id)
+                        return (
+                          <button
+                            key={cart.id}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() => toggleCart(cart.id)}
+                            className={cn(
+                              "group/cart relative inline-flex h-7 max-w-full items-center justify-center rounded-full border px-2.5",
+                              "text-[12px] font-medium tracking-[-0.01em]",
+                              "select-none [-webkit-tap-highlight-color:transparent]",
+                              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
+                              on
+                                ? "border-neutral-950 bg-neutral-950 text-white"
+                                : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-950",
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "truncate transition-opacity duration-150 ease-out",
+                                !on && "group-hover/cart:opacity-0",
+                              )}
+                            >
+                              {cart.name}
+                            </span>
+                            <Plus
+                              aria-hidden
+                              strokeWidth={2.25}
+                              className={cn(
+                                "pointer-events-none absolute size-3 text-neutral-950",
+                                "transition-opacity duration-150 ease-out",
+                                on
+                                  ? "opacity-0"
+                                  : "opacity-0 group-hover/cart:opacity-100",
+                              )}
+                            />
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </Col>
+
+            <Col label="Summary">
+              <div
+                aria-live="polite"
+                className="rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-2"
+              >
+                <p className="text-[12.5px] leading-5 tabular-nums tracking-[-0.01em] text-neutral-700">
+                  {summaryLines.map((line, index) => (
+                    <span key={line}>
+                      {index > 0 ? <br /> : null}
+                      {line}
+                    </span>
+                  ))}
+                </p>
+              </div>
+            </Col>
+
+            {category === "other" ? (
+              <Col label="Note" htmlFor="block-reason" className="sm:col-span-2">
+                <Input
+                  id="block-reason"
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  placeholder="Describe this lock"
+                  className={cn(
+                    "h-8 rounded-md border-neutral-200 bg-white px-2.5 shadow-none",
+                    "text-[13px] tracking-[-0.01em] placeholder:text-neutral-400",
+                    "focus-visible:ring-1 focus-visible:ring-black/15",
+                  )}
+                />
+              </Col>
+            ) : null}
           </FieldGroup>
         </div>
 
