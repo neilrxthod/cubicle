@@ -367,7 +367,12 @@ function TeacherSchedule({ user }: { user: SessionUser }) {
     startTransition(() => {
       const cleaned = assignments
         .filter(isAssignmentComplete)
-        .map((a) => ({ ...a, subject: a.subject.trim() }));
+        .map((a) => ({
+          id: a.id,
+          subject: a.subject.trim(),
+          grades: a.grades,
+          periods: a.periods,
+        }));
       saveOnboardingPrefs(
         user.id || user.email,
         {

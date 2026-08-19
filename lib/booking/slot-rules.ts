@@ -5,7 +5,12 @@
  * (and the usual daily cap). Admins: unlimited.
  */
 
-import type { Booking, BookingPolicy, Period } from "@/lib/types";
+import type {
+  Booking,
+  BookingPolicy,
+  BookingPurposeOption,
+  Period,
+} from "@/lib/types";
 import { bookingOccupiesUser } from "@/lib/types";
 
 /** Max carts a teacher may hold in one period (same period multi-book). */
@@ -173,8 +178,8 @@ export function canTeacherBookSlot(input: {
   return { ok: true };
 }
 
-/** Board / table placeholder until a Class booking is given a real name. */
-export const GENERIC_CLASS_LABEL = "N/A yet";
+/** Board label for a Class-purpose booking with no custom tag. */
+export const GENERIC_CLASS_LABEL = "Class";
 
 export function isGenericClassValue(
   value: string | undefined | null,
@@ -183,7 +188,7 @@ export function isGenericClassValue(
   return !v || v === "class" || v === "n/a yet" || v === "n/a";
 }
 
-/** Visible class / subject — generic Class bookings stay unlabeled until set. */
+/** Visible class / subject — generic Class bookings show "Class". */
 export function bookingClassLabel(
   booking: Pick<Booking, "className" | "subject">,
 ): string {
@@ -193,15 +198,35 @@ export function bookingClassLabel(
 }
 
 /**
- * Short label shown on the board cell (purpose badge or custom multi tag).
+ * Board purpose badge. Class keeps a "Class" tag; custom names (Multi) do not.
+ */
+export function bookingPurposeTag(
+  booking: Pick<Booking, "className" | "subject" | "notes">,
+  purpose: Pick<BookingPurposeOption, "id" | "tag"> | null | undefined,
+): string | null {
+  if (!purpose?.tag) return null;
+  if (
+    purpose.id === "class" &&
+    !isGenericClassValue(booking.className ?? booking.subject)
+  ) {
+    return null;
+  }
+  return purpose.tag;
+}
+
+/**
+ * Short label shown on the board cell.
+ * Class bookings read "Class". Spare/Club/etc keep their purpose tag.
+ * Custom admin tags (e.g. Multi) stay as stored.
  */
 export function bookingBoardTagText(
-  booking: Pick<Booking, "className" | "subject" | "notes">,
+  booking: Pick<Booking, "className" | "subject" | "notes" | "period">,
   purposeTag: string | null | undefined,
 ): string | null {
   if (purposeTag) return purposeTag;
 
   const custom = bookingClassLabel(booking);
+  if (isGenericClassValue(custom)) return GENERIC_CLASS_LABEL;
   if (custom.length <= 18) return custom;
   return custom.slice(0, 16);
 }

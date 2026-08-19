@@ -57,6 +57,7 @@ import {
 import {
   bookingBoardTagText,
   bookingClassLabel,
+  bookingPurposeTag,
   canTeacherBookSlot,
   isGenericClassValue,
   slotLimitNoticeFromError,
@@ -87,6 +88,11 @@ const ManageBookingDialog = dynamic(
 const BookingLimitDialog = dynamic(
   () =>
     import("./booking-limit-dialog").then((mod) => mod.BookingLimitDialog),
+  { ssr: false },
+)
+const BookingInfoDialog = dynamic(
+  () =>
+    import("./booking-info-dialog").then((mod) => mod.BookingInfoDialog),
   { ssr: false },
 )
 
@@ -126,6 +132,7 @@ import {
   Loader2,
   Trash2,
   UserPlus,
+  Info,
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -214,11 +221,13 @@ function slotTagClassName(input: {
   purposeTagClass?: string
   purposeTagClassOnDark?: string
 }) {
-  const placeholder = isGenericClassValue(input.tagText)
+  const placeholder =
+    isGenericClassValue(input.tagText) &&
+    input.tagText.trim().toLowerCase() !== "class"
   return cn(
     "absolute top-1 right-1 z-[3] max-w-[calc(100%-6px)]",
     "rounded px-1 py-px text-[8.5px] font-semibold tracking-[0.04em]",
-    "whitespace-nowrap",
+    "truncate whitespace-nowrap",
     placeholder ? "normal-case" : "uppercase",
     input.canRename ? "cursor-text select-none" : "pointer-events-none",
     input.purposeTag
@@ -361,6 +370,90 @@ function SlotPeople({
   )
 }
 
+const slotActionBtn =
+  "flex size-8 items-center justify-center rounded-full sm:size-9 bg-white/95 text-neutral-900 shadow-sm ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20 disabled:opacity-50"
+
+function SlotHoverActions({
+  personName,
+  deleting,
+  showSwap,
+  showInfo,
+  showDelete,
+  onSwap,
+  onInfo,
+  onDelete,
+}: {
+  personName: string
+  deleting: boolean
+  showSwap: boolean
+  showInfo: boolean
+  showDelete: boolean
+  onSwap: () => void
+  onInfo: () => void
+  onDelete: () => void
+}) {
+  if (!showSwap && !showInfo && !showDelete) return null
+  return (
+    <div
+      className={cn(
+        "absolute inset-0 z-[1] flex items-center justify-center gap-1",
+        "opacity-0 transition-opacity duration-150 ease-out",
+        "pointer-events-none group-hover/slot:pointer-events-auto group-hover/slot:opacity-100",
+        "group-focus-within/slot:pointer-events-auto group-focus-within/slot:opacity-100",
+      )}
+    >
+      {showSwap ? (
+        <button
+          type="button"
+          title="Request swap"
+          aria-label={`Request swap for ${personName}`}
+          disabled={deleting}
+          onClick={(e) => {
+            e.stopPropagation()
+            onSwap()
+          }}
+          className={slotActionBtn}
+        >
+          <ArrowLeftRight className="size-3.5 sm:size-4" strokeWidth={1.75} />
+        </button>
+      ) : null}
+      {showInfo ? (
+        <button
+          type="button"
+          title="Booking details"
+          aria-label={`View booking details for ${personName}`}
+          disabled={deleting}
+          onClick={(e) => {
+            e.stopPropagation()
+            onInfo()
+          }}
+          className={slotActionBtn}
+        >
+          <Info className="size-3.5 sm:size-4" strokeWidth={1.75} />
+        </button>
+      ) : null}
+      {showDelete ? (
+        <button
+          type="button"
+          title="Delete booking"
+          aria-label={`Delete booking for ${personName}`}
+          disabled={deleting}
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete()
+          }}
+          className={cn(
+            slotActionBtn,
+            "text-red-600 hover:bg-red-50 focus-visible:ring-red-500/25",
+          )}
+        >
+          <Trash2 className="size-3.5 sm:size-4" strokeWidth={1.75} />
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 export function DailyBoard({
   session,
   carts,
@@ -407,6 +500,7 @@ export function DailyBoard({
   const [issueDialog, setIssueDialog] = useState<Cart | null>(null)
   const [swapDialog, setSwapDialog] = useState<Booking | null>(null)
   const [manageDialog, setManageDialog] = useState<Booking | null>(null)
+  const [infoDialog, setInfoDialog] = useState<Booking | null>(null)
   const [slotLimit, setSlotLimit] = useState<SlotLimitNotice | null>(null)
   const [datePickerOpen, setDatePickerOpen] = useState(false)
   const [calendarMonth, setCalendarMonth] = useState(() => parseLocalYmd(date))
@@ -849,6 +943,9 @@ export function DailyBoard({
   const managedCart = manageDialog
     ? carts.find((c) => c.id === manageDialog.cartId)
     : undefined
+  const infoCart = infoDialog
+    ? carts.find((c) => c.id === infoDialog.cartId)
+    : undefined
 
   const navBtn = cn(
     "flex size-8 items-center justify-center rounded-full",
@@ -1285,10 +1382,10 @@ export function DailyBoard({
                         ? ""
                         : classLabel
                       const purpose = getBookingPurpose(booking)
-                      const purposeTag = purpose?.tag
+                      const purposeTag = bookingPurposeTag(booking, purpose)
                       const boardTag = bookingBoardTagText(
                         booking,
-                        purposeTag ?? null,
+                        purposeTag,
                       )
                       const canRenameTag =
                         isAdmin &&
@@ -1398,7 +1495,7 @@ export function DailyBoard({
                                 }}
                                 className={slotTagClassName({
                                   canRename: canRenameTag,
-                                  purposeTag: purpose?.tag,
+                                  purposeTag,
                                   tagText: boardTag,
                                   onDark: isInvolved || inviteForMe,
                                   purposeTagClass: purpose?.tagClass,
@@ -1458,7 +1555,8 @@ export function DailyBoard({
                             <span
                               className={cn(
                                 "inline-flex transition-[opacity,transform] duration-150 ease-out",
-                                isSwapTarget &&
+                                (isSwapTarget || isAdmin) &&
+                                  !inviteForMe &&
                                   "group-hover/slot:opacity-30 group-focus-within/slot:opacity-30",
                               )}
                             >
@@ -1474,66 +1572,21 @@ export function DailyBoard({
                             </span>
                           </button>
 
-                          {isSwapTarget ? (
-                            <div
-                              className={cn(
-                                "absolute inset-0 z-[1] flex items-center justify-center gap-1",
-                                "opacity-0 transition-opacity duration-150 ease-out",
-                                "pointer-events-none group-hover/slot:pointer-events-auto group-hover/slot:opacity-100",
-                                "group-focus-within/slot:pointer-events-auto group-focus-within/slot:opacity-100",
-                              )}
-                            >
-                              <button
-                                type="button"
-                                title="Request swap"
-                                aria-label={`Request swap for ${personName}`}
-                                disabled={deleting}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  onCellClick(cart, period)
-                                }}
-                                className={cn(
-                                  "flex size-8 items-center justify-center rounded-full sm:size-9",
-                                  "bg-white/95 text-neutral-900 shadow-sm ring-1 ring-black/10",
-                                  "transition-transform hover:scale-105 active:scale-95",
-                                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20",
-                                  "disabled:opacity-50",
-                                )}
-                              >
-                                <ArrowLeftRight
-                                  className="size-3.5 sm:size-4"
-                                  strokeWidth={1.75}
-                                />
-                              </button>
-                              {isAdmin ? (
-                                <button
-                                  type="button"
-                                  title="Delete booking"
-                                  aria-label={`Delete booking for ${personName}`}
-                                  disabled={deleting}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setPendingDelete({
-                                      booking,
-                                      cartName: cart.name,
-                                    })
-                                  }}
-                                  className={cn(
-                                    "flex size-8 items-center justify-center rounded-full sm:size-9",
-                                    "bg-white/95 text-red-600 shadow-sm ring-1 ring-black/10",
-                                    "transition-transform hover:scale-105 hover:bg-red-50 active:scale-95",
-                                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/25",
-                                    "disabled:opacity-50",
-                                  )}
-                                >
-                                  <Trash2
-                                    className="size-3.5 sm:size-4"
-                                    strokeWidth={1.75}
-                                  />
-                                </button>
-                              ) : null}
-                            </div>
-                          ) : null}
+                          <SlotHoverActions
+                            personName={personName}
+                            deleting={deleting}
+                            showSwap={isSwapTarget}
+                            showInfo={isAdmin && !inviteForMe}
+                            showDelete={isAdmin && isSwapTarget}
+                            onSwap={() => onCellClick(cart, period)}
+                            onInfo={() => setInfoDialog(booking)}
+                            onDelete={() =>
+                              setPendingDelete({
+                                booking,
+                                cartName: cart.name,
+                              })
+                            }
+                          />
                         </div>
                         </div>
                       )
@@ -1747,10 +1800,10 @@ export function DailyBoard({
                         ? ""
                         : classLabel
                       const purpose = getBookingPurpose(booking)
-                      const purposeTag = purpose?.tag
+                      const purposeTag = bookingPurposeTag(booking, purpose)
                       const boardTag = bookingBoardTagText(
                         booking,
-                        purposeTag ?? null,
+                        purposeTag,
                       )
                       const canRenameTag =
                         isAdmin &&
@@ -1860,7 +1913,7 @@ export function DailyBoard({
                                 }}
                                 className={slotTagClassName({
                                   canRename: canRenameTag,
-                                  purposeTag: purpose?.tag,
+                                  purposeTag,
                                   tagText: boardTag,
                                   onDark: isInvolved || inviteForMe,
                                   purposeTagClass: purpose?.tagClass,
@@ -1920,7 +1973,8 @@ export function DailyBoard({
                             <span
                               className={cn(
                                 "inline-flex transition-[opacity,transform] duration-150 ease-out",
-                                isSwapTarget &&
+                                (isSwapTarget || isAdmin) &&
+                                  !inviteForMe &&
                                   "group-hover/slot:opacity-30 group-focus-within/slot:opacity-30",
                               )}
                             >
@@ -1936,66 +1990,21 @@ export function DailyBoard({
                             </span>
                           </button>
 
-                          {isSwapTarget ? (
-                            <div
-                              className={cn(
-                                "absolute inset-0 z-[1] flex items-center justify-center gap-1",
-                                "opacity-0 transition-opacity duration-150 ease-out",
-                                "pointer-events-none group-hover/slot:pointer-events-auto group-hover/slot:opacity-100",
-                                "group-focus-within/slot:pointer-events-auto group-focus-within/slot:opacity-100",
-                              )}
-                            >
-                              <button
-                                type="button"
-                                title="Request swap"
-                                aria-label={`Request swap for ${personName}`}
-                                disabled={deleting}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  onCellClick(cart, period)
-                                }}
-                                className={cn(
-                                  "flex size-8 items-center justify-center rounded-full sm:size-9",
-                                  "bg-white/95 text-neutral-900 shadow-sm ring-1 ring-black/10",
-                                  "transition-transform hover:scale-105 active:scale-95",
-                                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20",
-                                  "disabled:opacity-50",
-                                )}
-                              >
-                                <ArrowLeftRight
-                                  className="size-3.5 sm:size-4"
-                                  strokeWidth={1.75}
-                                />
-                              </button>
-                              {isAdmin ? (
-                                <button
-                                  type="button"
-                                  title="Delete booking"
-                                  aria-label={`Delete booking for ${personName}`}
-                                  disabled={deleting}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setPendingDelete({
-                                      booking,
-                                      cartName: cart.name,
-                                    })
-                                  }}
-                                  className={cn(
-                                    "flex size-8 items-center justify-center rounded-full sm:size-9",
-                                    "bg-white/95 text-red-600 shadow-sm ring-1 ring-black/10",
-                                    "transition-transform hover:scale-105 hover:bg-red-50 active:scale-95",
-                                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/25",
-                                    "disabled:opacity-50",
-                                  )}
-                                >
-                                  <Trash2
-                                    className="size-3.5 sm:size-4"
-                                    strokeWidth={1.75}
-                                  />
-                                </button>
-                              ) : null}
-                            </div>
-                          ) : null}
+                          <SlotHoverActions
+                            personName={personName}
+                            deleting={deleting}
+                            showSwap={isSwapTarget}
+                            showInfo={isAdmin && !inviteForMe}
+                            showDelete={isAdmin && isSwapTarget}
+                            onSwap={() => onCellClick(cart, period)}
+                            onInfo={() => setInfoDialog(booking)}
+                            onDelete={() =>
+                              setPendingDelete({
+                                booking,
+                                cartName: cart.name,
+                              })
+                            }
+                          />
                         </div>
                         </div>
                       )
@@ -2107,6 +2116,13 @@ export function DailyBoard({
       )}
       {swapDialog && (
         <SwapRequestDialog booking={swapDialog} onClose={() => setSwapDialog(null)} />
+      )}
+      {infoDialog && (
+        <BookingInfoDialog
+          booking={infoDialog}
+          cart={infoCart}
+          onClose={() => setInfoDialog(null)}
+        />
       )}
       {manageDialog && (
         <ManageBookingDialog

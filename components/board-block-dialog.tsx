@@ -38,34 +38,44 @@ function parseLocalYmd(ymd: string): Date {
   return new Date(y ?? 0, (m ?? 1) - 1, d ?? 1)
 }
 
-const TYPE_CHIP: Record<RestrictionCategory, { on: string; off: string }> = {
+const TYPE_CHIP: Record<
+  RestrictionCategory,
+  { on: string; off: string; dot: string }
+> = {
   general: {
     on: "border-neutral-950 bg-neutral-950 text-white",
     off: "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-800",
+    dot: "bg-neutral-950",
   },
   ap_exam: {
     on: "border-violet-600 bg-violet-600 text-white",
     off: "border-violet-200 bg-violet-50 text-violet-700 hover:border-violet-300 hover:bg-violet-100",
+    dot: "bg-violet-500",
   },
   testing: {
     on: "border-sky-600 bg-sky-600 text-white",
     off: "border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-300 hover:bg-sky-100",
+    dot: "bg-sky-500",
   },
   holiday: {
     on: "border-rose-600 bg-rose-600 text-white",
     off: "border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100",
+    dot: "bg-rose-500",
   },
   event: {
     on: "border-amber-600 bg-amber-600 text-white",
     off: "border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300 hover:bg-amber-100",
+    dot: "bg-amber-500",
   },
   pd: {
     on: "border-teal-600 bg-teal-600 text-white",
     off: "border-teal-200 bg-teal-50 text-teal-700 hover:border-teal-300 hover:bg-teal-100",
+    dot: "bg-teal-500",
   },
   other: {
     on: "border-stone-600 bg-stone-600 text-white",
     off: "border-stone-200 bg-stone-50 text-stone-600 hover:border-stone-300 hover:bg-stone-100",
+    dot: "bg-stone-500",
   },
 }
 
@@ -265,16 +275,13 @@ export function BoardBlockDialog({
     RESTRICTION_TYPES.find((opt) => opt.id === category)?.label ?? "General"
   const cartSummary =
     chosenCarts.length === 1 ? "1 cart" : `${chosenCarts.length} carts`
-  const summaryLines = [
-    dateSummary,
-    `${formatPeriodList(selectedPeriods)} · ${cartSummary}`,
-    typeLabel,
-    slotCount > 0
-      ? `${slotCount} slot${slotCount === 1 ? "" : "s"}${
-          scope === "range" && weekdaysOnly ? " · weekdays" : ""
-        }`
-      : null,
-  ].filter(Boolean) as string[]
+  const scopeLine = [
+    formatPeriodList(selectedPeriods),
+    cartSummary,
+    scope === "range" && weekdaysOnly ? "weekdays" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ")
 
   const canApply =
     !busy &&
@@ -614,16 +621,33 @@ export function BoardBlockDialog({
             <Col label="Summary">
               <div
                 aria-live="polite"
-                className="rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-2"
+                className="rounded-lg border border-neutral-200 bg-white px-3 py-2.5"
               >
-                <p className="text-[12.5px] leading-5 tabular-nums tracking-[-0.01em] text-neutral-700">
-                  {summaryLines.map((line, index) => (
-                    <span key={line}>
-                      {index > 0 ? <br /> : null}
-                      {line}
-                    </span>
-                  ))}
+                <p className="text-[13px] font-medium tabular-nums tracking-[-0.02em] text-neutral-950">
+                  {dateSummary}
                 </p>
+                <p className="mt-0.5 truncate text-[12px] tabular-nums tracking-[-0.01em] text-neutral-500">
+                  {scopeLine}
+                </p>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full",
+                        TYPE_CHIP[category].dot,
+                      )}
+                    />
+                    <span className="truncate text-[12px] font-medium tracking-[-0.01em] text-neutral-700">
+                      {typeLabel}
+                    </span>
+                  </span>
+                  {slotCount > 0 ? (
+                    <span className="shrink-0 text-[11px] tabular-nums text-neutral-400">
+                      {slotCount}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </Col>
 

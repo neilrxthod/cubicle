@@ -228,20 +228,27 @@ export type BookingPurposeOption = {
   id: BookingPurposeId;
   /** Full label stored on the booking */
   label: string;
-  /** Short board badge (omit for Class — default teaching, less noise) */
+  /** Short board badge */
   tag: string | null;
   /** Badge styles (light cells / dark “mine” cells) */
   tagClass: string;
   tagClassOnDark: string;
+  /** Book-dialog capsule, idle */
+  capsuleClass: string;
+  /** Book-dialog capsule, selected */
+  capsuleClassSelected: string;
 };
 
 export const BOOKING_PURPOSES: readonly BookingPurposeOption[] = [
   {
     id: "class",
     label: "Class",
-    tag: null,
-    tagClass: "",
-    tagClassOnDark: "",
+    tag: "Class",
+    tagClass: "bg-blue-600 text-white",
+    tagClassOnDark: "bg-blue-400/25 text-blue-100",
+    capsuleClass:
+      "bg-blue-50 text-blue-800 hover:bg-blue-100 hover:text-blue-900",
+    capsuleClassSelected: "bg-blue-600 text-white hover:bg-blue-700",
   },
   {
     id: "spare",
@@ -249,6 +256,9 @@ export const BOOKING_PURPOSES: readonly BookingPurposeOption[] = [
     tag: "Spare",
     tagClass: "bg-sky-600 text-white",
     tagClassOnDark: "bg-sky-400/25 text-sky-100",
+    capsuleClass:
+      "bg-sky-50 text-sky-800 hover:bg-sky-100 hover:text-sky-900",
+    capsuleClassSelected: "bg-sky-600 text-white hover:bg-sky-700",
   },
   {
     id: "club",
@@ -256,6 +266,9 @@ export const BOOKING_PURPOSES: readonly BookingPurposeOption[] = [
     tag: "Club",
     tagClass: "bg-emerald-600 text-white",
     tagClassOnDark: "bg-emerald-400/25 text-emerald-100",
+    capsuleClass:
+      "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900",
+    capsuleClassSelected: "bg-emerald-600 text-white hover:bg-emerald-700",
   },
   {
     id: "extra",
@@ -263,6 +276,9 @@ export const BOOKING_PURPOSES: readonly BookingPurposeOption[] = [
     tag: "Extra",
     tagClass: "bg-amber-600 text-white",
     tagClassOnDark: "bg-amber-400/25 text-amber-100",
+    capsuleClass:
+      "bg-amber-50 text-amber-900 hover:bg-amber-100 hover:text-amber-950",
+    capsuleClassSelected: "bg-amber-600 text-white hover:bg-amber-700",
   },
   {
     id: "ap_exam",
@@ -270,13 +286,19 @@ export const BOOKING_PURPOSES: readonly BookingPurposeOption[] = [
     tag: "AP",
     tagClass: "bg-violet-600 text-white",
     tagClassOnDark: "bg-violet-400/25 text-violet-100",
+    capsuleClass:
+      "bg-violet-50 text-violet-800 hover:bg-violet-100 hover:text-violet-900",
+    capsuleClassSelected: "bg-violet-600 text-white hover:bg-violet-700",
   },
   {
     id: "other",
     label: "Other",
     tag: "Other",
-    tagClass: "bg-neutral-600 text-white",
-    tagClassOnDark: "bg-white/15 text-white",
+    tagClass: "bg-rose-600 text-white",
+    tagClassOnDark: "bg-rose-400/25 text-rose-100",
+    capsuleClass:
+      "bg-rose-50 text-rose-800 hover:bg-rose-100 hover:text-rose-900",
+    capsuleClassSelected: "bg-rose-600 text-white hover:bg-rose-700",
   },
 ] as const;
 

@@ -5,11 +5,13 @@ import {
   useMemo,
   useState,
   useTransition,
+  type CSSProperties,
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
-import { Check, Search, User, X } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { Check, ChevronRight, Search, User, X } from "lucide-react";
 import {
   Dialog,
   DialogCancel,
@@ -24,17 +26,13 @@ import { createBooking } from "@/lib/actions";
 import { slotLimitNoticeFromError } from "@/lib/booking/slot-rules";
 import type { SlotLimitNotice } from "@/lib/booking/slot-rules";
 import { getSessionSnapshot } from "@/lib/auth/session";
+import { motionSafe, transitionFast } from "@/lib/motion/platform";
 import { usePresenceMap, type PresenceStatus } from "@/lib/staff/presence";
 import { PresenceDot } from "@/components/presence-dot";
-import {
-  getOnboarding,
-  isAssignmentComplete,
-} from "@/lib/onboarding/storage";
 import { usePlatformStore } from "@/lib/data/platform-store";
 import { toast } from "@/hooks/use-toast";
 import { Spinner } from "@/components/ui/spinner";
 import {
-  BOOKING_PURPOSES,
   getBookingPurposeOption,
   type BookingPurposeId,
   type Cart,
@@ -42,6 +40,40 @@ import {
   type User as StaffUser,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+/** Keep the sheet above the software keyboard. */
+function useKeyboardLift() {
+  const [lift, setLift] = useState(0);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const sync = () => {
+      const overlap = Math.max(
+        0,
+        window.innerHeight - (viewport.height + viewport.offsetTop),
+      );
+      setLift(overlap > 48 ? overlap : 0);
+    };
+    viewport.addEventListener("resize", sync);
+    viewport.addEventListener("scroll", sync);
+    sync();
+    return () => {
+      viewport.removeEventListener("resize", sync);
+      viewport.removeEventListener("scroll", sync);
+    };
+  }, []);
+  return lift;
+}
+
+/** 2×3: Extra / AP exam on row 2, Club / Other under them. */
+const PURPOSE_GRID: BookingPurposeId[] = [
+  "class",
+  "spare",
+  "extra",
+  "ap_exam",
+  "club",
+  "other",
+];
 
 /** One-tap book. Purpose tag + optional share via colleague avatars. */
 export function BookDialog({
@@ -71,6 +103,7 @@ export function BookDialog({
   const session = getSessionSnapshot();
   const purpose = getBookingPurposeOption(purposeId);
   const presenceByUser = usePresenceMap();
+  const keyboardLift = useKeyboardLift();
 
   useEffect(() => {
     onOpened?.();
@@ -125,16 +158,6 @@ export function BookDialog({
     }
   })();
 
-  function resolveSubject() {
-    if (!session) return "";
-    const prefs = getOnboarding(session.id || session.email);
-    const loads = (prefs.teachingAssignments ?? []).filter(
-      isAssignmentComplete,
-    );
-    const match = loads.find((a) => a.periods.includes(period));
-    return match?.subject.trim() || loads[0]?.subject.trim() || "";
-  }
-
   function togglePartner(id: string) {
     setShareWithId((cur) => (cur === id ? null : id));
     setError(null);
@@ -147,18 +170,9 @@ export function BookDialog({
     formData.set("date", date);
     formData.set("period", period);
 
-    const teachingSubject = resolveSubject();
     const otherNote = custom.trim();
 
-    if (purposeId === "class") {
-      if (session?.role !== "admin" && teachingSubject) {
-        formData.set("subject", teachingSubject);
-        formData.set("className", teachingSubject);
-      } else {
-        formData.set("className", purpose.label);
-        formData.set("subject", purpose.label);
-      }
-    } else if (purposeId === "other" && otherNote) {
+    if (purposeId === "other" && otherNote) {
       formData.set("className", purpose.label);
       formData.set("subject", purpose.label);
       formData.set("notes", otherNote);
@@ -222,102 +236,170 @@ export function BookDialog({
     });
   }
 
-  const meta = [
-    period,
-    dateLabel,
-    purposeId !== "class" ? purpose.label : null,
-    selectedPartner ? `with ${selectedPartner.name.split(/\s+/)[0]}` : null,
-  ]
-    .filter(Boolean)
-    .join("  ·  ");
+  const metaParts = [period, dateLabel];
+  const partnerFirst =
+    selectedPartner?.name.trim().split(/\s+/)[0] ?? selectedPartner?.name;
+
+  const sheetStyle = {
+    transform: keyboardLift
+      ? `translateY(-${Math.round(Math.min(keyboardLift * 0.5, 180))}px)`
+      : undefined,
+  } satisfies CSSProperties;
 
   return (
     <>
     <Dialog open={!slotLimit} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         showCloseButton
-        className="w-[min(100%,27rem)] gap-0 overflow-hidden rounded-2xl border border-[var(--hairline-strong)] bg-white p-0 shadow-[var(--shadow-surface)] sm:max-w-[27rem]"
+        style={sheetStyle}
+        className={cn(
+          "flex min-h-0 w-[min(calc(100vw-2rem),42rem)] flex-col gap-0 overflow-hidden rounded-2xl",
+          "max-h-[min(88svh,calc(100dvh-2rem))] sm:max-w-[42rem]",
+          "border border-[var(--hairline-strong)] bg-white p-0 shadow-[var(--shadow-soft)]",
+          "motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-[cubic-bezier(0.16,1,0.3,1)]",
+        )}
       >
-        <DialogHeader className="space-y-0 px-5 pb-0 pt-5 text-left">
-          <DialogTitle className="text-[15px] font-light tracking-[-0.02em] text-neutral-950">
-            Book {cart.name}?
+        <DialogHeader className="shrink-0 space-y-0 border-b border-[var(--hairline)] px-5 py-4 pr-14 text-left">
+          <DialogTitle className="text-[15px] font-medium tracking-[-0.02em] text-neutral-950">
+            Book {cart.name}
           </DialogTitle>
-          <DialogDescription className="mt-1 text-[12.5px] text-neutral-400">
-            {meta}
+          <DialogDescription className="mt-1 flex min-w-0 items-center text-[12.5px] tracking-[-0.01em] text-neutral-500">
+            {metaParts.map((part, i) => (
+              <span key={part} className="inline-flex items-center">
+                {i > 0 ? (
+                  <ChevronRight
+                    aria-hidden
+                    className="mx-0.5 size-3.5 shrink-0 text-neutral-300"
+                    strokeWidth={1.75}
+                  />
+                ) : null}
+                <span className={part === period ? "tabular-nums" : undefined}>
+                  {part}
+                </span>
+              </span>
+            ))}
+            {selectedPartner ? (
+              <span className="inline-flex min-w-0 items-center">
+                <ChevronRight
+                  aria-hidden
+                  className="mx-0.5 size-3.5 shrink-0 text-neutral-300"
+                  strokeWidth={1.75}
+                />
+                <span className="mr-1.5 size-5 shrink-0 overflow-hidden rounded-full bg-neutral-100 ring-1 ring-black/[0.06]">
+                  <ShareFace user={selectedPartner} />
+                </span>
+                <span className="truncate">with {partnerFirst}</span>
+              </span>
+            ) : null}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-5 px-5 pt-5">
-          <div className="flex flex-nowrap gap-1.5">
-            {BOOKING_PURPOSES.map((p) => {
-              const selected = purposeId === p.id;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  disabled={pending}
-                  onClick={() => {
-                    setPurposeId(p.id);
-                    if (p.id !== "other") setCustom("");
-                    setError(null);
-                  }}
-                  className={cn(
-                    "h-8 rounded-full px-3 text-[12.5px] font-medium transition-colors",
-                    selected
-                      ? p.id === "ap_exam"
-                        ? "bg-violet-700 text-white"
-                        : "bg-neutral-950 text-white"
-                      : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200/80 hover:text-neutral-900",
-                  )}
+        <div className="flex min-h-0 flex-1 flex-col sm:flex-row sm:overflow-hidden">
+          <section className="shrink-0 px-5 py-4 sm:w-[17rem] sm:border-r sm:border-[var(--hairline)]">
+            <p className="text-[11px] font-medium tracking-[0.08em] text-neutral-400 uppercase">
+              Purpose
+            </p>
+            <div
+              className="mt-2.5 grid grid-cols-2 gap-1.5"
+              role="listbox"
+              aria-label="Purpose"
+            >
+              {PURPOSE_GRID.map((id) => {
+                const p = getBookingPurposeOption(id);
+                const selected = purposeId === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    disabled={pending}
+                    onClick={() => {
+                      setPurposeId(p.id);
+                      if (p.id !== "other") setCustom("");
+                      setError(null);
+                    }}
+                    className={cn(
+                      "h-8 w-full rounded-full px-2 text-[12.5px] font-medium tracking-[-0.01em] transition-colors",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/10",
+                      selected ? p.capsuleClassSelected : p.capsuleClass,
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <AnimatePresence initial={false}>
+              {purposeId === "other" ? (
+                <motion.div
+                  key="other-note"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={motionSafe(transitionFast)}
+                  className="overflow-hidden"
                 >
-                  {p.label}
-                </button>
-              );
-            })}
-          </div>
-          {purposeId === "other" ? (
-            <Input
-              id="book-custom"
-              value={custom}
-              onChange={(e) => setCustom(e.target.value)}
-              placeholder="What for? (optional)"
-              disabled={pending}
-              autoComplete="off"
-              className="-mt-2 h-9 rounded-lg border-neutral-200 bg-white text-[13px] tracking-[-0.01em] shadow-none placeholder:text-neutral-300"
-            />
-          ) : null}
+                  <Input
+                    id="book-custom"
+                    value={custom}
+                    onChange={(e) => setCustom(e.target.value)}
+                    placeholder="What for? (optional)"
+                    disabled={pending}
+                    autoComplete="off"
+                    className="mt-2.5 h-9 rounded-lg border-neutral-200/80 bg-neutral-50 text-[13px] tracking-[-0.01em] shadow-none placeholder:text-neutral-400"
+                  />
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+
+            {error ? (
+              <p className="mt-3 text-[12.5px] font-medium text-red-600">
+                {error}
+              </p>
+            ) : null}
+          </section>
 
           {colleagues.length > 0 ? (
-            <ShareColleagueGrid
-              query={shareQuery}
-              onQueryChange={setShareQuery}
-              colleagues={visibleColleagues}
-              shareWithId={shareWithId}
-              youPresence={
-                session?.id
-                  ? (presenceByUser.get(session.id) ?? "offline")
-                  : "offline"
-              }
-              presenceByUser={presenceByUser}
-              pending={pending}
-              showSearch={colleagues.length > 6}
-              empty={
-                shareQueryNorm.length > 0 && visibleColleagues.length === 0
-              }
-              onJustMe={() => {
-                setShareWithId(null);
-                setError(null);
-              }}
-              onToggle={togglePartner}
-            />
-          ) : null}
-
-          {error ? (
-            <p className="text-[12.5px] font-medium text-red-600">{error}</p>
+            <section className="flex min-h-0 min-w-0 flex-1 flex-col px-5 py-4">
+              <p className="shrink-0 text-[11px] font-medium tracking-[0.08em] text-neutral-400 uppercase">
+                Share
+              </p>
+              <div className="mt-2.5 min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                <ShareColleagueGrid
+                  query={shareQuery}
+                  onQueryChange={setShareQuery}
+                  colleagues={visibleColleagues}
+                  shareWithId={shareWithId}
+                  youPresence={
+                    session?.id
+                      ? (presenceByUser.get(session.id) ?? "offline")
+                      : "offline"
+                  }
+                  presenceByUser={presenceByUser}
+                  pending={pending}
+                  showSearch={colleagues.length > 6}
+                  empty={
+                    shareQueryNorm.length > 0 && visibleColleagues.length === 0
+                  }
+                  onJustMe={() => {
+                    setShareWithId(null);
+                    setError(null);
+                  }}
+                  onToggle={togglePartner}
+                />
+              </div>
+            </section>
           ) : null}
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-5 py-5">
+        <div
+          className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--hairline)] bg-white px-5 py-3"
+          style={{
+            paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+          }}
+        >
           <DialogCancel onClick={onClose}>Cancel</DialogCancel>
           <button
             type="button"
@@ -325,7 +407,7 @@ export function BookDialog({
             aria-busy={pending}
             aria-label={pending ? "Booking" : "Book"}
             onClick={handleBook}
-            className="inline-flex h-9 min-w-[5.5rem] items-center justify-center rounded-full bg-neutral-950 px-5 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="inline-flex h-9 min-w-[5.75rem] items-center justify-center rounded-full bg-neutral-950 px-5 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {pending ? (
               <Spinner className="size-3.5 text-white" />
@@ -411,10 +493,9 @@ function ShareColleagueGrid({
   );
 
   return (
-    <div className="flex flex-col gap-3">
-      {showSearch ? youButton : null}
+    <div className="flex flex-col gap-2.5">
       {showSearch ? (
-        <div className="relative">
+        <div className="relative shrink-0">
           <Search
             className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400"
             strokeWidth={2}
@@ -448,18 +529,14 @@ function ShareColleagueGrid({
         </div>
       ) : null}
 
-      <div
-        className="max-h-[11.5rem] overflow-y-auto overscroll-contain"
-        role="listbox"
-        aria-label="Share with colleague"
-      >
+      <div role="listbox" aria-label="Share with colleague">
         {empty ? (
-          <p className="py-6 text-center text-[12.5px] text-neutral-400">
+          <p className="py-8 text-center text-[12.5px] text-neutral-400">
             No match
           </p>
         ) : (
-          <div className="flex flex-wrap gap-x-3.5 gap-y-3">
-            {showSearch ? null : youButton}
+          <div className="grid grid-cols-4 gap-x-2 gap-y-3 sm:grid-cols-5">
+            {youButton}
             {colleagues.map((u) => {
               const selected = shareWithId === u.id;
               return (
@@ -517,7 +594,7 @@ function ShareIconButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex w-[3.25rem] shrink-0 flex-col items-center gap-[5px] outline-none",
+        "flex w-full flex-col items-center gap-1 outline-none",
         "disabled:pointer-events-none disabled:opacity-40",
         "rounded-lg focus-visible:outline-none",
       )}
@@ -537,7 +614,7 @@ function ShareIconButton({
       </span>
       <span
         className={cn(
-          "max-w-[3.25rem] truncate text-center text-[11px] leading-tight tracking-[-0.02em]",
+          "w-full truncate text-center text-[11px] leading-tight tracking-[-0.02em]",
           selected
             ? "font-medium text-neutral-950"
             : "font-normal text-[#8e8e93]",

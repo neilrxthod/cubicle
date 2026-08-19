@@ -611,7 +611,12 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
     try {
       const cleaned = assignments
         .filter(isAssignmentComplete)
-        .map((a) => ({ ...a, subject: a.subject.trim() }));
+        .map((a) => ({
+          id: a.id,
+          subject: a.subject.trim(),
+          grades: a.grades,
+          periods: a.periods,
+        }));
 
       const prefs: Omit<OnboardingPrefs, "completed" | "completedAt"> = {
         department: cleaned[0]?.subject.trim() || undefined,

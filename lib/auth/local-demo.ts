@@ -227,7 +227,6 @@ export function completeLocalDemoOnboarding(user?: SessionUser): void {
   if (typeof window === "undefined") return;
   if (!isLocalDemoMode()) return;
 
-  const teacherGrades: Grade[] = [10, 11];
   const teacherPeriods: Period[] = ["P1", "P2"];
   const teacherPrefs = {
     title: LOCAL_DEMO_TEACHER.title,
@@ -236,11 +235,17 @@ export function completeLocalDemoOnboarding(user?: SessionUser): void {
       {
         id: "local-demo-load-1",
         subject: "Biology",
-        grades: teacherGrades,
+        grades: [9, 10] as Grade[],
         periods: teacherPeriods,
       },
+      {
+        id: "local-demo-load-2",
+        subject: "Chemistry",
+        grades: [11, 12] as Grade[],
+        periods: ["P3", "P4"] as Period[],
+      },
     ],
-    preferredPeriods: ["P1", "P2"],
+    preferredPeriods: ["P1", "P2", "P3", "P4"],
     notifyEmail: true,
     notifyIssues: true,
   };
