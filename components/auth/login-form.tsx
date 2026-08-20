@@ -244,7 +244,7 @@ export default function LoginForm() {
                       <GoogleIcon width={12} height={12} />
                     </span>
                   )}
-                  {googleLoading ? "Connecting…" : "Continue with Google"}
+                  {googleLoading ? "Connecting" : "Continue with Google"}
                 </button>
               ) : null}
 

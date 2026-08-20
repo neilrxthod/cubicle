@@ -104,7 +104,7 @@ export function SocialSignInButton({
                 : "border-white/25 border-t-white",
             )}
           />
-          {compact ? "..." : "Connecting…"}
+          {compact ? null : isGoogle ? "Connecting" : "Connecting…"}
         </>
       ) : (
         <>
