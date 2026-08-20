@@ -521,7 +521,6 @@ export function DailyBoard({
   )
   const [renameDraft, setRenameDraft] = useState("")
   const [renameBusy, setRenameBusy] = useState(false)
-  /** Admin two-step delete: trash → confirm dialog → delete. */
   const [pendingDelete, setPendingDelete] = useState<{
     booking: Booking
     cartName: string
@@ -692,8 +691,16 @@ export function DailyBoard({
   async function adminDeleteBooking(booking: Booking) {
     if (deletingBookingId) return
     setDeletingBookingId(booking.id)
+    const startedAt = Date.now()
     try {
-      const res = await cancelBooking(booking.id)
+      const res = await cancelBooking(
+        booking.id,
+        booking.teacherId !== session.id ? { reason: "admin" } : undefined,
+      )
+      const remaining = 1500 - (Date.now() - startedAt)
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining))
+      }
       if (res && "error" in res && res.error) {
         toast({
           title: "Could not delete booking",
@@ -1415,7 +1422,7 @@ export function DailyBoard({
                       const title = inviteForMe
                         ? `${personName} invited you to share this cart`
                         : isInvolved
-                          ? `${titleClass || "Your booking"}${purposeBit}${shareBit} — click to manage`
+                          ? `${titleClass || "Your booking"}${purposeBit}${shareBit} — click to manage${isAdmin ? " or delete" : ""}`
                           : hasPendingSwap
                             ? `${titleClass || personName} · ${personName}${purposeBit}${shareBit} — swap pending`
                             : isAdmin
@@ -1577,7 +1584,7 @@ export function DailyBoard({
                             deleting={deleting}
                             showSwap={isSwapTarget}
                             showInfo={isAdmin && !inviteForMe}
-                            showDelete={isAdmin && isSwapTarget}
+                            showDelete={isAdmin && !inviteForMe}
                             onSwap={() => onCellClick(cart, period)}
                             onInfo={() => setInfoDialog(booking)}
                             onDelete={() =>
@@ -1833,7 +1840,7 @@ export function DailyBoard({
                       const title = inviteForMe
                         ? `${personName} invited you to share this cart`
                         : isInvolved
-                          ? `${titleClass || "Your booking"}${purposeBit}${shareBit} — click to manage`
+                          ? `${titleClass || "Your booking"}${purposeBit}${shareBit} — click to manage${isAdmin ? " or delete" : ""}`
                           : hasPendingSwap
                             ? `${titleClass || personName} · ${personName}${purposeBit}${shareBit} — swap pending`
                             : isAdmin
@@ -1995,7 +2002,7 @@ export function DailyBoard({
                             deleting={deleting}
                             showSwap={isSwapTarget}
                             showInfo={isAdmin && !inviteForMe}
-                            showDelete={isAdmin && isSwapTarget}
+                            showDelete={isAdmin && !inviteForMe}
                             onSwap={() => onCellClick(cart, period)}
                             onInfo={() => setInfoDialog(booking)}
                             onDelete={() =>
@@ -2144,7 +2151,6 @@ export function DailyBoard({
         />
       ) : null}
 
-      {/* Admin two-step delete: trash → confirm → remove */}
       <Dialog
         open={pendingDelete !== null}
         onOpenChange={(open) => {
@@ -2191,10 +2197,10 @@ export function DailyBoard({
                 void adminDeleteBooking(pendingDelete.booking)
               }}
               className={cn(
-                "inline-flex h-9 min-w-[7.5rem] items-center justify-center gap-1.5 rounded-lg px-4",
-                "bg-red-600 text-[13px] font-medium text-white",
+                "inline-flex h-9 min-w-[8.25rem] items-center justify-center gap-1.5 rounded-full px-4",
+                "bg-red-600 text-[13px] font-medium whitespace-nowrap text-white",
                 "transition-colors hover:bg-red-700",
-                "disabled:pointer-events-none disabled:opacity-50",
+                "disabled:pointer-events-none disabled:opacity-80",
               )}
             >
               {deletingBookingId ? (
