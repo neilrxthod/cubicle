@@ -19,6 +19,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { VerifiedBadge } from "@/components/verified-badge";
 import { LocalEmailTestingSection } from "@/components/settings/local-email-testing";
+import { SendTestEmailButton } from "@/components/settings/send-test-email-button";
 import { SetupPreferences } from "@/components/settings/setup-preferences";
 import { deleteAccountAction, signOutAction, updateProfile } from "@/lib/actions";
 import { getUiPreferences, setUiPreferences } from "@/lib/preferences/ui";
@@ -366,6 +367,12 @@ export function TeacherMobileSettings({
                 />
               </>
             ) : null}
+            <Hairline />
+            <SendTestEmailButton
+              appearance="row"
+              disabled={busy}
+              inboxEmail={user.email}
+            />
           </Group>
         </Labeled>
 

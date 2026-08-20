@@ -235,6 +235,15 @@ Sending is awaited on `/api/notifications`. The booking and issue UI already fir
 
 Without the API key, `/api/notifications` returns `{ skipped: true }` and no mail leaves the platform.
 
+**If Brevo returns 401 “unrecognised IP address”:** Cubicle is on Vercel, so outbound IPs change (e.g. `18.212.x.x`). Authorized-IP blocking cannot stay on for API keys.
+
+1. Brevo → account menu → **Settings → Security → Authorized IPs**
+2. Under **Blocking unauthorized IP addresses**, **Deactivate for API**
+3. Confirm **Deactivate blocking**
+4. Retry **Send test** in Cubicle Settings
+
+The app will try to allowlist the blocked IP and resend once. That grant often fails too — the authorize call comes from the same Vercel address. Turning blocking off is the durable fix.
+
 ## BIMI (official logo next to Brevo emails)
 
 BIMI is **DNS + a hosted logo + (for Gmail) a paid certificate**. It is not a Brevo app toggle. Sending stays `noreply-mail@mycubicle.app`.
@@ -367,4 +376,5 @@ Build must exit 0. Proxy (session refresh) should appear in the build output.
 | Double booking still possible | Unique index on bookings must exist (`schema.sql`) |
 | Phone never opens the camera | Grant camera permission; CSP / Permissions-Policy allow `camera=(self)` |
 | QR scan does nothing | Confirm `cart-laptop-codes.sql` and that the printed payload is a Cubicle label |
-| Settings says Live but no mail arrives | Redeploy after the notifications route change; run `notify-email.sql` or `repair-live.sql`; check Brevo logs and staff notify toggles; try **Send me a test email** |
+| Settings says Live but no mail arrives | Redeploy after the notifications route change; run `notify-email.sql` or `repair-live.sql`; check Brevo logs and staff notify toggles; try **Send test** |
+| Brevo 401 unrecognised IP | Deactivate **Authorized IP blocking for API keys** (Vercel IPs rotate). See Email notifications above. |

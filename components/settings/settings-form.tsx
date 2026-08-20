@@ -38,7 +38,7 @@ import {
 } from "@/components/settings/settings-section";
 import { SetupPreferences } from "@/components/settings/setup-preferences";
 import { LocalEmailTestingSection } from "@/components/settings/local-email-testing";
-import { sendProductionTestEmail } from "@/lib/email/queue";
+import { SendTestEmailButton } from "@/components/settings/send-test-email-button";
 import {
   getEmailDispatchStatus,
   type EmailDispatchStatus,
@@ -89,11 +89,6 @@ export function SettingsForm({
   const [emailStatus, setEmailStatus] = useState<EmailDispatchStatus | null>(
     null,
   );
-  const [testSending, setTestSending] = useState(false);
-  const [testMessage, setTestMessage] = useState<{
-    type: "ok" | "error";
-    text: string;
-  } | null>(null);
 
   const userStamp = `${user.name}\0${user.avatarUrl ?? ""}\0${user.notifyEmail}\0${user.notifyIssues}`;
   const [appliedUserStamp, setAppliedUserStamp] = useState(userStamp);
@@ -303,31 +298,6 @@ export function SettingsForm({
 
   function handleNameChange(value: string) {
     setName(value.slice(0, NAME_MAX));
-  }
-
-  async function handleSendTestEmail() {
-    if (testSending) return;
-    setTestSending(true);
-    setTestMessage(null);
-    try {
-      const result = await sendProductionTestEmail();
-      if (result.ok && (result.sent ?? 0) > 0) {
-        setTestMessage({
-          type: "ok",
-          text: "Test email sent. Check your school inbox (and spam).",
-        });
-        return;
-      }
-      setTestMessage({
-        type: "error",
-        text:
-          result.error ||
-          result.reason ||
-          "Could not send a test email. Try again in a moment.",
-      });
-    } finally {
-      setTestSending(false);
-    }
   }
 
   function handleNotifyEmail(checked: boolean) {
@@ -589,35 +559,6 @@ export function SettingsForm({
                   ? "Provider is configured. Local testing still has to be enabled to send."
                   : "Email is not configured on this deployment yet. Add BREVO_API_KEY and BREVO_SENDER_EMAIL on Vercel Production."}
             </p>
-            {emailStatus.live ? (
-              <div className="flex flex-col gap-2 px-4 pb-3 sm:flex-row sm:items-center sm:px-5">
-                <button
-                  type="button"
-                  onClick={() => void handleSendTestEmail()}
-                  disabled={testSending || busy}
-                  className={cn(
-                    "h-9 shrink-0 rounded-[10px] px-3.5 text-[13px] font-medium tracking-[-0.01em] transition-colors",
-                    testSending || busy
-                      ? "cursor-not-allowed bg-neutral-100 text-neutral-400"
-                      : "bg-neutral-900 text-white hover:bg-neutral-800",
-                  )}
-                >
-                  {testSending ? "Sending…" : "Send me a test email"}
-                </button>
-                {testMessage ? (
-                  <p
-                    className={cn(
-                      "text-[12.5px] leading-relaxed",
-                      testMessage.type === "ok"
-                        ? "text-neutral-500"
-                        : "text-red-600",
-                    )}
-                  >
-                    {testMessage.text}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
             <SettingsDivider />
           </>
         ) : null}
@@ -650,6 +591,8 @@ export function SettingsForm({
             />
           </>
         ) : null}
+        <SettingsDivider />
+        <SendTestEmailButton disabled={busy} inboxEmail={user.email} />
       </SettingsSection>
 
       <LocalEmailTestingSection />

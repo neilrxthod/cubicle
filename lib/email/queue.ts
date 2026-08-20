@@ -221,10 +221,10 @@ export async function sendLocalTestEmail(): Promise<{
 }
 
 /**
- * Production “send me a test email” from Settings.
- * Delivers to the signed-in staff inbox (not a local sink).
+ * Settings “send me a test email” for every signed-in user.
+ * Production delivers to their school inbox. Local uses the sink address.
  */
-export async function sendProductionTestEmail(): Promise<{
+export async function sendTestEmail(): Promise<{
   ok: boolean;
   error?: string;
   skipped?: boolean;
@@ -234,12 +234,21 @@ export async function sendProductionTestEmail(): Promise<{
   if (typeof window === "undefined") {
     return { ok: false, error: "Browser only." };
   }
+  if (!shouldQueueEmailFromClient()) {
+    return {
+      ok: false,
+      error: "Turn on local testing and set a valid email first.",
+    };
+  }
 
+  const localSink = localEmailSinkForRequest();
   try {
     const res = await fetch("/api/notifications", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ type: "self_test" }),
+      body: JSON.stringify(
+        localSink ? { type: "self_test", localSink } : { type: "self_test" },
+      ),
       credentials: "same-origin",
       cache: "no-store",
     });
