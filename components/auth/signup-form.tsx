@@ -111,7 +111,6 @@ export function SignupForm() {
       return;
     }
     if (!acceptedTerms) {
-      setError("Accept the Terms & Conditions and policies to continue.");
       return;
     }
 

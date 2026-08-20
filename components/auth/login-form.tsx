@@ -35,9 +35,6 @@ const roleAccent: Record<DemoAccount["role"], string> = {
   admin: "bg-violet-600",
 };
 
-const LEGAL_REQUIRED =
-  "You must accept the Terms & Conditions and policies before signing in.";
-
 const LOGIN_ERRORS: Record<string, string> = {
   not_allowed: `Not on the IT allowlist. Contact IT.`,
   invalid_domain: `Only @${SCHOOL_EMAIL_DOMAIN} accounts can sign in.`,
@@ -94,7 +91,6 @@ export default function LoginForm() {
       return true;
     }
     setLegalInvalid(true);
-    setError(LEGAL_REQUIRED);
     setGoogleLoading(false);
     setLoadingRole(null);
     return false;
@@ -318,15 +314,12 @@ export default function LoginForm() {
                 checked={acceptedLegal}
                 onCheckedChange={(value) => {
                   setAcceptedLegal(value);
-                  if (value) {
-                    setLegalInvalid(false);
-                    if (error === LEGAL_REQUIRED || urlError) setError("");
-                  }
+                  if (value) setLegalInvalid(false);
                 }}
                 invalid={legalInvalid}
               />
 
-              {accountDeleted && !displayError && !legalInvalid ? (
+              {accountDeleted && !displayError ? (
                 <p
                   role="status"
                   className="text-center text-[12.5px] font-medium text-neutral-600"
@@ -334,14 +327,14 @@ export default function LoginForm() {
                   Your account was deleted.
                 </p>
               ) : null}
-              {(displayError || legalInvalid) && (
+              {displayError ? (
                 <p
                   role="alert"
                   className="text-center text-[12.5px] font-medium text-red-600"
                 >
-                  {displayError || "You must accept to sign in."}
+                  {displayError}
                 </p>
-              )}
+              ) : null}
             </motion.div>
           )}
         </AnimatePresence>
