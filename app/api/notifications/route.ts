@@ -93,12 +93,17 @@ export async function POST(request: Request) {
   // Production always requires a signed-in user.
   // Local sink: auth optional (demo sandbox may lack Supabase cookies).
   let actorId: string | null = null;
+  let actorEmail: string | null = null;
+  let actorName: string | null = null;
   try {
     const supabase = await createClient();
     const {
       data: { user: actor },
     } = await supabase.auth.getUser();
     actorId = actor?.id ?? null;
+    actorEmail = actor?.email ?? null;
+    const metaName = actor?.user_metadata?.full_name ?? actor?.user_metadata?.name;
+    actorName = typeof metaName === "string" ? metaName : null;
   } catch {
     // Auth env missing
   }
@@ -147,7 +152,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await dispatchProduction(admin, actorId!, body);
+    const result = await dispatchProduction(admin, actorId!, body, {
+      email: actorEmail,
+      name: actorName,
+    });
     if (!result.ok) {
       console.error("[notifications] dispatch failed", body.type, result);
     } else if ("sent" in result) {
@@ -224,6 +232,7 @@ async function dispatchProduction(
   admin: ReturnType<typeof createAdminClient>,
   actorId: string,
   body: NotificationPayload,
+  actor?: { email: string | null; name: string | null },
 ) {
   if (body.type === "issue_reported") {
     return handleIssueReported(admin, actorId, body);
@@ -250,7 +259,7 @@ async function dispatchProduction(
     return handleSwapInviteUpdate(admin, body);
   }
   if (body.type === "self_test") {
-    return handleSelfTest(admin, actorId);
+    return handleSelfTest(admin, actorId, actor);
   }
   return { error: "Unknown notification type.", ok: false as const };
 }
@@ -646,15 +655,20 @@ async function sendSelfTestTo(
 async function handleSelfTest(
   admin: ReturnType<typeof createAdminClient>,
   actorId: string,
+  actor?: { email: string | null; name: string | null },
 ) {
   const user = await loadMailUser(admin, actorId, { ignorePref: true });
-  if (!user) {
+  const email = user?.email || actor?.email || null;
+  if (!email?.includes("@")) {
     return {
       ok: false as const,
       error: "Your account has no email address on file.",
     };
   }
-  return sendSelfTestTo(user, false);
+  return sendSelfTestTo(
+    { email, name: user?.name || actor?.name || undefined },
+    false,
+  );
 }
 
 async function sendIssueEmail(opts: {

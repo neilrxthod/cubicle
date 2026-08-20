@@ -2,9 +2,14 @@
  * Brevo (Sendinblue) transactional email client.
  *
  * Env:
- *   BREVO_API_KEY        — required to send
+ *   BREVO_API_KEY        — REST API (blocked on Vercel if Authorized IPs is on)
  *   BREVO_SENDER_EMAIL   — verified sender in Brevo (required)
  *   BREVO_SENDER_NAME    — optional display name (default: Cubicle)
+ *   BREVO_SMTP_USER      — SMTP login from Brevo → SMTP & API → SMTP
+ *   BREVO_SMTP_KEY       — SMTP key (xsmtpsib-…), not the REST API key
+ *
+ * SMTP is the Vercel path: API-key IP blocking does not apply to SMTP keys
+ * unless SMTP blocking is turned on separately (off by default).
  *
  * When API key or sender is missing, sends are skipped (no throw).
  * Callers should not block user flows on email failures.
@@ -126,10 +131,121 @@ function getConfig() {
   return { apiKey, senderEmail, senderName };
 }
 
+function getSmtpConfig() {
+  const user = process.env.BREVO_SMTP_USER?.trim() ?? "";
+  const pass = process.env.BREVO_SMTP_KEY?.trim() ?? "";
+  const host =
+    process.env.BREVO_SMTP_HOST?.trim() || "smtp-relay.brevo.com";
+  const port = Number(process.env.BREVO_SMTP_PORT?.trim() || "587");
+  return { user, pass, host, port: Number.isFinite(port) ? port : 587 };
+}
+
+/** True when SMTP relay can be used (survives Vercel REST IP blocking). */
+export function isSmtpConfigured(): boolean {
+  const { user, pass } = getSmtpConfig();
+  const { senderEmail } = getConfig();
+  return Boolean(user && pass && senderEmail);
+}
+
 /** True when Brevo is configured enough to attempt sends. */
 export function isBrevoConfigured(): boolean {
   const { apiKey, senderEmail } = getConfig();
-  return Boolean(apiKey && senderEmail);
+  if (!senderEmail) return false;
+  return Boolean(apiKey) || isSmtpConfigured();
+}
+
+export type BrevoProbe = {
+  reachable: boolean;
+  via: "rest" | "smtp" | "none";
+  blockReason?: string;
+};
+
+/** Live check — REST account call, then SMTP if REST is IP-blocked. */
+export async function probeBrevo(): Promise<BrevoProbe> {
+  const { apiKey } = getConfig();
+  if (apiKey) {
+    try {
+      const res = await fetch("https://api.brevo.com/v3/account", {
+        headers: brevoHeaders(apiKey),
+        cache: "no-store",
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (res.ok) return { reachable: true, via: "rest" };
+      const errText = await res.text().catch(() => "");
+      if (!isUnrecognizedIpError(res.status, errText) || !isSmtpConfigured()) {
+        return {
+          reachable: false,
+          via: "none",
+          blockReason: describeBrevoError(res.status, errText),
+        };
+      }
+    } catch (err) {
+      if (!isSmtpConfigured()) {
+        return {
+          reachable: false,
+          via: "none",
+          blockReason:
+            err instanceof Error ? err.message : "Could not reach mail provider.",
+        };
+      }
+    }
+  }
+
+  if (isSmtpConfigured()) {
+    return { reachable: true, via: "smtp" };
+  }
+
+  return {
+    reachable: false,
+    via: "none",
+    blockReason: "Brevo is not configured.",
+  };
+}
+
+async function sendViaSmtp(
+  input: SendEmailInput,
+  recipients: EmailAddress[],
+): Promise<SendEmailResult> {
+  const { senderEmail, senderName } = getConfig();
+  const smtp = getSmtpConfig();
+  if (!smtp.user || !smtp.pass || !senderEmail) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "Brevo SMTP not configured (BREVO_SMTP_USER / BREVO_SMTP_KEY)",
+    };
+  }
+
+  const nodemailer = (await import("nodemailer")).default;
+  const transporter = nodemailer.createTransport({
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.port === 465,
+    auth: { user: smtp.user, pass: smtp.pass },
+    connectionTimeout: 15_000,
+    socketTimeout: 20_000,
+  });
+
+  try {
+    const info = await transporter.sendMail({
+      from: { name: senderName, address: senderEmail },
+      to: recipients.map((row) =>
+        row.name
+          ? { name: row.name, address: row.email }
+          : row.email,
+      ),
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+    });
+    return { ok: true, messageId: info.messageId };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "SMTP error";
+    console.error("[brevo] smtp send failed", message);
+    return { ok: false, error: `SMTP: ${message}` };
+  } finally {
+    transporter.close();
+  }
 }
 
 function normalizeRecipients(
@@ -152,7 +268,7 @@ export async function sendEmail(
   input: SendEmailInput,
 ): Promise<SendEmailResult> {
   const { apiKey, senderEmail, senderName } = getConfig();
-  if (!apiKey || !senderEmail) {
+  if (!senderEmail || (!apiKey && !isSmtpConfigured())) {
     return {
       ok: true,
       skipped: true,
@@ -181,6 +297,10 @@ export async function sendEmail(
       email: input.replyTo.email,
       ...(input.replyTo.name ? { name: input.replyTo.name } : {}),
     };
+  }
+
+  if (!apiKey && isSmtpConfigured()) {
+    return sendViaSmtp(input, recipients);
   }
 
   try {
@@ -216,6 +336,10 @@ export async function sendEmail(
           }
           errText = await res.text().catch(() => errText);
         }
+        if (isSmtpConfigured()) {
+          console.warn("[brevo] REST IP blocked — falling back to SMTP");
+          return sendViaSmtp(input, recipients);
+        }
       }
 
       console.error("[brevo] send failed", res.status, errText.slice(0, 500));
@@ -232,6 +356,10 @@ export async function sendEmail(
   } catch (err) {
     const message = err instanceof Error ? err.message : "Network error";
     console.error("[brevo] send error", message);
+    if (isSmtpConfigured()) {
+      console.warn("[brevo] REST failed — falling back to SMTP");
+      return sendViaSmtp(input, recipients);
+    }
     return { ok: false, error: message };
   }
 }

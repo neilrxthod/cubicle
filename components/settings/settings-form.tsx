@@ -548,16 +548,18 @@ export function SettingsForm({
                 "px-4 py-3 text-[12.5px] leading-relaxed sm:px-5",
                 emailStatus.live
                   ? "text-neutral-500"
-                  : emailStatus.configured
-                    ? "text-neutral-500"
-                    : "text-amber-800/80",
+                  : "text-amber-800/80",
               )}
             >
               {emailStatus.live
-                ? "Live on this deployment. Staff receive mail for the events you leave on below."
-                : emailStatus.configured
-                  ? "Provider is configured. Local testing still has to be enabled to send."
-                  : "Email is not configured on this deployment yet. Add BREVO_API_KEY and BREVO_SENDER_EMAIL on Vercel Production."}
+                ? emailStatus.via === "smtp"
+                  ? "Live on this deployment via SMTP. Staff receive mail for the events you leave on below."
+                  : "Live on this deployment. Staff receive mail for the events you leave on below."
+                : emailStatus.blockReason
+                  ? emailStatus.blockReason
+                  : emailStatus.configured
+                    ? "Provider is configured. Local testing still has to be enabled to send."
+                    : "Email is not configured on this deployment yet. Add BREVO_API_KEY and BREVO_SENDER_EMAIL on Vercel Production."}
             </p>
             <SettingsDivider />
           </>

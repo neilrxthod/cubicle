@@ -56,6 +56,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactCompiler: true,
   compress: true,
+  serverExternalPackages: ["nodemailer"],
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [

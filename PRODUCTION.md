@@ -235,14 +235,29 @@ Sending is awaited on `/api/notifications`. The booking and issue UI already fir
 
 Without the API key, `/api/notifications` returns `{ skipped: true }` and no mail leaves the platform.
 
-**If Brevo returns 401 “unrecognised IP address”:** Cubicle is on Vercel, so outbound IPs change (e.g. `18.212.x.x`). Authorized-IP blocking cannot stay on for API keys.
+**If Brevo returns 401 “unrecognised IP address”:** Cubicle is on Vercel, so outbound IPs change (e.g. `18.212.x.x`). REST API-key IP blocking cannot stay on unless you also send via SMTP.
+
+Pick one:
+
+**A. Turn off API IP blocking (fastest)**
 
 1. Brevo → account menu → **Settings → Security → Authorized IPs**
 2. Under **Blocking unauthorized IP addresses**, **Deactivate for API**
 3. Confirm **Deactivate blocking**
 4. Retry **Send test** in Cubicle Settings
 
-The app will try to allowlist the blocked IP and resend once. That grant often fails too — the authorize call comes from the same Vercel address. Turning blocking off is the durable fix.
+**B. Send through SMTP instead (survives rotating Vercel IPs)**
+
+SMTP IP blocking is **off by default** and independent of API-key blocking.
+
+1. Brevo → [SMTP & API](https://app.brevo.com/settings/keys/smtp) → **SMTP** tab
+2. Copy **SMTP login** and generate an **SMTP key** (`xsmtpsib-…`, not the REST `xkeysib-…` key)
+3. Vercel → Production env:
+   - `BREVO_SMTP_USER=` (the SMTP login)
+   - `BREVO_SMTP_KEY=` (the SMTP key)
+4. Redeploy, then **Send test**
+
+The REST client still tries to allowlist a blocked IP and resend once. That grant usually fails from Vercel. SMTP fallback runs automatically when those two env vars are set.
 
 ## BIMI (official logo next to Brevo emails)
 
