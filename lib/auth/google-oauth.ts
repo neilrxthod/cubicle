@@ -1,29 +1,24 @@
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  GOOGLE_OAUTH_NEXT_COOKIE,
+  GOOGLE_OAUTH_STATE_COOKIE,
+  GOOGLE_OAUTH_VERIFIER_COOKIE,
+  isGoogleOAuthConfigured,
+} from "@/lib/auth/google-oauth-guard";
 import { GOOGLE_HOSTED_DOMAIN } from "@/lib/auth/school-domain";
 import { SUPABASE_SAME_ORIGIN_PROXY_PREFIX } from "@/lib/auth/oauth-proxy";
 import { finalizeSchoolLogin } from "@/lib/auth/finalize-login";
 import { createClient } from "@/lib/supabase/server";
 
-const STATE_COOKIE = "cubicle_ga_state";
-const VERIFIER_COOKIE = "cubicle_ga_verifier";
-const NEXT_COOKIE = "cubicle_ga_next";
+export { isGoogleOAuthConfigured, isOurGoogleOAuthCallback } from "@/lib/auth/google-oauth-guard";
+
+const STATE_COOKIE = GOOGLE_OAUTH_STATE_COOKIE;
+const VERIFIER_COOKIE = GOOGLE_OAUTH_VERIFIER_COOKIE;
+const NEXT_COOKIE = GOOGLE_OAUTH_NEXT_COOKIE;
 const COOKIE_MAX_AGE = 10 * 60;
 
 export function googleOAuthRedirectUri(origin: string): string {
   return `${origin}${SUPABASE_SAME_ORIGIN_PROXY_PREFIX}/auth/v1/callback`;
-}
-
-export function isGoogleOAuthConfigured(): boolean {
-  return Boolean(
-    process.env.GOOGLE_OAUTH_CLIENT_ID?.trim() &&
-      process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim(),
-  );
-}
-
-export function isOurGoogleOAuthCallback(request: NextRequest): boolean {
-  if (!isGoogleOAuthConfigured()) return false;
-  if (!request.nextUrl.pathname.endsWith("/auth/v1/callback")) return false;
-  return Boolean(request.cookies.get(STATE_COOKIE)?.value);
 }
 
 function cookieBase(secure: boolean) {

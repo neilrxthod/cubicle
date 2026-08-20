@@ -1,7 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isOurGoogleOAuthCallback } from "@/lib/auth/google-oauth";
+import { isOurGoogleOAuthCallback } from "@/lib/auth/google-oauth-guard";
 import { proxySupabaseAuth } from "@/lib/auth/oauth-supabase-proxy";
 import { updateSession } from "@/lib/supabase/middleware";
+
+/** Handshake routes set their own session. Do not call getUser() first. */
+function isAuthHandshake(pathname: string) {
+  return pathname === "/auth/google" || pathname === "/auth/callback";
+}
+
+function passthrough(request: NextRequest) {
+  return NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
+}
 
 export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
@@ -21,6 +34,10 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/callback";
     return NextResponse.redirect(url);
+  }
+
+  if (isAuthHandshake(pathname)) {
+    return passthrough(request);
   }
 
   return updateSession(request);
