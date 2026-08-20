@@ -1,4 +1,4 @@
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { format, parseISO } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -14,6 +14,7 @@ import {
   buildBookingRelocatedEmail,
   buildDevTestEmail,
   buildIssueReportEmail,
+  buildSelfTestEmail,
   buildShareInviteEmail,
   buildSwapExchangeEmail,
   buildSwapHandoffEmail,
@@ -35,15 +36,24 @@ type RequestBody = NotificationPayload & {
   localSink?: LocalEmailSink;
 };
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+const PROFILE_MAIL_SELECT =
+  "id, email, name, role, notify_email, notify_issues";
+const PROFILE_MAIL_SELECT_FALLBACK = "id, email, name, role";
 
 /**
  * Authenticated (production) / local-sink notification dispatch via Brevo.
  *
  * Local: default no-send. Only when Settings testing toggle is on and a sink
  * email is set — and only if the server itself is in local runtime.
- * Production: real recipients; client sink is ignored. Dispatch runs after
- * the HTTP response so booking flows are never blocked on SMTP.
+ * Production: real recipients; client sink is ignored.
+ *
+ * Dispatch is awaited here. Booking / issue UI already fires this request in
+ * the background (`keepalive` fetch), so waiting on Brevo does not block staff
+ * actions — and `after()` was dropping the send when the client aborted.
  */
 export async function GET() {
   return NextResponse.json({
@@ -136,14 +146,26 @@ export async function POST(request: Request) {
     );
   }
 
-  after(async () => {
-    try {
-      await dispatchProduction(admin, actorId!, body);
-    } catch (err) {
-      console.error("[notifications]", err);
+  try {
+    const result = await dispatchProduction(admin, actorId!, body);
+    if (!result.ok) {
+      console.error("[notifications] dispatch failed", body.type, result);
+    } else if ("sent" in result) {
+      const sent = result.sent ?? 0;
+      if (sent === 0) {
+        console.warn("[notifications] dispatch sent 0", body.type, result);
+      } else {
+        console.info("[notifications] sent", body.type, sent);
+      }
     }
-  });
-  return NextResponse.json({ ok: true, queued: true });
+    return NextResponse.json(result);
+  } catch (err) {
+    console.error("[notifications]", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to send." },
+      { status: 500 },
+    );
+  }
 }
 
 function formatDateLabel(date: string): string {
@@ -192,6 +214,9 @@ async function dispatchLocalSink(
   if (body.type === "swap_invite_update") {
     return sendSwapInviteUpdateTo(sink, body, true);
   }
+  if (body.type === "self_test") {
+    return sendSelfTestTo(sink, true);
+  }
   return { error: "Unknown notification type.", ok: false as const };
 }
 
@@ -224,26 +249,95 @@ async function dispatchProduction(
   if (body.type === "swap_invite_update") {
     return handleSwapInviteUpdate(admin, body);
   }
+  if (body.type === "self_test") {
+    return handleSelfTest(admin, actorId);
+  }
   return { error: "Unknown notification type.", ok: false as const };
+}
+
+function missingNotifyColumnError(
+  error: { message?: string; code?: string } | null | undefined,
+): boolean {
+  if (!error) return false;
+  const hay = `${error.code ?? ""} ${error.message ?? ""}`.toLowerCase();
+  return (
+    hay.includes("notify_email") ||
+    hay.includes("notify_issues") ||
+    hay.includes("pgrst204") ||
+    hay.includes("42703")
+  );
+}
+
+function toMailRow(data: Record<string, unknown>): ProfileMailRow {
+  return {
+    id: String(data.id ?? ""),
+    email: typeof data.email === "string" ? data.email : null,
+    name: typeof data.name === "string" ? data.name : null,
+    role: typeof data.role === "string" ? data.role : null,
+    notify_email:
+      typeof data.notify_email === "boolean" ? data.notify_email : true,
+    notify_issues:
+      typeof data.notify_issues === "boolean" ? data.notify_issues : true,
+  };
+}
+
+async function selectMailProfiles(
+  admin: ReturnType<typeof createAdminClient>,
+  filters: { id?: string; role?: string },
+): Promise<ProfileMailRow[]> {
+  const run = (columns: string) => {
+    let query = admin.from("profiles").select(columns);
+    if (filters.id) query = query.eq("id", filters.id);
+    if (filters.role) query = query.eq("role", filters.role);
+    return query;
+  };
+
+  let { data, error } = await run(PROFILE_MAIL_SELECT);
+  if (error && missingNotifyColumnError(error)) {
+    console.warn(
+      "[notifications] notify_* columns missing — run supabase/notify-email.sql",
+    );
+    ({ data, error } = await run(PROFILE_MAIL_SELECT_FALLBACK));
+  }
+  if (error) {
+    console.error("[notifications] load profiles", error.message);
+    return [];
+  }
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map(toMailRow);
+}
+
+async function emailFromAuthUser(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+): Promise<string | null> {
+  try {
+    const { data, error } = await admin.auth.admin.getUserById(userId);
+    if (error || !data.user?.email?.includes("@")) return null;
+    return data.user.email;
+  } catch (err) {
+    console.error("[notifications] auth email lookup", err);
+    return null;
+  }
 }
 
 async function loadMailUser(
   admin: ReturnType<typeof createAdminClient>,
   userId: string,
+  opts?: { ignorePref?: boolean },
 ): Promise<{ email: string; name?: string } | null> {
-  const { data } = await admin
-    .from("profiles")
-    .select("id, email, name, notify_email")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!data) return null;
-  const row = data as {
-    email: string | null;
-    name: string | null;
-    notify_email: boolean | null;
-  };
-  if (row.notify_email === false || !row.email?.includes("@")) return null;
-  return { email: row.email, name: row.name ?? undefined };
+  const row = (await selectMailProfiles(admin, { id: userId }))[0];
+  if (!row) {
+    const email = await emailFromAuthUser(admin, userId);
+    if (!email) return null;
+    return { email };
+  }
+  if (row.notify_email === false && !opts?.ignorePref) return null;
+  let email = row.email;
+  if (!email?.includes("@")) {
+    email = await emailFromAuthUser(admin, userId);
+  }
+  if (!email?.includes("@")) return null;
+  return { email, name: row.name ?? undefined };
 }
 
 async function loadAdminRecipients(
@@ -251,15 +345,8 @@ async function loadAdminRecipients(
   excludeIds: string[] = [],
 ): Promise<Array<{ email: string; name?: string }>> {
   const exclude = new Set(excludeIds);
-  const { data, error } = await admin
-    .from("profiles")
-    .select("id, email, name, role, notify_email, notify_issues")
-    .eq("role", "admin");
-  if (error) {
-    console.error("[notifications] load admins", error.message);
-    return [];
-  }
-  return ((data ?? []) as ProfileMailRow[])
+  const rows = await selectMailProfiles(admin, { role: "admin" });
+  return rows
     .filter(
       (row) =>
         !exclude.has(row.id) &&
@@ -533,6 +620,43 @@ async function sendDevTest(email: string) {
   return { ok: true, sent: result.skipped ? 0 : 1, skipped: result.skipped };
 }
 
+async function sendSelfTestTo(
+  to: { email: string; name?: string },
+  localTesting?: boolean,
+) {
+  const built = localTesting
+    ? buildDevTestEmail({ sinkEmail: to.email })
+    : buildSelfTestEmail({ name: to.name });
+  const subject = localTesting ? localSubject(built.subject) : built.subject;
+  const result = await sendEmail({
+    to,
+    subject,
+    html: built.html,
+    text: built.text,
+    tags: ["self-test", ...(localTesting ? ["local-dev"] : [])],
+  });
+  if (!result.ok) return { ok: false as const, error: result.error };
+  return {
+    ok: true as const,
+    sent: result.skipped ? 0 : 1,
+    skipped: result.skipped,
+  };
+}
+
+async function handleSelfTest(
+  admin: ReturnType<typeof createAdminClient>,
+  actorId: string,
+) {
+  const user = await loadMailUser(admin, actorId, { ignorePref: true });
+  if (!user) {
+    return {
+      ok: false as const,
+      error: "Your account has no email address on file.",
+    };
+  }
+  return sendSelfTestTo(user, false);
+}
+
 async function sendIssueEmail(opts: {
   recipients: Array<{ email: string; name?: string }>;
   payload: Extract<NotificationPayload, { type: "issue_reported" }>;
@@ -641,17 +765,8 @@ async function handleIssueReported(
     cartName = (cart as { name?: string } | null)?.name?.trim() || "Cart";
   }
 
-  const { data: admins, error } = await admin
-    .from("profiles")
-    .select("id, email, name, role, notify_email, notify_issues")
-    .eq("role", "admin");
-
-  if (error) {
-    console.error("[notifications] load admins", error.message);
-    return { ok: false, error: "Could not load recipients." };
-  }
-
-  const recipients = ((admins ?? []) as ProfileMailRow[])
+  const admins = await selectMailProfiles(admin, { role: "admin" });
+  const recipients = admins
     .filter(
       (row) =>
         row.id !== actorId &&
@@ -679,23 +794,13 @@ async function handleShareInvite(
     return { ok: false, error: "Invalid invitee." };
   }
 
-  const { data: invitee, error } = await admin
-    .from("profiles")
-    .select("id, email, name, role, notify_email, notify_issues")
-    .eq("id", inviteeId)
-    .maybeSingle();
-
-  if (error || !invitee) {
-    return { ok: false, error: "Invitee not found." };
-  }
-
-  const row = invitee as ProfileMailRow;
-  if (row.notify_email === false || !row.email?.includes("@")) {
+  const user = await loadMailUser(admin, inviteeId);
+  if (!user) {
     return { ok: true, sent: 0, skipped: true };
   }
 
   return sendShareEmail({
-    to: { email: row.email!, name: row.name ?? undefined },
+    to: user,
     payload,
   });
 }

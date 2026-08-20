@@ -97,6 +97,8 @@ export async function sendEmail(
   }
 
   try {
+    // Explicit timeout so Next.js does not bind this to the incoming
+    // request AbortSignal (that aborts as soon as the HTTP response is sent).
     const res = await fetch(BREVO_SEND_URL, {
       method: "POST",
       headers: {
@@ -105,6 +107,8 @@ export async function sendEmail(
         "api-key": apiKey,
       },
       body: JSON.stringify(body),
+      cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
     });
 
     if (!res.ok) {

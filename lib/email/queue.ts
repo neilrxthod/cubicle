@@ -34,6 +34,11 @@ export type DevTestNotificationPayload = {
   type: "dev_test";
 };
 
+/** Signed-in staff asked Settings to send a test to their own inbox. */
+export type SelfTestNotificationPayload = {
+  type: "self_test";
+};
+
 /** Admin moved a booking to a different cart (maintenance pause or manual reassign). */
 export type BookingRelocatedPayload = {
   type: "booking_relocated";
@@ -109,6 +114,7 @@ export type NotificationPayload =
   | IssueNotificationPayload
   | ShareInviteNotificationPayload
   | DevTestNotificationPayload
+  | SelfTestNotificationPayload
   | BookingRelocatedPayload
   | BookingCancelledPayload
   | SwapExchangePayload
@@ -142,9 +148,22 @@ export function queueNotification(payload: NotificationPayload): void {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
     credentials: "same-origin",
-  }).catch((err) => {
-    console.error("[notifications] queue failed", err);
-  });
+    keepalive: true,
+    cache: "no-store",
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error(
+          "[notifications] queue http",
+          res.status,
+          text.slice(0, 200),
+        );
+      }
+    })
+    .catch((err) => {
+      console.error("[notifications] queue failed", err);
+    });
 }
 
 /**
@@ -175,6 +194,54 @@ export async function sendLocalTestEmail(): Promise<{
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ type: "dev_test", localSink }),
       credentials: "same-origin",
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+      skipped?: boolean;
+      reason?: string;
+      sent?: number;
+    };
+    if (!res.ok) {
+      return { ok: false, error: data.error ?? `HTTP ${res.status}` };
+    }
+    return {
+      ok: data.ok !== false,
+      error: data.error,
+      skipped: data.skipped,
+      reason: data.reason,
+      sent: data.sent,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Network error",
+    };
+  }
+}
+
+/**
+ * Production “send me a test email” from Settings.
+ * Delivers to the signed-in staff inbox (not a local sink).
+ */
+export async function sendProductionTestEmail(): Promise<{
+  ok: boolean;
+  error?: string;
+  skipped?: boolean;
+  reason?: string;
+  sent?: number;
+}> {
+  if (typeof window === "undefined") {
+    return { ok: false, error: "Browser only." };
+  }
+
+  try {
+    const res = await fetch("/api/notifications", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "self_test" }),
+      credentials: "same-origin",
+      cache: "no-store",
     });
     const data = (await res.json().catch(() => ({}))) as {
       ok?: boolean;

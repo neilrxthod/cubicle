@@ -4,6 +4,12 @@
 --
 -- Dashboard -> SQL Editor -> paste -> Run.
 
+alter table public.profiles
+  add column if not exists notify_email boolean not null default true;
+
+alter table public.profiles
+  add column if not exists notify_issues boolean not null default true;
+
 alter table public.carts
   add column if not exists laptop_codes text[] not null default '{}';
 

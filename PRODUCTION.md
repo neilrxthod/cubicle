@@ -220,7 +220,7 @@ Staff email is **on in production** whenever the three Brevo vars above are set 
 | Swap / handoff request or decision | Owner or requester | Settings → Schedule email |
 | Booking moved or cancelled by admin | That teacher | Settings → Schedule email |
 
-Sending is fire-and-forget (`after()` on `/api/notifications`). Booking and issue flows never wait on Brevo.
+Sending is awaited on `/api/notifications`. The booking and issue UI already fires that request in the background, so staff actions are not blocked on Brevo.
 
 ### Turn it on (if mail is still silent)
 
@@ -231,7 +231,7 @@ Sending is fire-and-forget (`after()` on `/api/notifications`). Booking and issu
 2. Redeploy Production (env changes do not apply to an existing deployment).
 3. In Supabase SQL Editor, run `supabase/notify-email.sql` if an older project is missing `notify_email` / `notify_issues`.
 4. Settings → Email notifications should read **Live on this deployment**.
-5. Report a test issue or send a share invite from a real staff account.
+5. Use **Send me a test email**, or report a test issue / send a share invite from a real staff account.
 
 Without the API key, `/api/notifications` returns `{ skipped: true }` and no mail leaves the platform.
 
@@ -329,6 +329,7 @@ Build must exit 0. Proxy (session refresh) should appear in the build output.
 - [ ] Staff: add allowlist email; permanent shows blue tick
 - [ ] Settings: profile photo/name save; booking policy (admin); teaching schedule (teacher)
 - [ ] Settings → Email notifications shows **Live on this deployment**
+- [ ] Settings → **Send me a test email** arrives from `noreply-mail@mycubicle.app`
 - [ ] Share invite or issue report delivers mail from `noreply-mail@mycubicle.app`
 - [ ] Phone (iOS / Android): Home / Scan / Profile shell; admins see Inventory tools
 - [ ] Sign out works
@@ -366,3 +367,4 @@ Build must exit 0. Proxy (session refresh) should appear in the build output.
 | Double booking still possible | Unique index on bookings must exist (`schema.sql`) |
 | Phone never opens the camera | Grant camera permission; CSP / Permissions-Policy allow `camera=(self)` |
 | QR scan does nothing | Confirm `cart-laptop-codes.sql` and that the printed payload is a Cubicle label |
+| Settings says Live but no mail arrives | Redeploy after the notifications route change; run `notify-email.sql` or `repair-live.sql`; check Brevo logs and staff notify toggles; try **Send me a test email** |

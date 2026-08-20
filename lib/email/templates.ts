@@ -365,6 +365,46 @@ export function buildDevTestEmail(input: {
   return { subject, html, text };
 }
 
+export function buildSelfTestEmail(input: {
+  name?: string;
+}): { subject: string; html: string; text: string } {
+  const subject = "Cubicle email is working";
+  const greeting = input.name?.trim() || "there";
+  const bodyHtml = `
+    <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#404040;">
+      Hi ${escapeHtml(greeting)} — this is a test from Cubicle. If you’re
+      reading this, production notifications can reach your inbox.
+    </p>
+    ${emailMetaTable([
+      { label: "Mode", value: "Production" },
+      { label: "Provider", value: "Brevo" },
+    ])}
+    <p style="margin:18px 0 0;font-size:13px;line-height:1.5;color:#737373;">
+      You’ll still only get schedule and issue mail when those toggles are on
+      in Settings.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: "Cubicle can deliver mail to this inbox",
+    eyebrow: "Email test",
+    title: "Test notification",
+    lead: "Staff notifications from this deployment are reaching you.",
+    bodyHtml,
+    cta: { label: "Open settings", href: `${SITE_ORIGIN}/settings` },
+  });
+
+  const text = plainTextFromLines([
+    subject,
+    "",
+    "This is a test from Cubicle. Production notifications can reach this inbox.",
+    "",
+    `Settings: ${SITE_ORIGIN}/settings`,
+  ]);
+
+  return { subject, html, text };
+}
+
 function whenLabel(dateLabel: string, period: string): string {
   return [dateLabel, period].filter(Boolean).join(" · ") || "—";
 }
