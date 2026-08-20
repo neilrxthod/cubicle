@@ -30,9 +30,24 @@ export async function getEmailDispatchStatus(): Promise<EmailDispatchStatus> {
     };
   }
 
-  const probe = configured
-    ? await probeBrevo()
-    : { reachable: false, via: "none" as const, blockReason: undefined };
+  let probe: {
+    reachable: boolean;
+    via: "rest" | "smtp" | "none";
+    blockReason?: string;
+  } = { reachable: false, via: "none" };
+
+  if (configured) {
+    try {
+      probe = await probeBrevo();
+    } catch {
+      probe = {
+        reachable: false,
+        via: "none",
+        blockReason:
+          "Could not reach Brevo from this host. If Authorized IP blocking is on for API keys, turn it off, or add BREVO_SMTP_USER and BREVO_SMTP_KEY.",
+      };
+    }
+  }
 
   return {
     configured,

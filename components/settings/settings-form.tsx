@@ -125,9 +125,23 @@ export function SettingsForm({
 
   useEffect(() => {
     let cancelled = false;
-    void getEmailDispatchStatus().then((next) => {
-      if (!cancelled) setEmailStatus(next);
-    });
+    void getEmailDispatchStatus()
+      .then((next) => {
+        if (!cancelled) setEmailStatus(next);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEmailStatus({
+            configured: true,
+            live: false,
+            mode: "production",
+            reachable: false,
+            via: "none",
+            blockReason:
+              "Could not check mail status. Open Settings again, or turn off Brevo Authorized IP blocking for API keys.",
+          });
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -543,24 +557,51 @@ export function SettingsForm({
       <SettingsSection id="notifications" title="Email notifications">
         {emailStatus ? (
           <>
-            <p
-              className={cn(
-                "px-4 py-3 text-[12.5px] leading-relaxed sm:px-5",
-                emailStatus.live
-                  ? "text-neutral-500"
-                  : "text-amber-800/80",
-              )}
-            >
-              {emailStatus.live
-                ? emailStatus.via === "smtp"
+            {emailStatus.live ? (
+              <p className="px-4 py-3 text-[12.5px] leading-relaxed text-neutral-500 sm:px-5">
+                {emailStatus.via === "smtp"
                   ? "Live on this deployment via SMTP. Staff receive mail for the events you leave on below."
-                  : "Live on this deployment. Staff receive mail for the events you leave on below."
-                : emailStatus.blockReason
-                  ? emailStatus.blockReason
-                  : emailStatus.configured
-                    ? "Provider is configured. Local testing still has to be enabled to send."
-                    : "Email is not configured on this deployment yet. Add BREVO_API_KEY and BREVO_SENDER_EMAIL on Vercel Production."}
-            </p>
+                  : "Live on this deployment. Staff receive mail for the events you leave on below."}
+              </p>
+            ) : emailStatus.mode === "production" && emailStatus.configured ? (
+              <div className="border-b border-amber-200/80 bg-amber-50/80 px-4 py-3.5 sm:px-5">
+                <p className="text-[13px] font-medium tracking-[-0.01em] text-amber-950">
+                  Mail is blocked
+                </p>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-amber-900/85">
+                  {emailStatus.blockReason ||
+                    "Vercel’s address is not on Brevo’s Authorized IPs list, so API sends are rejected."}
+                </p>
+                <ol className="mt-2 list-decimal space-y-1 pl-4 text-[12.5px] leading-relaxed text-amber-900/85">
+                  <li>
+                    Open{" "}
+                    <a
+                      href="https://app.brevo.com/security/authorised_ips"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium underline underline-offset-2"
+                    >
+                      Brevo → Authorized IPs
+                    </a>
+                  </li>
+                  <li>
+                    Under Blocking unauthorized IP addresses, choose{" "}
+                    <span className="font-medium">Deactivate for API</span>
+                  </li>
+                  <li>Return here and send a test</li>
+                </ol>
+              </div>
+            ) : emailStatus.configured ? (
+              <p className="px-4 py-3 text-[12.5px] leading-relaxed text-neutral-500 sm:px-5">
+                Provider is configured. Local testing still has to be enabled to
+                send.
+              </p>
+            ) : (
+              <p className="px-4 py-3 text-[12.5px] leading-relaxed text-amber-800/80 sm:px-5">
+                Email is not configured on this deployment yet. Add
+                BREVO_API_KEY and BREVO_SENDER_EMAIL on Vercel Production.
+              </p>
+            )}
             <SettingsDivider />
           </>
         ) : null}
