@@ -11,28 +11,28 @@ export const LEGAL_LINKS = [
   {
     href: "/legal/terms",
     label: "Terms & Conditions",
-    shortLabel: "Terms",
+    shortLabel: "Terms & Conditions",
     description:
       "Binding terms and conditions for authorized school staff using Cubicle.",
   },
   {
     href: "/legal/privacy",
     label: "Privacy Policy",
-    shortLabel: "Privacy",
+    shortLabel: "Privacy Policy",
     description:
       "What personal information we process, why, how long, and your rights.",
   },
   {
     href: "/legal/security",
     label: "Security & Data Safety",
-    shortLabel: "Security",
+    shortLabel: "Security & Data Safety",
     description:
       "Authentication, access control, infrastructure, and incident handling.",
   },
   {
     href: "/legal/acceptable-use",
     label: "Acceptable Use Policy",
-    shortLabel: "Acceptable use",
+    shortLabel: "Acceptable Use Policy",
     description:
       "Permitted and prohibited use of bookings, inventory, and school data.",
   },

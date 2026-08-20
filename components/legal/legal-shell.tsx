@@ -138,7 +138,7 @@ export function LegalShell({
                   href={link.href}
                   className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-neutral-400 transition-colors duration-200 hover:text-neutral-950"
                 >
-                  {link.shortLabel}
+                  {link.label}
                 </Link>
               </span>
             ))}

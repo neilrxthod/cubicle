@@ -47,7 +47,7 @@ export function DashboardFrame({
           </p>
           <nav
             aria-label="Legal"
-            className="flex min-w-0 flex-wrap items-center justify-center gap-x-0 sm:justify-end"
+            className="flex min-w-0 flex-wrap items-center justify-center gap-x-0 gap-y-2 sm:justify-end"
           >
             {LEGAL_LINKS.map((link, index) => (
               <span key={link.href} className="inline-flex items-center">
@@ -59,9 +59,9 @@ export function DashboardFrame({
                 ) : null}
                 <Link
                   href={link.href}
-                  className="text-[10.5px] font-normal uppercase tracking-[0.14em] text-neutral-400 transition-colors duration-200 hover:text-neutral-950"
+                  className="text-[10.5px] font-normal uppercase tracking-[0.12em] text-neutral-400 transition-colors duration-200 hover:text-neutral-950"
                 >
-                  {link.shortLabel}
+                  {link.label}
                 </Link>
               </span>
             ))}
