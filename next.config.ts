@@ -48,10 +48,6 @@ const securityHeaders = [
   },
 ];
 
-/** Real Supabase project origin — used only server-side for rewrites. */
-const supabaseOrigin =
-  process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "").trim() || "";
-
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactCompiler: true,
@@ -123,19 +119,10 @@ const nextConfig: NextConfig = {
     ];
   },
   /**
-   * Proxy Supabase through this app so OAuth authorize never puts
-   * `*.supabase.co` in the staff browser address bar.
-   * Client navigates to `/__supabase/auth/v1/authorize…`; Next fetches upstream.
+   * Do not rewrite `/__supabase` to `*.supabase.co` here. An external
+   * rewrite can 307 the tab onto the project host, which Chrome treats as
+   * bounce tracking. `proxy.ts` fetches Supabase server-side instead.
    */
-  async rewrites() {
-    if (!supabaseOrigin) return [];
-    return [
-      {
-        source: "/__supabase/:path*",
-        destination: `${supabaseOrigin}/:path*`,
-      },
-    ];
-  },
 };
 
 export default nextConfig;

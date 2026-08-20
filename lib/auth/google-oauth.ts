@@ -7,6 +7,10 @@ import {
 } from "@/lib/auth/google-oauth-guard";
 import { GOOGLE_HOSTED_DOMAIN } from "@/lib/auth/school-domain";
 import { SUPABASE_SAME_ORIGIN_PROXY_PREFIX } from "@/lib/auth/oauth-proxy";
+import {
+  isBrowserSafeOAuthRedirect,
+  rewriteGoogleRedirectUri,
+} from "@/lib/auth/oauth-supabase-proxy";
 import { finalizeSchoolLogin } from "@/lib/auth/finalize-login";
 import { createClient } from "@/lib/supabase/server";
 
@@ -124,23 +128,14 @@ async function startSupabaseGoogleOAuth(
       `${origin}/login?error=${encodeURIComponent("auth_failed")}`,
     );
   }
-  try {
-    const target = new URL(data.url);
-    const project = process.env.NEXT_PUBLIC_SUPABASE_URL
-      ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL)
-      : null;
-    if (
-      project &&
-      target.hostname.toLowerCase() === project.hostname.toLowerCase()
-    ) {
-      return NextResponse.redirect(
-        `${origin}${SUPABASE_SAME_ORIGIN_PROXY_PREFIX}${target.pathname}${target.search}`,
-      );
-    }
-  } catch {
-    // fall through
+  const project = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "").trim() ?? "";
+  const target = rewriteGoogleRedirectUri(data.url, origin, project);
+  if (!isBrowserSafeOAuthRedirect(target, origin)) {
+    return NextResponse.redirect(
+      `${origin}/login?error=${encodeURIComponent("auth_failed")}`,
+    );
   }
-  return NextResponse.redirect(data.url);
+  return NextResponse.redirect(target);
 }
 
 export async function completeGoogleOAuth(

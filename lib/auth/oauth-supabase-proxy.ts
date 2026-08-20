@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isGoogleOAuthConfigured } from "@/lib/auth/google-oauth-guard";
 import { SUPABASE_SAME_ORIGIN_PROXY_PREFIX } from "@/lib/auth/oauth-proxy";
 
 const HOP_BY_HOP = new Set([
@@ -29,9 +30,25 @@ function isGoogleAccountsHost(hostname: string): boolean {
   );
 }
 
+function sameHost(a: string, b: string) {
+  return a.toLowerCase() === b.toLowerCase();
+}
+
+function isSupabaseProjectHost(hostname: string, projectOrigin: string) {
+  try {
+    return sameHost(hostname, new URL(projectOrigin).hostname);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Point Google's OAuth redirect_uri at this app so the account picker
- * shows mycubicle.app instead of <ref>.supabase.co.
+ * shows mycubicle.app instead of <ref>.supabase.co, and so Chrome does
+ * not treat supabase.co as a bounce-tracking hop.
+ *
+ * Only rewrite Google's redirect_uri when first-party Google OAuth is
+ * configured — otherwise Supabase cannot exchange the code.
  */
 export function rewriteGoogleRedirectUri(
   location: string,
@@ -40,28 +57,50 @@ export function rewriteGoogleRedirectUri(
 ): string {
   let url: URL;
   try {
-    url = new URL(location);
+    url = new URL(location, publicOrigin);
   } catch {
     return location;
   }
 
-  // Never rewrite Google's redirect_uri. That code is bound to the URI
-  // Supabase registered (*.supabase.co). Changing it makes Google issue a
-  // code Supabase cannot exchange → /login?error=missing_code.
   if (isGoogleAccountsHost(url.hostname)) {
-    return location;
-  }
-
-  try {
-    const project = new URL(projectOrigin);
-    if (url.hostname.toLowerCase() === project.hostname.toLowerCase()) {
-      return `${publicOrigin}${SUPABASE_SAME_ORIGIN_PROXY_PREFIX}${url.pathname}${url.search}${url.hash}`;
+    if (!isGoogleOAuthConfigured() || !projectOrigin) {
+      return url.toString();
     }
-  } catch {
-    // keep original
+    const raw = url.searchParams.get("redirect_uri");
+    if (!raw) return url.toString();
+    try {
+      const redirect = new URL(raw);
+      if (isSupabaseProjectHost(redirect.hostname, projectOrigin)) {
+        url.searchParams.set(
+          "redirect_uri",
+          `${publicOrigin}${SUPABASE_SAME_ORIGIN_PROXY_PREFIX}${redirect.pathname}`,
+        );
+      }
+    } catch {
+      return url.toString();
+    }
+    return url.toString();
   }
 
-  return location;
+  if (isSupabaseProjectHost(url.hostname, projectOrigin)) {
+    return `${publicOrigin}${SUPABASE_SAME_ORIGIN_PROXY_PREFIX}${url.pathname}${url.search}${url.hash}`;
+  }
+
+  return url.toString();
+}
+
+/** True when a 302 target will not put *.supabase.co in the tab. */
+export function isBrowserSafeOAuthRedirect(
+  location: string,
+  publicOrigin: string,
+): boolean {
+  try {
+    const url = new URL(location, publicOrigin);
+    if (url.origin === new URL(publicOrigin).origin) return true;
+    return isGoogleAccountsHost(url.hostname);
+  } catch {
+    return false;
+  }
 }
 
 function rewriteSetCookie(value: string): string {
@@ -70,7 +109,8 @@ function rewriteSetCookie(value: string): string {
 
 /**
  * Forward /__supabase/* to the Supabase project (authorize hop).
- * Do not change Google's redirect_uri — that breaks the code exchange.
+ * Location headers to the project host are rewritten onto this origin so
+ * the browser never visits *.supabase.co.
  */
 export async function proxySupabaseAuth(
   request: NextRequest,
