@@ -374,3 +374,62 @@ export function sendEmailBackground(input: SendEmailInput): void {
     }
   });
 }
+
+export type EmailDeliveryPhase = "on_the_way" | "delivered" | "failed";
+
+const FAILED_EVENTS = new Set([
+  "hardBounce",
+  "blocked",
+  "invalid",
+  "error",
+  "spam",
+]);
+
+/**
+ * Live transactional status for a Brevo messageId.
+ * Empty/unknown events stay “on the way” — delivery reports lag the send.
+ */
+export async function getEmailDeliveryStatus(messageId: string): Promise<{
+  phase: EmailDeliveryPhase;
+  event?: string;
+}> {
+  const { apiKey } = getConfig();
+  const id = messageId.trim();
+  if (!apiKey || !id) return { phase: "on_the_way" };
+
+  const url = new URL("https://api.brevo.com/v3/smtp/statistics/events");
+  url.searchParams.set("messageId", id);
+  url.searchParams.set("limit", "50");
+
+  try {
+    const res = await fetch(url, {
+      headers: brevoHeaders(apiKey),
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.error("[brevo] events", res.status, errText.slice(0, 200));
+      return { phase: "on_the_way" };
+    }
+    const data = (await res.json().catch(() => ({}))) as {
+      events?: Array<{ event?: string }>;
+    };
+    const events = data.events ?? [];
+    for (const row of events) {
+      const event = String(row.event ?? "");
+      if (event === "delivered") return { phase: "delivered", event };
+    }
+    for (const row of events) {
+      const event = String(row.event ?? "");
+      if (FAILED_EVENTS.has(event)) return { phase: "failed", event };
+    }
+    return { phase: "on_the_way", event: events[0]?.event };
+  } catch (err) {
+    console.error(
+      "[brevo] events error",
+      err instanceof Error ? err.message : "Network error",
+    );
+    return { phase: "on_the_way" };
+  }
+}

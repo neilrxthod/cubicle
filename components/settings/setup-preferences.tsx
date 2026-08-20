@@ -296,16 +296,14 @@ function AdminBookingWindow({ user }: { user: SessionUser }) {
           disabled={!dirty || pending}
           onClick={handleSave}
           className={cn(
-            "inline-flex h-8 w-[7.25rem] shrink-0 items-center justify-center gap-1.5 rounded-full",
-            "bg-neutral-950 text-[12.5px] font-medium text-white",
+            "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full px-3.5",
+            "bg-neutral-950 text-[12.5px] font-medium whitespace-nowrap text-white",
             "transition-opacity hover:opacity-90 disabled:opacity-30",
           )}
         >
-          <span className="inline-flex size-3 shrink-0 items-center justify-center">
-            {pending ? (
-              <Loader2 className="size-3 animate-spin" strokeWidth={2} />
-            ) : null}
-          </span>
+          {pending ? (
+            <Loader2 className="size-3 animate-spin" strokeWidth={2} />
+          ) : null}
           Save policy
         </button>
       </div>

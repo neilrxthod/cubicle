@@ -1,14 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Mail } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CheckCheck, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { sendTestEmail } from "@/lib/email/queue";
+import { getTestEmailDelivery, sendTestEmail } from "@/lib/email/queue";
 import { cn } from "@/lib/utils";
+
+type Status =
+  | { kind: "idle" }
+  | { kind: "sending" }
+  | { kind: "on_the_way"; messageId?: string }
+  | { kind: "delivered" }
+  | { kind: "failed"; text: string };
 
 /**
  * Delivery-test control for every signed-in staff member (desktop + phone).
+ * Bouncing dots while the message is in transit; green double-check when
+ * Brevo reports delivered. Status is polled live after send.
  */
 export function SendTestEmailButton({
   disabled,
@@ -19,40 +28,80 @@ export function SendTestEmailButton({
   appearance?: "card" | "row";
   inboxEmail?: string;
 }) {
-  const [sending, setSending] = useState(false);
-  const [message, setMessage] = useState<{
-    type: "ok" | "error";
-    text: string;
-  } | null>(null);
+  const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const busy = status.kind === "sending" || status.kind === "on_the_way";
 
-  async function onSend() {
-    if (sending || disabled) return;
-    setSending(true);
-    setMessage(null);
-    try {
-      const result = await sendTestEmail();
-      if (result.ok && (result.sent ?? 0) > 0) {
-        setMessage({
-          type: "ok",
-          text: inboxEmail
-            ? `Delivered to ${inboxEmail}`
-            : "Test notification delivered.",
-        });
+  useEffect(() => {
+    if (status.kind !== "on_the_way" || !status.messageId) return;
+    const messageId = status.messageId;
+    let cancelled = false;
+    let ticks = 0;
+
+    async function poll() {
+      ticks += 1;
+      const next = await getTestEmailDelivery(messageId);
+      if (cancelled) return;
+      if (next.phase === "delivered") {
+        setStatus({ kind: "delivered" });
         return;
       }
-      setMessage({
-        type: "error",
-        text:
-          result.error ||
-          result.reason ||
-          "Delivery failed. Try again in a moment.",
-      });
-    } finally {
-      setSending(false);
+      if (next.phase === "failed") {
+        setStatus({
+          kind: "failed",
+          text: failedCopy(next.event, inboxEmail),
+        });
+      }
     }
+
+    void poll();
+    const id = window.setInterval(() => {
+      if (ticks >= 45) {
+        window.clearInterval(id);
+        return;
+      }
+      void poll();
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [status, inboxEmail]);
+
+  async function onSend() {
+    if (busy || disabled) return;
+    setStatus({ kind: "sending" });
+    const result = await sendTestEmail();
+    if (result.ok && (result.sent ?? 0) > 0) {
+      setStatus({
+        kind: "on_the_way",
+        messageId: result.messageId,
+      });
+      return;
+    }
+    setStatus({
+      kind: "failed",
+      text:
+        result.error ||
+        result.reason ||
+        "Delivery failed. Try again in a moment.",
+    });
   }
 
-  const actionLabel = sending ? "Sending" : "Send test";
+  const actionLabel =
+    status.kind === "sending"
+      ? "Sending"
+      : status.kind === "on_the_way"
+        ? "On the way"
+        : "Send test";
+
+  const live = (
+    <LiveStatus
+      status={status}
+      inboxEmail={inboxEmail}
+      appearance={appearance}
+    />
+  );
 
   if (appearance === "row") {
     return (
@@ -68,10 +117,10 @@ export function SendTestEmailButton({
             variant="outline"
             size="sm"
             onClick={() => void onSend()}
-            disabled={sending || disabled}
+            disabled={busy || disabled}
             aria-label="Send a test notification email"
           >
-            {sending ? (
+            {status.kind === "sending" ? (
               <Spinner data-icon="inline-start" />
             ) : (
               <Mail data-icon="inline-start" />
@@ -79,18 +128,7 @@ export function SendTestEmailButton({
             {actionLabel}
           </Button>
         </div>
-        {message ? (
-          <p
-            className={cn(
-              "px-4 pb-3 text-[12px] leading-snug",
-              message.type === "ok"
-                ? "text-muted-foreground"
-                : "text-destructive",
-            )}
-          >
-            {message.text}
-          </p>
-        ) : null}
+        {live}
       </div>
     );
   }
@@ -112,10 +150,10 @@ export function SendTestEmailButton({
           size="sm"
           className="shrink-0"
           onClick={() => void onSend()}
-          disabled={sending || disabled}
+          disabled={busy || disabled}
           aria-label="Send a test notification email"
         >
-          {sending ? (
+          {status.kind === "sending" ? (
             <Spinner data-icon="inline-start" />
           ) : (
             <Mail data-icon="inline-start" />
@@ -123,19 +161,93 @@ export function SendTestEmailButton({
           {actionLabel}
         </Button>
       </div>
-      {message ? (
-        <p
-          className={cn(
-            "flex items-start gap-1.5 text-[12.5px] leading-relaxed",
-            message.type === "ok" ? "text-neutral-500" : "text-destructive",
-          )}
-        >
-          {message.type === "ok" ? (
-            <Check className="mt-0.5 size-3.5 shrink-0" strokeWidth={2} />
-          ) : null}
-          {message.text}
-        </p>
-      ) : null}
+      {live}
     </div>
+  );
+}
+
+function LiveStatus({
+  status,
+  inboxEmail,
+  appearance,
+}: {
+  status: Status;
+  inboxEmail?: string;
+  appearance: "card" | "row";
+}) {
+  if (status.kind === "idle") return null;
+
+  const to = inboxEmail ? ` to ${inboxEmail}` : "";
+  const pad = appearance === "row" ? "px-4 pb-3" : "";
+
+  if (status.kind === "sending" || status.kind === "on_the_way") {
+    return (
+      <p
+        role="status"
+        aria-live="polite"
+        className={cn(
+          "flex items-center gap-2 text-[12.5px] leading-relaxed text-amber-600",
+          pad,
+        )}
+      >
+        <BouncingDots />
+        {status.kind === "sending" ? "Sending" : `On the way${to}`}
+      </p>
+    );
+  }
+
+  if (status.kind === "delivered") {
+    return (
+      <p
+        role="status"
+        aria-live="polite"
+        className={cn(
+          "flex items-center gap-1.5 text-[12.5px] font-medium leading-relaxed text-emerald-700",
+          pad,
+        )}
+      >
+        <CheckCheck
+          className="size-4 shrink-0 text-emerald-600"
+          strokeWidth={2.25}
+          aria-hidden
+        />
+        Delivered{to}
+      </p>
+    );
+  }
+
+  return (
+    <p
+      role="status"
+      aria-live="polite"
+      className={cn("text-[12.5px] leading-relaxed text-destructive", pad)}
+    >
+      {status.text}
+    </p>
+  );
+}
+
+function failedCopy(event: string | undefined, inboxEmail?: string): string {
+  if (event === "spam") {
+    return inboxEmail
+      ? `The provider marked this as spam. Check junk for ${inboxEmail}.`
+      : "The provider marked this as spam. Check your junk folder.";
+  }
+  if (event === "hardBounce" || event === "invalid") {
+    return "The address was rejected. Confirm the school email on this account.";
+  }
+  if (event === "blocked") {
+    return "The provider blocked this send. Try again in a moment.";
+  }
+  return "Delivery failed. Try again in a moment.";
+}
+
+function BouncingDots() {
+  return (
+    <span className="email-test-loader" aria-hidden>
+      <span />
+      <span />
+      <span />
+    </span>
   );
 }

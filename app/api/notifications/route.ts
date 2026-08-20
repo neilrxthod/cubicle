@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { format, parseISO } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isBrevoConfigured, sendEmail } from "@/lib/email/brevo";
+import {
+  getEmailDeliveryStatus,
+  isBrevoConfigured,
+  sendEmail,
+} from "@/lib/email/brevo";
 import { isLocalDevRuntime } from "@/lib/data/durability";
 import {
   localSubject,
@@ -55,7 +59,24 @@ const PROFILE_MAIL_SELECT_FALLBACK = "id, email, name, role";
  * the background (`keepalive` fetch), so waiting on Brevo does not block staff
  * actions — and `after()` was dropping the send when the client aborted.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const messageId = new URL(request.url).searchParams.get("messageId")?.trim();
+  if (messageId) {
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+      }
+    } catch {
+      return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+    }
+    const status = await getEmailDeliveryStatus(messageId);
+    return NextResponse.json(status);
+  }
+
   return NextResponse.json({
     configured: isBrevoConfigured(),
     mode: isLocalDevRuntime() ? "local" : "production",
@@ -626,7 +647,12 @@ async function sendDevTest(email: string) {
     tags: ["local-dev", "dev-test"],
   });
   if (!result.ok) return { ok: false, error: result.error };
-  return { ok: true, sent: result.skipped ? 0 : 1, skipped: result.skipped };
+  return {
+    ok: true,
+    sent: result.skipped ? 0 : 1,
+    skipped: result.skipped,
+    messageId: result.messageId,
+  };
 }
 
 async function sendSelfTestTo(
@@ -649,6 +675,7 @@ async function sendSelfTestTo(
     ok: true as const,
     sent: result.skipped ? 0 : 1,
     skipped: result.skipped,
+    messageId: result.messageId,
   };
 }
 

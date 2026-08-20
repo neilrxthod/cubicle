@@ -230,6 +230,7 @@ export async function sendTestEmail(): Promise<{
   skipped?: boolean;
   reason?: string;
   sent?: number;
+  messageId?: string;
 }> {
   if (typeof window === "undefined") {
     return { ok: false, error: "Browser only." };
@@ -258,6 +259,7 @@ export async function sendTestEmail(): Promise<{
       skipped?: boolean;
       reason?: string;
       sent?: number;
+      messageId?: string;
     };
     if (!res.ok) {
       return { ok: false, error: data.error ?? `HTTP ${res.status}` };
@@ -268,11 +270,51 @@ export async function sendTestEmail(): Promise<{
       skipped: data.skipped,
       reason: data.reason,
       sent: data.sent,
+      messageId: data.messageId,
     };
   } catch (err) {
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Network error",
     };
+  }
+}
+
+export type TestEmailDeliveryPhase = "on_the_way" | "delivered" | "failed";
+
+export async function getTestEmailDelivery(
+  messageId: string,
+): Promise<{
+  phase: TestEmailDeliveryPhase;
+  event?: string;
+  error?: string;
+}> {
+  if (typeof window === "undefined") {
+    return { phase: "on_the_way" };
+  }
+  try {
+    const params = new URLSearchParams({ messageId });
+    const res = await fetch(`/api/notifications?${params.toString()}`, {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      phase?: TestEmailDeliveryPhase;
+      event?: string;
+      error?: string;
+    };
+    if (!res.ok) {
+      return { phase: "on_the_way", error: data.error };
+    }
+    if (
+      data.phase === "delivered" ||
+      data.phase === "failed" ||
+      data.phase === "on_the_way"
+    ) {
+      return { phase: data.phase, event: data.event };
+    }
+    return { phase: "on_the_way" };
+  } catch {
+    return { phase: "on_the_way" };
   }
 }
