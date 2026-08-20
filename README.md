@@ -175,7 +175,7 @@ In-app documents for authorized school use (Saskatchewan, Canada; school divisio
 
 | Document | Path |
 |----------|------|
-| Terms of Service | `/legal/terms` |
+| Terms & Conditions | `/legal/terms` |
 | Privacy Policy | `/legal/privacy` |
 | Security & Data Safety | `/legal/security` |
 | Acceptable Use | `/legal/acceptable-use` |
@@ -373,7 +373,7 @@ Permanent staff may show a **verified** indicator; substitute / temporary staff 
 
 ## License
 
-Private project — all rights reserved. Unauthorized redistribution of source code or credentials is prohibited. Use is limited to authorized school staff under the Terms of Service and school division policy.
+Private project — all rights reserved. Unauthorized redistribution of source code or credentials is prohibited. Use is limited to authorized school staff under the Terms & Conditions and school division policy.
 
 ---
 

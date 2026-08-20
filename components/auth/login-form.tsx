@@ -36,7 +36,7 @@ const roleAccent: Record<DemoAccount["role"], string> = {
 };
 
 const LEGAL_REQUIRED =
-  "You must accept the Terms and policies before signing in.";
+  "You must accept the Terms & Conditions and policies before signing in.";
 
 const LOGIN_ERRORS: Record<string, string> = {
   not_allowed: `Not on the IT allowlist. Contact IT.`,

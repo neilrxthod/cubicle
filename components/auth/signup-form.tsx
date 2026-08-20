@@ -111,7 +111,7 @@ export function SignupForm() {
       return;
     }
     if (!acceptedTerms) {
-      setError("Accept the Terms and Privacy Policy to continue.");
+      setError("Accept the Terms & Conditions and policies to continue.");
       return;
     }
 
@@ -333,17 +333,31 @@ export function SignupForm() {
                   <span className="text-[12px] leading-snug text-neutral-600">
                     I agree to the{" "}
                     <Link
-                      href="#"
+                      href="/legal/terms"
                       className="font-medium text-neutral-950 underline-offset-2 hover:underline"
                     >
-                      Terms
-                    </Link>{" "}
-                    and{" "}
+                      Terms &amp; Conditions
+                    </Link>
+                    ,{" "}
                     <Link
-                      href="#"
+                      href="/legal/privacy"
                       className="font-medium text-neutral-950 underline-offset-2 hover:underline"
                     >
                       Privacy
+                    </Link>
+                    ,{" "}
+                    <Link
+                      href="/legal/acceptable-use"
+                      className="font-medium text-neutral-950 underline-offset-2 hover:underline"
+                    >
+                      Acceptable Use
+                    </Link>
+                    {" & "}
+                    <Link
+                      href="/legal/security"
+                      className="font-medium text-neutral-950 underline-offset-2 hover:underline"
+                    >
+                      Security
                     </Link>
                     .
                   </span>

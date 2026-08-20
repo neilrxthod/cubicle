@@ -161,15 +161,57 @@ export function LegalShell({
   );
 }
 
+function sectionSlug(title: string) {
+  return title
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function LegalToc({
+  items,
+}: {
+  items: ReadonlyArray<{ href: string; label: string }>;
+}) {
+  return (
+    <nav
+      aria-label="On this page"
+      className="mb-10 border-b border-[var(--hairline)] pb-8 sm:mb-12"
+    >
+      <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-neutral-400">
+        Contents
+      </p>
+      <ol className="mt-4 flex flex-col gap-2">
+        {items.map((item) => (
+          <li key={item.href}>
+            <a
+              href={item.href}
+              className="text-[13px] font-medium leading-snug tracking-[-0.01em] text-neutral-500 no-underline decoration-transparent transition-colors hover:text-neutral-950"
+            >
+              {item.label}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </nav>
+  );
+}
+
 export function LegalSection({
   title,
+  id,
   children,
 }: {
   title: string;
+  id?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="scroll-mt-28 border-b border-[var(--hairline)] py-7 first:pt-0 last:border-b-0 last:pb-0 sm:py-8">
+    <section
+      id={id ?? sectionSlug(title)}
+      className="scroll-mt-28 border-b border-[var(--hairline)] py-7 first:pt-0 last:border-b-0 last:pb-0 sm:py-8"
+    >
       <h2 className="text-[12px] font-medium uppercase tracking-[0.1em] text-neutral-950 sm:text-[12.5px]">
         {title}
       </h2>
@@ -177,6 +219,14 @@ export function LegalSection({
         {children}
       </div>
     </section>
+  );
+}
+
+export function LegalSubheading({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="mt-2 text-[13.5px] font-medium tracking-[-0.015em] text-neutral-800">
+      {children}
+    </h3>
   );
 }
 

@@ -39,7 +39,7 @@ export function LegalConsent({
       >
         I agree to the{" "}
         <Link href="/legal/terms" className={linkClass} onClick={(e) => e.stopPropagation()}>
-          Terms
+          Terms &amp; Conditions
         </Link>
         ,{" "}
         <Link href="/legal/privacy" className={linkClass} onClick={(e) => e.stopPropagation()}>

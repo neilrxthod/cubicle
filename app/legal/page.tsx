@@ -18,7 +18,7 @@ export default function LegalIndexPage() {
   return (
     <LegalShell
       title="Legal"
-      description="Policies for authorized school staff using Cubicle."
+      description="Terms & Conditions, Privacy Policy, Acceptable Use, and Security & Data Safety for authorized school staff using Cubicle."
       effectiveDate={LEGAL_EFFECTIVE_DATE}
       variant="index"
     >
