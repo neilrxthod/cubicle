@@ -36,7 +36,6 @@ export function LocalPerspectiveSwitch({
     setSwitching(false);
     if (!result.ok) return;
     router.push(role === "admin" ? "/admin" : "/");
-    router.refresh();
   }
 
   return (

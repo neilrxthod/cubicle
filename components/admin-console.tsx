@@ -2,7 +2,6 @@
 
 import { useState, useTransition, useMemo, useRef } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import {
   laptopBrandLabel,
   type Booking,
@@ -174,7 +173,6 @@ export function AdminConsole({
   initialTab?: Tab
   hideChrome?: boolean
 }) {
-  const router = useRouter()
   const [tab, setTab] = useState<Tab>(initialTab)
   const [range] = useState<DateRange | undefined>()
   const [clearTarget, setClearTarget] = useState<ClearDataTarget | null>(null)
@@ -322,7 +320,6 @@ export function AdminConsole({
         onClose={() => setClearTarget(null)}
         onCleared={() => {
           setClearTarget(null)
-          router.refresh()
         }}
       />
     </div>
@@ -470,7 +467,6 @@ function CartsGrid({
   bookings: Booking[]
   users: User[]
 }) {
-  const router = useRouter()
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
   const [optimisticStatusById, setOptimisticStatusById] = useState<
     Record<string, Cart["status"]>
@@ -553,7 +549,6 @@ function CartsGrid({
         title: next === "maintenance" ? "Cart paused" : "Cart resumed",
         description: cart.name,
       })
-      router.refresh()
     })
   }
 
@@ -581,7 +576,6 @@ function CartsGrid({
       title: field === "name" ? "Name updated" : "Location updated",
       description: next,
     })
-    router.refresh()
     return true
   }
 
@@ -852,7 +846,6 @@ function CartsGrid({
         onClose={() => setEditor(null)}
         onSaved={() => {
           setEditor(null)
-          router.refresh()
         }}
       />
 
@@ -872,11 +865,6 @@ function CartsGrid({
             return next
           })
         }}
-        onDeleted={() => {
-          window.setTimeout(() => {
-            router.refresh()
-          }, 280)
-        }}
       />
 
       {pauseConflictCart ? (
@@ -886,7 +874,6 @@ function CartsGrid({
           carts={carts}
           users={users}
           onClose={() => setPauseConflictCart(null)}
-          onResolvedAndPaused={() => router.refresh()}
         />
       ) : null}
     </section>
@@ -1008,7 +995,7 @@ function CartDeleteDialog({
   onClose: () => void
   onBeginExit: (cartId: string) => void
   onDeleteFailed: (cartId: string) => void
-  onDeleted: () => void
+  onDeleted?: () => void
 }) {
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -1047,7 +1034,7 @@ function CartDeleteDialog({
         title: "Cart deleted",
         description: target.name,
       })
-      onDeleted()
+      onDeleted?.()
     })
   }
 

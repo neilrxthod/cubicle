@@ -1,7 +1,6 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
 import type { Booking, Cart, SwapRequest } from "@/lib/types"
 import { acceptSwap, declineSwap } from "@/lib/actions"
@@ -87,7 +86,6 @@ export function SwapRequestsList({
   carts: Cart[]
   variant?: "incoming" | "outgoing"
 }) {
-  const router = useRouter()
   const platform = usePlatformStore()
   const [busy, setBusy] = useState<{
     id: string
@@ -126,7 +124,6 @@ export function SwapRequestsList({
         return
       }
       toast({ title: okTitle })
-      router.refresh()
     } finally {
       setBusy(null)
     }

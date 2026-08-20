@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import {
   Dialog,
@@ -62,7 +61,6 @@ export function IssueDialog({
   carts?: Cart[];
   onClose: () => void;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(true);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -136,7 +134,6 @@ export function IssueDialog({
                 title: "Issue reported",
                 description: selectedCart?.name,
               });
-              router.refresh();
               requestClose();
             });
           }}

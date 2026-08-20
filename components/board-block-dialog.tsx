@@ -1,7 +1,6 @@
 "use client"
 
 import { useMemo, useState, type ReactNode } from "react"
-import { useRouter } from "next/navigation"
 import { eachDayOfInterval, format } from "date-fns"
 import type { DateRange } from "react-day-picker"
 import { Calendar as CalendarIcon, ChevronDown, Plus, Search, X } from "lucide-react"
@@ -200,7 +199,6 @@ export function BoardBlockDialog({
   carts: Cart[]
   activeDate: string
 }) {
-  const router = useRouter()
   const activeCarts = useMemo(
     () => sortCarts(carts.filter((cart) => cart.status !== "maintenance")),
     [carts],
@@ -328,7 +326,6 @@ export function BoardBlockDialog({
             ? `${res.data?.restrictedCount ?? 0} locked · ${res.data?.skippedBookedCount ?? 0} booked skipped`
             : `${res.data?.restrictedCount ?? 0} unlocked`,
       })
-      router.refresh()
       onOpenChange(false)
     } finally {
       setBusy(null)

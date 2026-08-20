@@ -597,7 +597,6 @@ export function DailyBoard({
         })
         return
       }
-      router.refresh()
     } finally {
       setReorderBusy(false)
       orderAtDragStart.current = ""
@@ -711,7 +710,6 @@ export function DailyBoard({
       }
       toast({ title: "Booking deleted" })
       setPendingDelete(null)
-      router.refresh()
     } finally {
       setDeletingBookingId(null)
     }
@@ -749,7 +747,6 @@ export function DailyBoard({
         title:
           action === "accept" ? "Share accepted" : "Share invite declined",
       })
-      router.refresh()
     } finally {
       await holdInviteBusy(startedAt)
       setShareInviteBusy(null)
@@ -823,11 +820,9 @@ export function DailyBoard({
           description: res.error,
           variant: "destructive",
         })
-        router.refresh()
         return
       }
       // Quiet multi-book — no toast spam on every click.
-      router.refresh()
     } finally {
       multiBusy.current = false
       setBookingSlotKey(null)
@@ -853,7 +848,6 @@ export function DailyBoard({
       }
       setMultiTag(next)
       setRenamingBookingId(null)
-      router.refresh()
     } finally {
       setRenameBusy(false)
     }

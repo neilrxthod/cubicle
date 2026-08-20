@@ -1,7 +1,6 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogCancel,
@@ -39,7 +38,6 @@ export function SwapRequestDialog({
   booking: Booking
   onClose: () => void
 }) {
-  const router = useRouter()
   const platform = usePlatformStore()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -118,7 +116,6 @@ export function SwapRequestDialog({
           ? `${offeredCart?.name ?? "Your cart"} → ${targetCart?.name ?? "their cart"}`
           : `${targetCart?.name ?? "Cart"} · ${booking.period}`,
       })
-      router.refresh()
       onClose()
     })
   }

@@ -1,6 +1,5 @@
 "use client"
 
-import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
 import {
   Dialog,
@@ -30,7 +29,6 @@ export function ManageBookingDialog({
   cart?: Cart
   onClose: () => void
 }) {
-  const router = useRouter()
   const session = getSessionSnapshot()
   const isOwner =
     session?.role === "admin" || booking.teacherId === session?.id
@@ -150,7 +148,6 @@ export function ManageBookingDialog({
                   }}
                   onSuccess={() => {
                     toast({ title: "Booking canceled" })
-                    router.refresh()
                     onClose()
                   }}
                 />

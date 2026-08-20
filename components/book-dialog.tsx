@@ -8,7 +8,6 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { AnimatePresence, motion } from "motion/react";
 import { Check, ChevronRight, Search, User, X } from "lucide-react";
@@ -89,7 +88,6 @@ export function BookDialog({
   onClose: () => void;
   onOpened?: () => void;
 }) {
-  const router = useRouter();
   const platform = usePlatformStore();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -204,7 +202,6 @@ export function BookDialog({
           description: res.error,
           variant: "destructive",
         });
-        router.refresh();
         return;
       }
       if (res.ok && res.data?.shareSkipped) {
@@ -231,7 +228,6 @@ export function BookDialog({
             .join(" · "),
         });
       }
-      router.refresh();
       onClose();
     });
   }

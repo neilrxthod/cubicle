@@ -1,7 +1,6 @@
 "use client"
 
 import { useMemo, useState, type ReactNode } from "react"
-import { useRouter } from "next/navigation"
 import {
   addDays,
   eachDayOfInterval,
@@ -79,7 +78,6 @@ export function RestrictionsPanel({
   slotRestrictions: SlotRestriction[]
   bookingPolicy: BookingPolicy
 }) {
-  const router = useRouter()
   const [activeDate, setActiveDate] = useState(format(new Date(), "yyyy-MM-dd"))
   const [query, setQuery] = useState("")
   const [lockedOnly, setLockedOnly] = useState(false)
@@ -127,10 +125,6 @@ export function RestrictionsPanel({
     setActiveDate(format(addDays(parseISO(activeDate), offset), "yyyy-MM-dd"))
   }
 
-  function refresh() {
-    router.refresh()
-  }
-
   async function lockSlot(
     cartId: string,
     period: Period,
@@ -161,7 +155,6 @@ export function RestrictionsPanel({
         title: category === "ap_exam" ? "AP exam lock set" : "Slot locked",
         description: `${period} · ${format(parseISO(activeDate), "MMM d")}`,
       })
-      refresh()
     } finally {
       setPendingKey(null)
     }
@@ -181,7 +174,6 @@ export function RestrictionsPanel({
         return
       }
       toast({ title: "Slot unlocked" })
-      refresh()
     } finally {
       setPendingKey(null)
     }
@@ -206,7 +198,6 @@ export function RestrictionsPanel({
         return
       }
       toast({ title: "Day locks cleared" })
-      refresh()
     } finally {
       setPendingKey(null)
     }
@@ -763,7 +754,6 @@ function BatchToolsDialog({
   bookingPolicy: BookingPolicy
   activeDate: string
 }) {
-  const router = useRouter()
   const [tab, setTab] = useState<"policy" | "batch">("batch")
   const [selectedCartIds, setSelectedCartIds] = useState<Set<string>>(
     () => new Set(carts.map((c) => c.id)),
@@ -869,7 +859,6 @@ function BatchToolsDialog({
             ? `${res.data?.restrictedCount ?? 0} locked · ${res.data?.skippedBookedCount ?? 0} booked skipped`
             : undefined,
       })
-      router.refresh()
       onOpenChange(false)
     } finally {
       setBusy(false)
@@ -901,7 +890,6 @@ function BatchToolsDialog({
         title: "Booking window updated",
         description: `${n} day${n === 1 ? "" : "s"} ahead`,
       })
-      router.refresh()
     } finally {
       setBusy(false)
     }

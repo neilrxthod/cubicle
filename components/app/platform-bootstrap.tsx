@@ -37,10 +37,12 @@ const VISIBLE_POLL_MS = 30_000;
  * in `.env.local`) so developer carts/bookings never hit the school database.
  *
  * Multi-client sync (two browsers, two teachers, phone + laptop):
- * 1. Supabase Realtime postgres_changes → full store refresh (~80ms debounce)
- * 2. Tab focus / visibility / online → immediate refresh
- * 3. Visible-tab poll every ~1s as a fallback if a websocket event is dropped
- * 4. localStorage + BroadcastChannel for same-browser multi-tab
+ * 1. Supabase Realtime postgres_changes → patch the store immediately
+ *    (other clients see bookings/carts/issues/etc. within ~200ms)
+ * 2. Debounced full hydrate (200ms) to reconcile allowlist / missed fields
+ * 3. Tab focus / visibility / online → immediate refresh
+ * 4. Visible-tab poll as a fallback if a websocket event is dropped
+ * 5. localStorage + BroadcastChannel for same-browser multi-tab
  */
 export function PlatformBootstrap({
   children,

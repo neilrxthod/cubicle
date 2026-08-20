@@ -93,7 +93,7 @@ export function CartPauseConflictDialog({
   carts: Cart[];
   users: User[];
   onClose: () => void;
-  onResolvedAndPaused: () => void;
+  onResolvedAndPaused?: () => void;
 }) {
   const [plans, setPlans] = useState<Record<string, Plan>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -189,7 +189,7 @@ export function CartPauseConflictDialog({
       }
 
       toast({ title: "Cart paused", description: cart.name });
-      onResolvedAndPaused();
+      onResolvedAndPaused?.();
       onClose();
     });
   }

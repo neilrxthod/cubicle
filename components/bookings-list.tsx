@@ -2,7 +2,6 @@
 
 import { useTransition } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { format, isToday, isTomorrow, parseISO } from "date-fns"
 import { bookingClassLabel } from "@/lib/booking/slot-rules"
 import type { Booking, Cart } from "@/lib/types"
@@ -35,7 +34,6 @@ export function BookingsList({
   canCancel?: boolean
   viewerId?: string
 }) {
-  const router = useRouter()
   const cartMap = new Map(carts.map((c) => [c.id, c]))
 
   return (
@@ -113,10 +111,7 @@ export function BookingsList({
                 </div>
 
                 {showCancel ? (
-                  <CancelAction
-                    bookingId={b.id}
-                    onDone={() => router.refresh()}
-                  />
+                  <CancelAction bookingId={b.id} />
                 ) : null}
               </li>
             )
@@ -129,10 +124,8 @@ export function BookingsList({
 
 function CancelAction({
   bookingId,
-  onDone,
 }: {
   bookingId: string
-  onDone: () => void
 }) {
   const [pending, startTransition] = useTransition()
 
@@ -159,7 +152,6 @@ function CancelAction({
             return
           }
           toast({ title: "Booking canceled" })
-          onDone()
         })
       }
       className={cn(

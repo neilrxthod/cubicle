@@ -8,7 +8,6 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react"
-import { useRouter } from "next/navigation"
 import {
   format,
   formatDistanceToNow,
@@ -121,7 +120,6 @@ export function StaffPanel({
   carts: Cart[]
   swapRequests: SwapRequest[]
 }) {
-  const router = useRouter()
   const googleMode = isRemotePlatformEnabled()
   const today = format(new Date(), "yyyy-MM-dd")
   const presenceByUser = usePresenceMap()
@@ -475,7 +473,6 @@ export function StaffPanel({
           description: res.data?.name,
         })
         setAccessDialog(null)
-        router.refresh()
         return
       }
 
@@ -490,7 +487,6 @@ export function StaffPanel({
       }
       toast({ title: "Staff updated" })
       setAccessDialog(null)
-      router.refresh()
     })
   }
 
@@ -524,7 +520,6 @@ export function StaffPanel({
       setDeleteTarget(null)
       setDeleteMode("access")
       if (selectedId === user.id) setSelectedId(null)
-      router.refresh()
     })
   }
 
@@ -808,7 +803,6 @@ export function StaffPanel({
                         : "Verified badge removed",
                       description: selected.name,
                     })
-                    router.refresh()
                   })
                 }}
               />

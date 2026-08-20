@@ -1,7 +1,6 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
 import { ChevronDown, Plus, Search, X } from "lucide-react"
 import { setCartLaptopCodes } from "@/lib/actions"
 import { openQrLabelsPdf, buildQrLabels } from "@/lib/export/qr-labels-pdf"
@@ -57,7 +56,6 @@ function QrMark({ value, className }: { value: string; className?: string }) {
 }
 
 export function QrLabelsPanel({ carts }: { carts: Cart[] }) {
-  const router = useRouter()
   const [query, setQuery] = useState("")
   const [codeQuery, setCodeQuery] = useState("")
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -162,7 +160,6 @@ export function QrLabelsPanel({ carts }: { carts: Cart[] }) {
         })
         return
       }
-      router.refresh()
     })
   }
 

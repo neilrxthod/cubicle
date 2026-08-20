@@ -266,6 +266,14 @@ export function mutate(mutator: (draft: PlatformState) => void) {
 }
 
 /**
+ * Apply a remote row to the browser cache (Realtime). Safe in production —
+ * this mirrors Postgres, it does not persist.
+ */
+export function applyRemotePatch(mutator: (draft: PlatformState) => void) {
+  update(mutator);
+}
+
+/**
  * Replace client cache after a successful Supabase fetch.
  * Does not write to Postgres — only mirrors remote state for the UI.
  */

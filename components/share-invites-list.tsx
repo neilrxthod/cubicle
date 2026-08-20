@@ -1,7 +1,6 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
 import type { Booking, Cart } from "@/lib/types"
 import { bookingHasShareInviteFor } from "@/lib/types"
@@ -93,7 +92,6 @@ export function ShareInvitesList({
   carts: Cart[]
   userId: string
 }) {
-  const router = useRouter()
   const platform = usePlatformStore()
   const [busy, setBusy] = useState<{
     id: string
@@ -174,7 +172,6 @@ export function ShareInvitesList({
                   ? "Dismissed"
                   : "Invite declined",
         })
-        router.refresh()
       })
     } finally {
       setBusy(null)

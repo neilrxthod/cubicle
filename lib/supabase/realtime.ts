@@ -1,9 +1,10 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { isRemotePlatformEnabled } from "@/lib/data/durability";
+import { applyRealtimePostgresChange } from "@/lib/supabase/realtime-apply";
 import { createClient } from "@/lib/supabase/client";
 
-/** Batch multi-row writes into one refresh — keep low so peers feel near-instant. */
-const DEBOUNCE_MS = 80;
+/** Full hydrate after a burst of writes. Patches apply immediately (0ms). */
+const DEBOUNCE_MS = 200;
 const RECONNECT_BASE_MS = 400;
 const RECONNECT_MAX_MS = 5_000;
 const PLATFORM_TOPIC = "cubicle-platform";
@@ -89,8 +90,9 @@ export function subscribePlatformRealtime(onChange: () => void): () => void {
       // CLOSED as a reconnect and overflowed Phoenix filterBindings.
       const next = supabase
         .channel(PLATFORM_TOPIC)
-        .on("postgres_changes", { event: "*", schema: "public" }, () => {
+        .on("postgres_changes", { event: "*", schema: "public" }, (payload) => {
           if (disposed || gen !== connectGen) return;
+          applyRealtimePostgresChange(payload);
           schedule();
         });
 
