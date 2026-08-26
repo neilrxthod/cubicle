@@ -289,6 +289,13 @@ create policy "Users can update own profile"
   using (auth.uid() = id)
   with check (auth.uid() = id);
 
+-- Upsert needs INSERT even when the row already exists (ON CONFLICT).
+drop policy if exists "Users can insert own profile" on public.profiles;
+create policy "Users can insert own profile"
+  on public.profiles for insert
+  to authenticated
+  with check (auth.uid() = id);
+
 -- Carts: everyone authenticated can read; only admins write
 drop policy if exists "Carts are viewable by authenticated users" on public.carts;
 create policy "Carts are viewable by authenticated users"

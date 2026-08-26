@@ -219,7 +219,7 @@ export async function completeGoogleOAuth(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithIdToken({
+  const { data, error } = await supabase.auth.signInWithIdToken({
     provider: "google",
     token: idToken,
   });
@@ -232,7 +232,7 @@ export async function completeGoogleOAuth(
     return response;
   }
 
-  const finished = await finalizeSchoolLogin(origin, next);
+  const finished = await finalizeSchoolLogin(origin, next, data.user);
   clearOAuthCookies(finished, secure);
   return finished;
 }

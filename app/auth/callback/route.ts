@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   }
 
   const supabase = await createClient();
-  const { error: exchangeError } =
+  const { data, error: exchangeError } =
     await supabase.auth.exchangeCodeForSession(code);
 
   if (exchangeError) {
@@ -28,5 +28,5 @@ export async function GET(request: Request) {
     );
   }
 
-  return finalizeSchoolLogin(origin, next);
+  return finalizeSchoolLogin(origin, next, data.user);
 }

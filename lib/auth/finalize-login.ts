@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { User } from "@supabase/supabase-js";
 import {
   checkSchoolAccess,
   deleteUnauthorizedUser,
@@ -10,20 +11,25 @@ import {
 import { isSafeInternalPath } from "@/lib/auth/safe-path";
 import { getDashboardPath } from "@/lib/auth/session";
 import type { UserRole } from "@/lib/auth/types";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 /**
  * After a session exists (PKCE exchange or Google id_token), enforce
  * domain + allowlist and send the user to /auth/complete.
+ *
+ * Profile writes use the service role: `profiles` has no INSERT policy for
+ * the user JWT, and Postgres still requires one for `ON CONFLICT` upserts.
  */
 export async function finalizeSchoolLogin(
   origin: string,
   next: string | null,
+  knownUser?: User | null,
 ): Promise<NextResponse> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user =
+    knownUser ??
+    (await supabase.auth.getUser()).data.user;
 
   if (!user?.email) {
     await supabase.auth.signOut();
@@ -32,7 +38,15 @@ export async function finalizeSchoolLogin(
     );
   }
 
-  const access = await checkSchoolAccess(user.email);
+  const admin = createAdminClient();
+  const [access, existingRes] = await Promise.all([
+    checkSchoolAccess(user.email),
+    admin
+      .from("profiles")
+      .select("avatar_url, name")
+      .eq("id", user.id)
+      .maybeSingle(),
+  ]);
 
   if (!access.ok) {
     const userId = user.id;
@@ -61,12 +75,7 @@ export async function finalizeSchoolLogin(
     allowed.name?.trim() ||
     identity.fullName;
 
-  const { data: existing } = await supabase
-    .from("profiles")
-    .select("avatar_url, name")
-    .eq("id", user.id)
-    .maybeSingle();
-
+  const existing = existingRes.data;
   const existingName =
     typeof existing?.name === "string" ? existing.name.trim() : "";
   const keepExistingName =
@@ -89,7 +98,7 @@ export async function finalizeSchoolLogin(
     updated_at: new Date().toISOString(),
   };
 
-  let { error: upsertError } = await supabase.from("profiles").upsert(
+  let { error: upsertError } = await admin.from("profiles").upsert(
     {
       ...profilePayload,
       employment_type: employmentType,
@@ -98,36 +107,13 @@ export async function finalizeSchoolLogin(
   );
 
   if (upsertError?.message?.toLowerCase().includes("employment_type")) {
-    ({ error: upsertError } = await supabase
+    ({ error: upsertError } = await admin
       .from("profiles")
       .upsert(profilePayload, { onConflict: "id" }));
   }
 
   if (upsertError) {
     console.error("[auth] profile upsert failed:", upsertError.message);
-  } else {
-    await Promise.all([
-      supabase
-        .from("bookings")
-        .update({ teacher_name: name })
-        .eq("teacher_id", user.id),
-      supabase
-        .from("bookings")
-        .update({ last_edited_by_name: name })
-        .eq("last_edited_by_id", user.id),
-      supabase
-        .from("issues")
-        .update({ reporter_name: name })
-        .eq("reported_by_id", user.id),
-      supabase
-        .from("swap_requests")
-        .update({ requester_name: name })
-        .eq("requester_id", user.id),
-      supabase
-        .from("allowed_emails")
-        .update({ name })
-        .eq("email", user.email.toLowerCase()),
-    ]);
   }
 
   const dashboard = isSafeInternalPath(next) ? next : getDashboardPath(role);

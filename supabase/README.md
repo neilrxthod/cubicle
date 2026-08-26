@@ -63,6 +63,7 @@ If an existing project is missing later pieces (swap accept RPC, laptop codes, l
 |------|-------------|
 | `repair-live.sql` | Additive catch-up on a live project that skipped later migrations |
 | `harden-privileges.sql` | Required on live projects: pin roles to the allowlist and lock RLS |
+| `profiles-insert-policy.sql` | Lets allowlisted staff upsert `profiles` (fixes login RLS errors) |
 | `clear-operational-data.sql` | Official empty go-live — wipes carts/bookings/issues/locks/swaps, **keeps** allowlisted staff |
 
 ---
