@@ -268,11 +268,12 @@ export function BoardBlockDialog({
     }).length
   }, [start, end, scope, weekdaysOnly])
 
-  const slotCount = chosenCarts.length * selectedPeriods.size * dayCount
   const typeLabel =
     RESTRICTION_TYPES.find((opt) => opt.id === category)?.label ?? "General"
   const cartSummary =
-    chosenCarts.length === 1 ? "1 cart" : `${chosenCarts.length} carts`
+    chosenCarts.length > 0
+      ? chosenCarts.map((cart) => cart.name).join(", ")
+      : "No carts"
   const scopeLine = [
     formatPeriodList(selectedPeriods),
     cartSummary,
@@ -469,7 +470,7 @@ export function BoardBlockDialog({
                         "select-none [-webkit-tap-highlight-color:transparent]",
                         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
                         on
-                          ? "border-solid border-neutral-950 bg-neutral-950 text-white"
+                          ? "border-solid border-red-600 bg-red-600 text-white"
                           : "border-dashed border-neutral-400 bg-transparent text-neutral-500 hover:border-neutral-950",
                       )}
                     >
@@ -583,7 +584,7 @@ export function BoardBlockDialog({
                               "select-none [-webkit-tap-highlight-color:transparent]",
                               "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
                               on
-                                ? "border-neutral-950 bg-neutral-950 text-white"
+                                ? "border-red-600 bg-red-600 text-white"
                                 : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-950",
                             )}
                           >
@@ -639,11 +640,6 @@ export function BoardBlockDialog({
                       {typeLabel}
                     </span>
                   </span>
-                  {slotCount > 0 ? (
-                    <span className="shrink-0 text-[11px] tabular-nums text-neutral-400">
-                      {slotCount}
-                    </span>
-                  ) : null}
                 </div>
               </div>
             </Col>
