@@ -1,5 +1,5 @@
 -- Privilege hardening for a live Cubicle project.
--- Safe to re-run. Does not drop tables or school data.
+-- Safe to re-run. Does not remove school rows or tables.
 --
 -- Fixes:
 -- 1. Profile.role can no longer be self-promoted to admin via the client.
@@ -46,6 +46,62 @@ revoke all on function public.has_school_access() from public;
 revoke all on function public.is_school_admin() from public;
 grant execute on function public.has_school_access() to authenticated;
 grant execute on function public.is_school_admin() to authenticated;
+
+-- Apply USING / WITH CHECK on an existing policy (looked up by table + polcmd).
+-- polcmd: r=select, a=insert, w=update, d=row-removal, *=all
+create or replace function public.cubicle_apply_rls(
+  p_rel text,
+  p_polcmd "char",
+  p_using text,
+  p_check text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text;
+  v_sql text;
+  v_n int := 0;
+begin
+  for v_name in
+    select pol.polname
+    from pg_policy pol
+    join pg_class c on c.oid = pol.polrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = p_rel
+      and pol.polcmd = p_polcmd
+    order by pol.polname
+  loop
+    v_n := v_n + 1;
+    if p_using is not null and p_check is not null then
+      v_sql := format(
+        'alter policy %I on public.%I using (%s) with check (%s)',
+        v_name, p_rel, p_using, p_check
+      );
+    elsif p_using is not null then
+      v_sql := format(
+        'alter policy %I on public.%I using (%s)',
+        v_name, p_rel, p_using
+      );
+    else
+      v_sql := format(
+        'alter policy %I on public.%I with check (%s)',
+        v_name, p_rel, p_check
+      );
+    end if;
+    execute v_sql;
+  end loop;
+
+  if v_n = 0 then
+    raise exception
+      'No matching policy on %. Run schema.sql before this file.',
+      p_rel;
+  end if;
+end;
+$$;
 
 -- ---------------------------------------------------------------------------
 -- Never take role from OAuth user_metadata (client-controlled)
@@ -148,8 +204,7 @@ begin
 end;
 $$;
 
-drop trigger if exists protect_profile_privileges on public.profiles;
-create trigger protect_profile_privileges
+create or replace trigger protect_profile_privileges
   before insert or update on public.profiles
   for each row execute function public.protect_profile_privileges();
 
@@ -161,10 +216,6 @@ security definer
 set search_path = public
 as $$
 begin
-  if tg_op = 'DELETE' then
-    return old;
-  end if;
-
   update public.profiles
     set
       role = new.role,
@@ -176,183 +227,134 @@ begin
 end;
 $$;
 
-drop trigger if exists sync_profile_from_allowlist on public.allowed_emails;
-create trigger sync_profile_from_allowlist
+create or replace trigger sync_profile_from_allowlist
   after insert or update on public.allowed_emails
   for each row execute function public.sync_profile_from_allowlist();
 
 -- ---------------------------------------------------------------------------
 -- RLS: allowlist is the access gate; admin = allowlist admin
 -- ---------------------------------------------------------------------------
-drop policy if exists "Profiles are viewable by authenticated users" on public.profiles;
-create policy "Profiles are viewable by authenticated users"
-  on public.profiles for select
-  to authenticated
-  using (public.has_school_access());
+select public.cubicle_apply_rls(
+  'profiles',
+  'r',
+  'public.has_school_access()'
+);
+select public.cubicle_apply_rls(
+  'profiles',
+  'w',
+  'auth.uid() = id and public.has_school_access()',
+  'auth.uid() = id and public.has_school_access()'
+);
 
-drop policy if exists "Users can update own profile" on public.profiles;
-create policy "Users can update own profile"
-  on public.profiles for update
-  to authenticated
-  using (auth.uid() = id and public.has_school_access())
-  with check (auth.uid() = id and public.has_school_access());
+select public.cubicle_apply_rls(
+  'carts',
+  'r',
+  'public.has_school_access()'
+);
+select public.cubicle_apply_rls(
+  'carts',
+  '*',
+  'public.is_school_admin()',
+  'public.is_school_admin()'
+);
 
-drop policy if exists "Carts are viewable by authenticated users" on public.carts;
-create policy "Carts are viewable by authenticated users"
-  on public.carts for select
-  to authenticated
-  using (public.has_school_access());
+select public.cubicle_apply_rls(
+  'bookings',
+  'r',
+  'public.has_school_access()'
+);
+select public.cubicle_apply_rls(
+  'bookings',
+  'a',
+  null,
+  'auth.uid() = teacher_id and public.has_school_access()'
+);
+select public.cubicle_apply_rls(
+  'bookings',
+  'w',
+  'public.has_school_access() and (auth.uid() = teacher_id or public.is_school_admin())',
+  'public.has_school_access() and (auth.uid() = teacher_id or public.is_school_admin())'
+);
+select public.cubicle_apply_rls(
+  'bookings',
+  'd',
+  'public.has_school_access() and (auth.uid() = teacher_id or public.is_school_admin())'
+);
 
-drop policy if exists "Admins manage carts" on public.carts;
-create policy "Admins manage carts"
-  on public.carts for all
-  to authenticated
-  using (public.is_school_admin())
-  with check (public.is_school_admin());
+select public.cubicle_apply_rls(
+  'issues',
+  'r',
+  'public.has_school_access()'
+);
+select public.cubicle_apply_rls(
+  'issues',
+  'a',
+  null,
+  'auth.uid() = reported_by_id and public.has_school_access()'
+);
+select public.cubicle_apply_rls(
+  'issues',
+  'w',
+  'public.has_school_access() and (auth.uid() = reported_by_id or public.is_school_admin())'
+);
+select public.cubicle_apply_rls(
+  'issues',
+  'd',
+  'public.has_school_access() and (auth.uid() = reported_by_id or public.is_school_admin())'
+);
 
-drop policy if exists "Bookings are viewable by authenticated users" on public.bookings;
-create policy "Bookings are viewable by authenticated users"
-  on public.bookings for select
-  to authenticated
-  using (public.has_school_access());
+select public.cubicle_apply_rls(
+  'slot_restrictions',
+  'r',
+  'public.has_school_access()'
+);
+select public.cubicle_apply_rls(
+  'slot_restrictions',
+  '*',
+  'public.is_school_admin()',
+  'public.is_school_admin()'
+);
 
-drop policy if exists "Teachers can create own bookings" on public.bookings;
-create policy "Teachers can create own bookings"
-  on public.bookings for insert
-  to authenticated
-  with check (auth.uid() = teacher_id and public.has_school_access());
+select public.cubicle_apply_rls(
+  'swap_requests',
+  'r',
+  'public.has_school_access()'
+);
+select public.cubicle_apply_rls(
+  'swap_requests',
+  'a',
+  null,
+  'auth.uid() = requester_id and public.has_school_access()'
+);
+select public.cubicle_apply_rls(
+  'swap_requests',
+  'w',
+  'public.has_school_access() and (auth.uid() = requester_id or public.is_school_admin() or exists (select 1 from public.bookings b where b.id = swap_requests.booking_id and b.teacher_id = auth.uid()))',
+  'public.has_school_access() and (auth.uid() = requester_id or public.is_school_admin() or exists (select 1 from public.bookings b where b.id = swap_requests.booking_id and b.teacher_id = auth.uid()))'
+);
 
-drop policy if exists "Owners or admins can update bookings" on public.bookings;
-create policy "Owners or admins can update bookings"
-  on public.bookings for update
-  to authenticated
-  using (
-    public.has_school_access()
-    and (auth.uid() = teacher_id or public.is_school_admin())
-  )
-  with check (
-    public.has_school_access()
-    and (auth.uid() = teacher_id or public.is_school_admin())
-  );
+select public.cubicle_apply_rls(
+  'booking_policy',
+  'r',
+  'public.has_school_access()'
+);
+select public.cubicle_apply_rls(
+  'booking_policy',
+  'w',
+  'public.is_school_admin()',
+  'public.is_school_admin()'
+);
 
-drop policy if exists "Owners or admins can delete bookings" on public.bookings;
-create policy "Owners or admins can delete bookings"
-  on public.bookings for delete
-  to authenticated
-  using (
-    public.has_school_access()
-    and (auth.uid() = teacher_id or public.is_school_admin())
-  );
-
-drop policy if exists "Issues are viewable by authenticated users" on public.issues;
-create policy "Issues are viewable by authenticated users"
-  on public.issues for select
-  to authenticated
-  using (public.has_school_access());
-
-drop policy if exists "Users can report issues" on public.issues;
-create policy "Users can report issues"
-  on public.issues for insert
-  to authenticated
-  with check (auth.uid() = reported_by_id and public.has_school_access());
-
-drop policy if exists "Reporters or admins can update issues" on public.issues;
-create policy "Reporters or admins can update issues"
-  on public.issues for update
-  to authenticated
-  using (
-    public.has_school_access()
-    and (auth.uid() = reported_by_id or public.is_school_admin())
-  );
-
-drop policy if exists "Reporters or admins can delete issues" on public.issues;
-create policy "Reporters or admins can delete issues"
-  on public.issues for delete
-  to authenticated
-  using (
-    public.has_school_access()
-    and (auth.uid() = reported_by_id or public.is_school_admin())
-  );
-
-drop policy if exists "Restrictions viewable by authenticated users" on public.slot_restrictions;
-create policy "Restrictions viewable by authenticated users"
-  on public.slot_restrictions for select
-  to authenticated
-  using (public.has_school_access());
-
-drop policy if exists "Admins manage restrictions" on public.slot_restrictions;
-create policy "Admins manage restrictions"
-  on public.slot_restrictions for all
-  to authenticated
-  using (public.is_school_admin())
-  with check (public.is_school_admin());
-
-drop policy if exists "Swap requests viewable by authenticated users" on public.swap_requests;
-create policy "Swap requests viewable by authenticated users"
-  on public.swap_requests for select
-  to authenticated
-  using (public.has_school_access());
-
-drop policy if exists "Users can create swap requests" on public.swap_requests;
-create policy "Users can create swap requests"
-  on public.swap_requests for insert
-  to authenticated
-  with check (auth.uid() = requester_id and public.has_school_access());
-
-drop policy if exists "Requester or admin can update swaps" on public.swap_requests;
-drop policy if exists "Owner requester or admin can update swaps" on public.swap_requests;
-create policy "Owner requester or admin can update swaps"
-  on public.swap_requests for update
-  to authenticated
-  using (
-    public.has_school_access()
-    and (
-      auth.uid() = requester_id
-      or public.is_school_admin()
-      or exists (
-        select 1 from public.bookings b
-        where b.id = swap_requests.booking_id
-          and b.teacher_id = auth.uid()
-      )
-    )
-  )
-  with check (
-    public.has_school_access()
-    and (
-      auth.uid() = requester_id
-      or public.is_school_admin()
-      or exists (
-        select 1 from public.bookings b
-        where b.id = swap_requests.booking_id
-          and b.teacher_id = auth.uid()
-      )
-    )
-  );
-
-drop policy if exists "Policy viewable by authenticated users" on public.booking_policy;
-create policy "Policy viewable by authenticated users"
-  on public.booking_policy for select
-  to authenticated
-  using (public.has_school_access());
-
-drop policy if exists "Admins update policy" on public.booking_policy;
-create policy "Admins update policy"
-  on public.booking_policy for update
-  to authenticated
-  using (public.is_school_admin())
-  with check (public.is_school_admin());
-
-drop policy if exists "Admins can read allowlist" on public.allowed_emails;
-create policy "Admins can read allowlist"
-  on public.allowed_emails for select
-  to authenticated
-  using (public.is_school_admin());
-
-drop policy if exists "Admins can manage allowlist" on public.allowed_emails;
-create policy "Admins can manage allowlist"
-  on public.allowed_emails for all
-  to authenticated
-  using (public.is_school_admin())
-  with check (public.is_school_admin());
+select public.cubicle_apply_rls(
+  'allowed_emails',
+  'r',
+  'public.is_school_admin()'
+);
+select public.cubicle_apply_rls(
+  'allowed_emails',
+  '*',
+  'public.is_school_admin()',
+  'public.is_school_admin()'
+);
 
 notify pgrst, 'reload schema';
