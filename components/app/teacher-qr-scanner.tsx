@@ -76,6 +76,23 @@ function resolveHit(raw: string, carts: Cart[]): ScanHit | "foreign" {
     : { kind: "missing", title: target.code };
 }
 
+function ScanKindCapsule({ kind }: { kind: "cart" | "laptop" }) {
+  const isLaptop = kind === "laptop";
+  return (
+    <span
+      className={cn(
+        "inline-flex w-fit items-center rounded-full px-2 py-0.5",
+        "text-[11px] font-semibold tracking-[0.04em]",
+        isLaptop
+          ? "bg-blue-50 text-blue-800 ring-1 ring-inset ring-blue-200/80"
+          : "bg-neutral-100 text-neutral-700 ring-1 ring-inset ring-neutral-200/80",
+      )}
+    >
+      {isLaptop ? "Laptop" : "Cart"}
+    </span>
+  );
+}
+
 /** Viewfinder: thin ring + thick corners share one rounded-rect path. */
 function ScanReticle({ locked }: { locked: boolean }) {
   const size = 280;
@@ -676,10 +693,8 @@ function TeacherScanCamera({
                   </p>
                 </div>
               ) : (
-                <div className="flex flex-col gap-1">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-400">
-                    {hit.kind === "laptop" ? "Laptop" : "Cart"}
-                  </p>
+                <div className="flex flex-col gap-1.5">
+                  <ScanKindCapsule kind={hit.kind} />
                   <h2 className="flex items-center gap-2 text-[22px] font-semibold tracking-[-0.03em]">
                     {hit.kind === "laptop" ? hit.code : hit.cart.name}
                     <CartBrandMark
