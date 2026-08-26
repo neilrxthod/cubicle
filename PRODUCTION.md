@@ -98,6 +98,7 @@ Copy from `.env.local.example`.
 | 16 | `supabase/cart-sort-order.sql` | Admin drag-and-drop cart order |
 | 17 | `supabase/issues-delete.sql` | Reporter / admin issue delete |
 | 18 | `supabase/notify-email.sql` | Profile email notification toggles (idempotent) |
+| 19 | `supabase/harden-privileges.sql` | Pin roles to the allowlist; revoked staff lose data access |
 
 If an existing project skipped later files, run **`supabase/repair-live.sql` once**.
 

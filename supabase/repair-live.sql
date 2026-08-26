@@ -153,8 +153,10 @@ begin
   end if;
 
   select exists (
-    select 1 from public.profiles p
-    where p.id = v_uid and p.role = 'admin'
+    select 1
+    from public.profiles p
+    join public.allowed_emails ae on ae.email = lower(p.email)
+    where p.id = v_uid and ae.role = 'admin'
   ) into v_is_admin;
 
   if not v_is_admin and v_target.teacher_id is distinct from v_uid then
@@ -329,8 +331,10 @@ begin
   where b.id = v_req.booking_id;
 
   select exists (
-    select 1 from public.profiles p
-    where p.id = v_uid and p.role = 'admin'
+    select 1
+    from public.profiles p
+    join public.allowed_emails ae on ae.email = lower(p.email)
+    where p.id = v_uid and ae.role = 'admin'
   ) into v_is_admin;
 
   if not v_is_admin
@@ -349,3 +353,6 @@ grant execute on function public.decline_swap_request(uuid) to authenticated;
 grant execute on function public.decline_swap_request(uuid) to service_role;
 
 notify pgrst, 'reload schema';
+
+-- Privilege lock-down (role pinning, allowlist-gated RLS) lives in
+-- supabase/harden-privileges.sql — run that file after this one.

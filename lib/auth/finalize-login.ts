@@ -7,6 +7,7 @@ import {
   extractOAuthIdentity,
   isPlaceholderDisplayName,
 } from "@/lib/auth/google-identity";
+import { isSafeInternalPath } from "@/lib/auth/safe-path";
 import { getDashboardPath } from "@/lib/auth/session";
 import type { UserRole } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
@@ -129,8 +130,7 @@ export async function finalizeSchoolLogin(
     ]);
   }
 
-  const dashboard =
-    next && next.startsWith("/") ? next : getDashboardPath(role);
+  const dashboard = isSafeInternalPath(next) ? next : getDashboardPath(role);
 
   const complete = new URL("/auth/complete", origin);
   complete.searchParams.set("next", dashboard);

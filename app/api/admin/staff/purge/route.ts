@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import {
+  allowRate,
+  clientKey,
+  forbidden,
+  isSameOriginRequest,
+  requireSchoolAdmin,
+  tooMany,
+} from "@/lib/security/api-guard";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -23,25 +30,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = await createClient();
-    const {
-      data: { user: actor },
-      error: actorError,
-    } = await supabase.auth.getUser();
-
-    if (actorError || !actor) {
-      return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+    if (!isSameOriginRequest(request)) {
+      return forbidden("Invalid origin.");
+    }
+    if (!allowRate(clientKey(request, "staff-purge"), 10, 10 * 60 * 1000)) {
+      return tooMany();
     }
 
-    const { data: actorProfile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", actor.id)
-      .maybeSingle();
-
-    if (actorProfile?.role !== "admin") {
-      return NextResponse.json({ error: "Admin only." }, { status: 403 });
-    }
+    const adminActor = await requireSchoolAdmin();
+    if (!adminActor.ok) return adminActor.response;
+    const actor = { id: adminActor.actor.id };
 
     if (userId === actor.id) {
       return NextResponse.json(

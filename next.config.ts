@@ -15,7 +15,7 @@ function contentSecurityPolicy() {
     process.env.NODE_ENV === "development"
       ? "'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'"
       : "'self' 'unsafe-inline' 'wasm-unsafe-eval'";
-  return [
+  const directives = [
     "default-src 'self'",
     `script-src ${scriptSrc}`,
     "style-src 'self' 'unsafe-inline'",
@@ -28,7 +28,11 @@ function contentSecurityPolicy() {
     "base-uri 'self'",
     "form-action 'self'",
     "object-src 'none'",
-  ].join("; ");
+  ];
+  if (process.env.NODE_ENV === "production") {
+    directives.push("upgrade-insecure-requests");
+  }
+  return directives.join("; ");
 }
 
 const securityHeaders = [
@@ -38,8 +42,11 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
     key: "Permissions-Policy",
-    value: "camera=(self), microphone=(), geolocation=()",
+    value:
+      "camera=(self), microphone=(), geolocation=(), usb=(), payment=(), interest-cohort=()",
   },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
   { key: "Content-Security-Policy", value: contentSecurityPolicy() },
   // HSTS only effective over HTTPS (Vercel production).
   {

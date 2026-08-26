@@ -39,8 +39,10 @@ begin
   end if;
 
   select exists (
-    select 1 from public.profiles p
-    where p.id = uid and p.role = 'admin'
+    select 1
+    from public.profiles p
+    join public.allowed_emails ae on ae.email = lower(p.email)
+    where p.id = uid and ae.role = 'admin'
   ) into is_admin;
 
   select * into rec

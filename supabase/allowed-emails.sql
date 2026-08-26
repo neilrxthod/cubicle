@@ -88,6 +88,9 @@ create policy "Admins can manage allowlist"
     )
   );
 
+-- Required on every project: lock roles to this allowlist (see harden-privileges.sql).
+-- New installs should run supabase/harden-privileges.sql immediately after this file.
+
 -- Server-side helper (security definer) — used by app via service role or RPC
 create or replace function public.is_email_allowed(check_email text)
 returns boolean

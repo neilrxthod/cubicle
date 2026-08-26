@@ -16,7 +16,10 @@ const geist = Geist({
   subsets: ["latin"],
   variable: "--font-geist-sans",
   display: "swap",
-  preload: true,
+  // Render-blocking CSS already loads Geist via @font-face. The extra
+  // React preload hint is injected after hydration in dev, so Chrome
+  // reports the woff2 as preloaded but unused.
+  preload: false,
   adjustFontFallback: true,
 });
 
@@ -81,15 +84,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={cn("h-full font-sans", geist.variable)}
+      className={cn("h-full font-sans", geist.className, geist.variable)}
       data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
       <body
-        className={cn(
-          geist.className,
-          "flex min-h-dvh w-full flex-col overflow-x-clip",
-        )}
+        className="flex min-h-dvh w-full flex-col overflow-x-clip"
         suppressHydrationWarning
       >
         {children}

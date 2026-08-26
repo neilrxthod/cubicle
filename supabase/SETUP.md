@@ -42,8 +42,9 @@ Run each file fully, wait for **Success**:
 | 16 | `cart-sort-order.sql` | Admin drag-and-drop cart order |
 | 17 | `issues-delete.sql` | Allow reporters/admins to **delete issues** from Postgres |
 | 18 | `notify-email.sql` | Profile email notification toggles |
+| 19 | `harden-privileges.sql` | Pin roles to the allowlist; revoked staff lose data access |
 
-Existing project that skipped later files: run **`repair-live.sql` once** (laptop codes + last-editor columns + swap accept/decline RPCs). Full index: [`README.md`](./README.md).
+Existing project that skipped later files: run **`repair-live.sql` once**, then **`harden-privileges.sql`**. Full index: [`README.md`](./README.md).
 
 **Durability:** App deploys never touch this data. See [`DATA_DURABILITY.md`](./DATA_DURABILITY.md).  
 Never `drop table` / `truncate` on a live school project without a backup.

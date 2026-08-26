@@ -1,3 +1,4 @@
+import { isSafeInternalPath } from "@/lib/auth/safe-path";
 import { isProductionHostname, SITE_ORIGIN } from "@/lib/site";
 
 /**
@@ -30,7 +31,7 @@ export function getOAuthRedirectTo(
   }
 
   const url = new URL(normalizedPath, origin.endsWith("/") ? origin : `${origin}/`);
-  if (next && next.startsWith("/")) {
+  if (isSafeInternalPath(next)) {
     url.searchParams.set("next", next);
   }
   return url.toString();

@@ -240,7 +240,8 @@ begin
     new.id,
     coalesce(new.email, ''),
     display_name,
-    coalesce(new.raw_user_meta_data ->> 'role', 'teacher'),
+    -- Never take role from OAuth user_metadata (client-controlled).
+    'teacher',
     coalesce(
       new.raw_user_meta_data ->> 'avatar_url',
       new.raw_user_meta_data ->> 'picture',

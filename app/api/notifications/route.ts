@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { format, parseISO } from "date-fns";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getEmailDeliveryStatus,
@@ -26,6 +25,17 @@ import {
   buildSwapInviteUpdateEmail,
 } from "@/lib/email/templates";
 import type { NotificationPayload } from "@/lib/email/queue";
+import {
+  allowRate,
+  clientKey,
+  forbidden,
+  isSameOriginRequest,
+  requireAllowlistedStaff,
+  tooMany,
+  unauthorized,
+} from "@/lib/security/api-guard";
+
+const MAX_NOTIFICATION_BODY = 16_384;
 
 type ProfileMailRow = {
   id: string;
@@ -60,21 +70,20 @@ const PROFILE_MAIL_SELECT_FALLBACK = "id, email, name, role";
  * actions — and `after()` was dropping the send when the client aborted.
  */
 export async function GET(request: Request) {
+  const staff = await requireAllowlistedStaff();
+  if (!staff.ok) return staff.response;
+
   const messageId = new URL(request.url).searchParams.get("messageId")?.trim();
   if (messageId) {
-    try {
-      const supabase = await createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-      }
-    } catch {
-      return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+    if (!allowRate(clientKey(request, `mail-status:${staff.actor.id}`), 30, 60_000)) {
+      return tooMany();
     }
     const status = await getEmailDeliveryStatus(messageId);
     return NextResponse.json(status);
+  }
+
+  if (staff.actor.role !== "admin") {
+    return forbidden("Admin only.");
   }
 
   return NextResponse.json({
@@ -85,6 +94,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!isSameOriginRequest(request)) {
+    return forbidden("Invalid origin.");
+  }
+
   if (!isBrevoConfigured()) {
     return NextResponse.json(
       { ok: true, skipped: true, reason: "Brevo not configured" },
@@ -92,9 +105,14 @@ export async function POST(request: Request) {
     );
   }
 
+  const raw = await request.text();
+  if (raw.length > MAX_NOTIFICATION_BODY) {
+    return NextResponse.json({ error: "Payload too large." }, { status: 413 });
+  }
+
   let body: RequestBody;
   try {
-    body = (await request.json()) as RequestBody;
+    body = JSON.parse(raw) as RequestBody;
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
@@ -111,26 +129,48 @@ export async function POST(request: Request) {
     );
   }
 
-  // Production always requires a signed-in user.
+  // Production always requires a signed-in allowlisted user.
   // Local sink: auth optional (demo sandbox may lack Supabase cookies).
   let actorId: string | null = null;
   let actorEmail: string | null = null;
   let actorName: string | null = null;
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user: actor },
-    } = await supabase.auth.getUser();
-    actorId = actor?.id ?? null;
-    actorEmail = actor?.email ?? null;
-    const metaName = actor?.user_metadata?.full_name ?? actor?.user_metadata?.name;
-    actorName = typeof metaName === "string" ? metaName : null;
-  } catch {
-    // Auth env missing
+  let actorRole: "teacher" | "admin" | null = null;
+
+  if (plan.mode === "production") {
+    const staff = await requireAllowlistedStaff();
+    if (!staff.ok) return staff.response;
+    if (!allowRate(clientKey(request, `mail:${staff.actor.id}`), 20, 10 * 60 * 1000)) {
+      return tooMany();
+    }
+    actorId = staff.actor.id;
+    actorEmail = staff.actor.email;
+    actorRole = staff.actor.role;
+  } else {
+    try {
+      const staff = await requireAllowlistedStaff();
+      if (staff.ok) {
+        actorId = staff.actor.id;
+        actorEmail = staff.actor.email;
+        actorRole = staff.actor.role;
+      }
+    } catch {
+      // Local demo may lack Auth cookies.
+    }
   }
 
   if (plan.mode === "production" && !actorId) {
-    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+    return unauthorized();
+  }
+
+  if (plan.mode === "production" && actorId && actorRole) {
+    const allowed = await actorMaySendNotification(
+      actorId,
+      actorRole,
+      body,
+    );
+    if (!allowed) {
+      return forbidden("Not allowed to send this notification.");
+    }
   }
 
   if (body.type === "dev_test") {
@@ -195,6 +235,82 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
+/**
+ * Staff can only trigger mail they would send from the product UI:
+ * their own issue reports, their own share invites, swaps they are in,
+ * or admin relocation/cancellation notices.
+ */
+async function actorMaySendNotification(
+  actorId: string,
+  actorRole: "teacher" | "admin",
+  body: NotificationPayload,
+): Promise<boolean> {
+  const isAdmin = actorRole === "admin";
+
+  if (body.type === "self_test" || body.type === "dev_test") {
+    return true;
+  }
+
+  if (body.type === "issue_reported") {
+    const description = String(body.description ?? "").trim();
+    return description.length > 0 && description.length <= 4000;
+  }
+
+  if (body.type === "share_invite") {
+    const inviteeId = String(body.inviteeId ?? "").trim();
+    if (!isUuid(inviteeId) || inviteeId === actorId) return false;
+    try {
+      const admin = createAdminClient();
+      const { data } = await admin
+        .from("bookings")
+        .select("id")
+        .eq("teacher_id", actorId)
+        .eq("share_pending_id", inviteeId)
+        .limit(1)
+        .maybeSingle();
+      return Boolean(data);
+    } catch {
+      return false;
+    }
+  }
+
+  if (body.type === "booking_relocated" || body.type === "booking_cancelled") {
+    return isAdmin && isUuid(String(body.teacherId ?? ""));
+  }
+
+  if (body.type === "swap_exchange") {
+    const a = String(body.teacherAId ?? "");
+    const b = String(body.teacherBId ?? "");
+    if (!isUuid(a) || !isUuid(b)) return false;
+    return isAdmin || actorId === a || actorId === b;
+  }
+
+  if (body.type === "swap_handoff") {
+    const from = String(body.fromTeacherId ?? "");
+    const to = String(body.toTeacherId ?? "");
+    if (!isUuid(from) || !isUuid(to)) return false;
+    return isAdmin || actorId === from || actorId === to;
+  }
+
+  if (body.type === "swap_invite") {
+    const ownerId = String(body.ownerId ?? "");
+    return isUuid(ownerId) && (isAdmin || actorId !== ownerId);
+  }
+
+  if (body.type === "swap_invite_update") {
+    const requesterId = String(body.requesterId ?? "");
+    return isUuid(requesterId) && (isAdmin || actorId !== requesterId);
+  }
+
+  return false;
 }
 
 function formatDateLabel(date: string): string {

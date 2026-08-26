@@ -51,6 +51,7 @@ Run each file fully in the Supabase **SQL Editor** and wait for **Success** befo
 | 16 | `cart-sort-order.sql` | Admin drag-and-drop cart order (`sort_order`) |
 | 17 | `issues-delete.sql` | Reporters and admins can delete issues |
 | 18 | `notify-email.sql` | Profile email notification toggles (`notify_email`, `notify_issues`) |
+| 19 | `harden-privileges.sql` | Pin `profiles.role` to the allowlist; RLS uses allowlist, not a writable role column |
 
 If an existing project is missing later pieces (swap accept RPC, laptop codes, last-editor columns), run **`repair-live.sql` once** instead of guessing which files were skipped.
 
@@ -61,6 +62,7 @@ If an existing project is missing later pieces (swap accept RPC, laptop codes, l
 | File | When to use |
 |------|-------------|
 | `repair-live.sql` | Additive catch-up on a live project that skipped later migrations |
+| `harden-privileges.sql` | Required on live projects: pin roles to the allowlist and lock RLS |
 | `clear-operational-data.sql` | Official empty go-live — wipes carts/bookings/issues/locks/swaps, **keeps** allowlisted staff |
 
 ---

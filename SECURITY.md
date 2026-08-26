@@ -19,7 +19,7 @@ Always run the latest `main` deploy with current Supabase schema migrations appl
 2. **Allowlist** — exact email must exist in Supabase `allowed_emails`.
 3. **Roles** — `teacher` or `admin` from allowlist / profile.
 4. **Service role** — `SUPABASE_SERVICE_ROLE_KEY` is server-only; never prefix with `NEXT_PUBLIC_`.
-5. **RLS** — Postgres Row Level Security backs table access; the browser uses the publishable / anon key only.
+5. **RLS** — Postgres Row Level Security backs table access; the browser uses the publishable / anon key only. Admin power comes from `allowed_emails.role`, not a client-writable `profiles.role`.
 6. **Demo login** — disabled unless `NEXT_PUBLIC_ENABLE_DEMO_LOGIN=true` (must never be set on Vercel production).
 7. **Camera** — phone QR scan uses the device camera. `Permissions-Policy` allows `camera=(self)` only.
 
@@ -78,4 +78,4 @@ If a secret may have been committed or shared:
 - [ ] Supabase Auth redirect URLs match production only (+ local for dev)
 - [ ] Google OAuth client restricted to school / internal consent where possible
 - [ ] Offboarded staff removed from `allowed_emails`
-- [ ] Later additive SQL applied (`restrict-domain.sql`, `employment-type.sql`, share / QR / notify files — see `supabase/README.md`)
+- [ ] Later additive SQL applied (`restrict-domain.sql`, `employment-type.sql`, share / QR / notify files, **`harden-privileges.sql`** — see `supabase/README.md`)

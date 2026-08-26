@@ -11,6 +11,7 @@ import {
   isBrowserSafeOAuthRedirect,
   rewriteGoogleRedirectUri,
 } from "@/lib/auth/oauth-supabase-proxy";
+import { isSafeInternalPath } from "@/lib/auth/safe-path";
 import { finalizeSchoolLogin } from "@/lib/auth/finalize-login";
 import { createClient } from "@/lib/supabase/server";
 
@@ -97,7 +98,7 @@ export async function startGoogleOAuth(
   const opts = cookieBase(secure);
   response.cookies.set(STATE_COOKIE, state, opts);
   response.cookies.set(VERIFIER_COOKIE, verifier, opts);
-  if (next && next.startsWith("/")) {
+  if (isSafeInternalPath(next)) {
     response.cookies.set(NEXT_COOKIE, next, opts);
   }
   return response;
@@ -109,7 +110,7 @@ async function startSupabaseGoogleOAuth(
 ): Promise<NextResponse> {
   const supabase = await createClient();
   const redirectTo = new URL("/auth/callback", origin);
-  if (next && next.startsWith("/")) {
+  if (isSafeInternalPath(next)) {
     redirectTo.searchParams.set("next", next);
   }
   const { data, error } = await supabase.auth.signInWithOAuth({
