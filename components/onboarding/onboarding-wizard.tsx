@@ -54,6 +54,8 @@ import {
   waitAtLeast,
 } from "@/components/app/bloub-loading";
 
+const OPEN_SCHEDULE_LOADING_MS = 4000;
+
 /**
  * Simple 2-step setup for cart booking only.
  * 1. You — optional photo
@@ -605,7 +607,8 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
     if (pending) return;
     setPending(true);
     setError(null);
-    markPostAuthSplash();
+    const startedAt = Date.now();
+    markPostAuthSplash(startedAt);
 
     try {
       const cleaned = assignments
@@ -664,7 +667,7 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
       });
 
       const dest = onboardingHomeForRole(user.role);
-      await waitAtLeast();
+      await waitAtLeast(startedAt, OPEN_SCHEDULE_LOADING_MS);
       router.replace(dest);
       window.setTimeout(() => {
         if (window.location.pathname.startsWith("/onboarding")) {

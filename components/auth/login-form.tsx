@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import type { SessionUser } from "@/lib/types";
 import {
   BloubLoading,
+  GOOGLE_AUTH_LOADING_MS,
   markPostAuthSplash,
   waitAtLeast,
 } from "@/components/app/bloub-loading";
@@ -154,13 +155,13 @@ export default function LoginForm() {
     // Demo personas: skip the first-run wizard so Admin ↔ Teacher switches stay fast.
     if (isLocalDemoPersona(sessionUser)) {
       completeLocalDemoOnboarding(sessionUser);
-      await waitAtLeast();
+      await waitAtLeast(undefined, GOOGLE_AUTH_LOADING_MS);
       router.push(onboardingHomeForRole(sessionUser.role));
       return;
     }
     // Other local accounts: re-prompt teaching setup after auth.
     prepareOnboardingAfterAuth(user.id, user.email);
-    await waitAtLeast();
+    await waitAtLeast(undefined, GOOGLE_AUTH_LOADING_MS);
     router.push("/onboarding");
   }
 
@@ -246,8 +247,8 @@ export default function LoginForm() {
                   className={cn(
                     "flex h-11 w-full items-center justify-center gap-2.5 rounded-full",
                     "bg-neutral-950 text-[14px] font-medium tracking-[-0.01em] text-white",
-                    "transition-[opacity,transform] duration-150",
-                    "hover:opacity-90 active:scale-[0.99]",
+                    "transition-opacity duration-150",
+                    "hover:opacity-90",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950/20 focus-visible:ring-offset-2",
                     "disabled:pointer-events-none disabled:opacity-50",
                   )}
@@ -315,8 +316,8 @@ export default function LoginForm() {
                   className={cn(
                     "flex h-11 w-full items-center justify-center gap-2.5 rounded-full",
                     "bg-neutral-950 text-[14px] font-medium tracking-[-0.01em] text-white",
-                    "transition-[opacity,transform] duration-150",
-                    "hover:opacity-90 active:scale-[0.99]",
+                    "transition-opacity duration-150",
+                    "hover:opacity-90",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950/20 focus-visible:ring-offset-2",
                     "disabled:pointer-events-none disabled:opacity-50",
                   )}

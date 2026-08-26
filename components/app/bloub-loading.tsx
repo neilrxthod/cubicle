@@ -5,6 +5,7 @@ const SIZE = 80;
 
 /** Minimum time the post-auth Bloub beat stays on screen. */
 export const POST_AUTH_LOADING_MS = 200;
+export const GOOGLE_AUTH_LOADING_MS = 4000;
 
 const SPLASH_KEY = "cubicle_post_auth_splash";
 

@@ -18,6 +18,7 @@ import {
 import { PlatformBootstrap } from "@/components/app/platform-bootstrap";
 import { TeacherQrScanner } from "@/components/app/teacher-qr-scanner";
 import { isIosOrAndroidDevice } from "@/lib/device/ios-android";
+import { syncOAuthProfileFromGoogle } from "@/lib/auth/sync-oauth-profile";
 import { needsOnboarding } from "@/lib/onboarding/storage";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { Role, SessionUser } from "@/lib/types";
@@ -127,9 +128,6 @@ export function RequirePlatformAuth({
         }
 
         // Re-pull First + Last from Google metadata and fan-out to the board.
-        const { syncOAuthProfileFromGoogle } = await import(
-          "@/lib/auth/sync-oauth-profile"
-        );
         const synced = await syncOAuthProfileFromGoogle(user);
 
         if (cancelled) return;
@@ -205,9 +203,6 @@ export function RequirePlatformAuth({
             if (!user?.email || !isSchoolEmail(user.email)) return;
 
             try {
-              const { syncOAuthProfileFromGoogle } = await import(
-                "@/lib/auth/sync-oauth-profile"
-              );
               const synced = await syncOAuthProfileFromGoogle(user);
               if (cancelled || !synced) return;
 

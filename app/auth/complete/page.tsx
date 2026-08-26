@@ -13,6 +13,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import {
   BloubLoading,
+  GOOGLE_AUTH_LOADING_MS,
   markPostAuthSplash,
   waitAtLeast,
 } from "@/components/app/bloub-loading";
@@ -32,6 +33,7 @@ function CompleteInner() {
 
     (async () => {
       const startedAt = Date.now();
+      markPostAuthSplash(startedAt);
       try {
         const supabase = createClient();
         const {
@@ -93,12 +95,10 @@ function CompleteInner() {
           firstName: synced.firstName,
           lastName: synced.lastName,
         });
-        markPostAuthSplash(startedAt);
-
         // Local dev: reset so onboarding shows after every sign-in.
         // Production: leave completed prefs so first-run stays one-time.
         prepareOnboardingAfterAuth(synced.id, synced.email);
-        await waitAtLeast(startedAt);
+        await waitAtLeast(startedAt, GOOGLE_AUTH_LOADING_MS);
         if (cancelled) return;
         if (needsOnboarding(synced.role, synced.id, synced.email)) {
           router.replace("/onboarding");
