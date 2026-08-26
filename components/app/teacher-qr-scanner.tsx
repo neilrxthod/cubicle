@@ -81,11 +81,9 @@ function ScanKindCapsule({ kind }: { kind: "cart" | "laptop" }) {
   return (
     <span
       className={cn(
-        "inline-flex w-fit items-center rounded-full px-2 py-0.5",
+        "inline-flex w-fit items-center rounded-full px-2.5 py-0.5",
         "text-[11px] font-semibold tracking-[0.04em]",
-        isLaptop
-          ? "bg-blue-50 text-blue-800 ring-1 ring-inset ring-blue-200/80"
-          : "bg-neutral-100 text-neutral-700 ring-1 ring-inset ring-neutral-200/80",
+        isLaptop ? "bg-indigo-600 text-white" : "bg-teal-600 text-white",
       )}
     >
       {isLaptop ? "Laptop" : "Cart"}
