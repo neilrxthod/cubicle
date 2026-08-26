@@ -1,8 +1,8 @@
 /* Cubicle PWA — network-first, installable on Android + iOS. */
-const CACHE = "cubicle-pwa-v1";
+const CACHE = "cubicle-pwa-v3";
 const PRECACHE = [
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
+  "/icons/pwa-192.png",
+  "/icons/pwa-512.png",
   "/apple-touch-icon.png",
 ];
 
