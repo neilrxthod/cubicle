@@ -14,21 +14,13 @@ import {
 import { ShareInvitesList } from "@/components/share-invites-list";
 import { SwapRequestsList } from "@/components/swap-requests-list";
 import { usePlatformStore } from "@/lib/data/platform-store";
-import { ScheduleOpeningOverlay } from "@/components/onboarding/schedule-opening-overlay";
+import { BloubLoading } from "@/components/app/bloub-loading";
 import type { Booking, Issue, SessionUser } from "@/lib/types";
 
 const SPARK_DAYS = 14;
 
 function HomeBoardFallback() {
-  const firstRun =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).has("firstRun");
-  if (firstRun) return <ScheduleOpeningOverlay play={false} />;
-  return (
-    <div className="flex h-svh items-center justify-center bg-[var(--canvas,#f4f4f5)]">
-      <div className="size-5 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
-    </div>
-  );
+  return <BloubLoading />;
 }
 
 export default function HomePage() {

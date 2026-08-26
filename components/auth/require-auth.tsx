@@ -2,6 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
+import { BloubLoading } from "@/components/app/bloub-loading";
 import type { SessionUser, UserRole } from "@/lib/auth/types";
 import {
   getDashboardPath,
@@ -36,11 +37,7 @@ export function RequireAuth({ role, children }: RequireAuthProps) {
   }, [session, role, router]);
 
   if (!isAuthorized) {
-    return (
-      <div className="flex min-h-dvh w-full items-center justify-center bg-[#fafafa]">
-        <div className="size-6 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
-      </div>
-    );
+    return <BloubLoading />;
   }
 
   return <>{children(session)}</>;

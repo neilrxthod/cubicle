@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { isSchoolEmail } from "@/lib/auth/school-domain";
 import { setSession } from "@/lib/auth/session";
@@ -11,6 +11,11 @@ import {
   prepareOnboardingAfterAuth,
 } from "@/lib/onboarding/storage";
 import { createClient } from "@/lib/supabase/client";
+import {
+  BloubLoading,
+  markPostAuthSplash,
+  waitAtLeast,
+} from "@/components/app/bloub-loading";
 
 /**
  * After Supabase OAuth + allowlist pass:
@@ -21,12 +26,12 @@ import { createClient } from "@/lib/supabase/client";
 function CompleteInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const [message, setMessage] = useState("Syncing your Google profile…");
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
+      const startedAt = Date.now();
       try {
         const supabase = createClient();
         const {
@@ -64,7 +69,6 @@ function CompleteInner() {
           return;
         }
 
-        setMessage("Loading your name from Google…");
         const synced = await syncOAuthProfileFromGoogle(user);
 
         if (cancelled) return;
@@ -89,10 +93,13 @@ function CompleteInner() {
           firstName: synced.firstName,
           lastName: synced.lastName,
         });
+        markPostAuthSplash(startedAt);
 
         // Local dev: reset so onboarding shows after every sign-in.
         // Production: leave completed prefs so first-run stays one-time.
         prepareOnboardingAfterAuth(synced.id, synced.email);
+        await waitAtLeast(startedAt);
+        if (cancelled) return;
         if (needsOnboarding(synced.role, synced.id, synced.email)) {
           router.replace("/onboarding");
         } else {
@@ -100,7 +107,6 @@ function CompleteInner() {
         }
       } catch {
         if (!cancelled) {
-          setMessage("Could not finish sign-in.");
           router.replace("/login?error=session_bridge");
         }
       }
@@ -111,24 +117,13 @@ function CompleteInner() {
     };
   }, [params, router]);
 
-  return (
-    <div className="flex min-h-svh items-center justify-center bg-[#f6f6f7]">
-      <div className="flex flex-col items-center gap-3">
-        <div className="size-6 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
-        <p className="text-sm text-neutral-500">{message}</p>
-      </div>
-    </div>
-  );
+  return <BloubLoading label="Syncing your Google profile" />;
 }
 
 export default function AuthCompletePage() {
   return (
     <Suspense
-      fallback={
-        <div className="flex min-h-svh items-center justify-center bg-[#f6f6f7]">
-          <div className="size-6 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
-        </div>
-      }
+      fallback={<BloubLoading label="Finishing sign-in" />}
     >
       <CompleteInner />
     </Suspense>

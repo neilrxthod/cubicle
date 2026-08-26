@@ -22,6 +22,11 @@ import { isLocalDemoMode } from "@/lib/data/durability";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { cn } from "@/lib/utils";
 import type { SessionUser } from "@/lib/types";
+import {
+  BloubLoading,
+  markPostAuthSplash,
+  waitAtLeast,
+} from "@/components/app/bloub-loading";
 import { AuthLayout } from "./auth-layout";
 import { LegalConsent } from "./legal-consent";
 import {
@@ -68,6 +73,7 @@ export default function LoginForm() {
   const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [legalInvalid, setLegalInvalid] = useState(false);
   const [error, setError] = useState("");
+  const [postAuth, setPostAuth] = useState(false);
 
   const supabaseReady = isSupabaseConfigured();
   const demoEnabled = isDemoLoginEnabled();
@@ -76,6 +82,7 @@ export default function LoginForm() {
   const accountDeleted = searchParams.get("deleted") === "1";
 
   useEffect(() => {
+    if (postAuth) return;
     const existing = getSession();
     if (!existing) return;
     if (needsOnboarding(existing.role, existing.id, existing.email)) {
@@ -83,7 +90,7 @@ export default function LoginForm() {
     } else {
       router.replace(onboardingHomeForRole(existing.role));
     }
-  }, [router]);
+  }, [router, postAuth]);
 
   function requireLegal(): boolean {
     if (acceptedLegal) {
@@ -118,12 +125,13 @@ export default function LoginForm() {
   async function signInWithAccount(account: DemoAccount) {
     setError("");
     if (!requireLegal()) return;
+    setPostAuth(true);
     setLoadingRole(account.role);
-    await new Promise((r) => setTimeout(r, 400));
     const user = authenticate(account.email, account.password);
     if (!user) {
       setError("Sign-in failed.");
       setLoadingRole(null);
+      setPostAuth(false);
       return;
     }
     if (isLocalDemoMode()) {
@@ -142,14 +150,17 @@ export default function LoginForm() {
       employmentType: user.employmentType,
     };
     setSession(sessionUser);
+    markPostAuthSplash();
     // Demo personas: skip the first-run wizard so Admin ↔ Teacher switches stay fast.
     if (isLocalDemoPersona(sessionUser)) {
       completeLocalDemoOnboarding(sessionUser);
+      await waitAtLeast();
       router.push(onboardingHomeForRole(sessionUser.role));
       return;
     }
     // Other local accounts: re-prompt teaching setup after auth.
     prepareOnboardingAfterAuth(user.id, user.email);
+    await waitAtLeast();
     router.push("/onboarding");
   }
 
@@ -165,6 +176,10 @@ export default function LoginForm() {
       return;
     }
     setError("Google sign-in is not configured.");
+  }
+
+  if (postAuth) {
+    return <BloubLoading />;
   }
 
   const demoAccounts = getDemoAccounts();

@@ -48,12 +48,11 @@ import { usePlatformStore, mutate } from "@/lib/data/platform-store";
 import { updateProfile } from "@/lib/actions";
 import { setSession, getSession } from "@/lib/auth/session";
 import { toast } from "@/hooks/use-toast";
-import { prefersReducedMotion } from "@/lib/motion/platform";
 import {
-  OPEN_DEADLINE_MS,
-  OPEN_HOLD_MS,
-  ScheduleOpeningOverlay,
-} from "@/components/onboarding/schedule-opening-overlay";
+  BloubLoading,
+  markPostAuthSplash,
+  waitAtLeast,
+} from "@/components/app/bloub-loading";
 
 /**
  * Simple 2-step setup for cart booking only.
@@ -606,7 +605,7 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
     if (pending) return;
     setPending(true);
     setError(null);
-    const startedAt = Date.now();
+    markPostAuthSplash();
 
     try {
       const cleaned = assignments
@@ -664,24 +663,14 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
         notifyIssues,
       });
 
-      if (!prefersReducedMotion()) {
-        await new Promise<void>((resolve) => {
-          window.setTimeout(resolve, OPEN_HOLD_MS);
-        });
-      }
-
-      const dest = onboardingHomeForRole(user.role, { firstRun: true });
+      const dest = onboardingHomeForRole(user.role);
+      await waitAtLeast();
       router.replace(dest);
-
-      const remaining = Math.max(
-        0,
-        OPEN_DEADLINE_MS - (Date.now() - startedAt),
-      );
       window.setTimeout(() => {
         if (window.location.pathname.startsWith("/onboarding")) {
           window.location.assign(dest);
         }
-      }, remaining);
+      }, 1500);
     } catch {
       setError("Could not finish setup. Try again.");
       setPending(false);
@@ -693,9 +682,12 @@ export function OnboardingWizard({ user }: { user: SessionUser }) {
       className="flex h-svh max-h-svh items-center justify-center overflow-hidden bg-[#ececef] p-3 sm:p-5 md:p-6"
       aria-busy={pending}
     >
-      <AnimatePresence>
-        {pending ? <ScheduleOpeningOverlay key="opening" /> : null}
-      </AnimatePresence>
+      {pending ? (
+        <BloubLoading
+          label="Opening your schedule"
+          className="fixed inset-0 z-50"
+        />
+      ) : null}
       <input
         ref={fileRef}
         id="onboarding-photo"

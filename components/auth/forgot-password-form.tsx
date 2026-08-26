@@ -28,8 +28,6 @@ export function ForgotPasswordForm() {
     setError("");
     setIsLoading(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 700));
-
     if (!isSchoolEmail(email)) {
       setError("Enter a valid email.");
       setIsLoading(false);

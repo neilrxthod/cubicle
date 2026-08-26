@@ -133,7 +133,7 @@ export async function POST(request: Request) {
   // Local sink: auth optional (demo sandbox may lack Supabase cookies).
   let actorId: string | null = null;
   let actorEmail: string | null = null;
-  let actorName: string | null = null;
+  const actorName: string | null = null;
   let actorRole: "teacher" | "admin" | null = null;
 
   if (plan.mode === "production") {

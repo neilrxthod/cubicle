@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { BloubLoading } from "@/components/app/bloub-loading";
 import { RequirePlatformAuth } from "@/components/app/require-platform-auth";
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 import {
@@ -29,11 +30,7 @@ function OnboardingGate({ user }: { user: SessionUser }) {
   }, [mustSetup, user.role, router]);
 
   if (!mustSetup) {
-    return (
-      <div className="flex h-svh max-h-svh items-center justify-center overflow-hidden bg-[#ececef]">
-        <div className="size-6 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
-      </div>
-    );
+    return <BloubLoading className="max-h-svh overflow-hidden bg-[#ececef]" />;
   }
 
   return <OnboardingWizard user={user} />;

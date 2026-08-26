@@ -39,7 +39,6 @@ export function ResetPasswordForm() {
     }
 
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 700));
     setDone(true);
     setIsLoading(false);
   }

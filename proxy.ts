@@ -8,12 +8,12 @@ function isAuthHandshake(pathname: string) {
   return pathname === "/auth/google" || pathname === "/auth/callback";
 }
 
-function passthrough(request: NextRequest) {
-  return NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
+function passthrough() {
+  // Do not pass `request.headers`. Next.js 16 turns that into
+  // `x-middleware-override-headers`, which replaces Node's request headers
+  // and drops internal routing fields — App Router then misses `route.ts`
+  // and renders 404 HTML.
+  return NextResponse.next();
 }
 
 export async function proxy(request: NextRequest) {
@@ -37,7 +37,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isAuthHandshake(pathname)) {
-    return passthrough(request);
+    return passthrough();
   }
 
   return updateSession(request);

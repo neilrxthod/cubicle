@@ -20,6 +20,7 @@ import { ensureLocalDemoSandbox } from "@/lib/auth/local-demo";
 import { getSessionSnapshot, subscribeToSession } from "@/lib/auth/session";
 import { startPresence } from "@/lib/staff/presence";
 import { subscribePlatformRealtime } from "@/lib/supabase/realtime";
+import { BloubLoading } from "@/components/app/bloub-loading";
 import { RemoteRequiredScreen } from "@/components/app/remote-required-screen";
 
 /**
@@ -188,16 +189,13 @@ export function PlatformBootstrap({
 
   if (!ready) {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-[#f6f6f7]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="size-6 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
-          <p className="text-sm text-neutral-500">
-            {requiresRemoteDatabase()
-              ? "Loading school data…"
-              : "Starting Cubicle…"}
-          </p>
-        </div>
-      </div>
+      <BloubLoading
+        label={
+          requiresRemoteDatabase()
+            ? "Loading school data"
+            : "Starting Cubicle"
+        }
+      />
     );
   }
 

@@ -10,6 +10,11 @@ import {
 } from "@/lib/auth/session";
 import { isSchoolEmail } from "@/lib/auth/school-domain";
 import { toPlatformSession } from "@/lib/auth/map-session";
+import {
+  BloubLoading,
+  clearPostAuthSplash,
+  postAuthSplashRemainingMs,
+} from "@/components/app/bloub-loading";
 import { PlatformBootstrap } from "@/components/app/platform-bootstrap";
 import { TeacherQrScanner } from "@/components/app/teacher-qr-scanner";
 import { isIosOrAndroidDevice } from "@/lib/device/ios-android";
@@ -31,11 +36,7 @@ function getMobileDeviceServerSnapshot() {
 }
 
 function LoadingScreen() {
-  return (
-    <div className="flex min-h-dvh w-full items-center justify-center bg-[#fafafa]">
-      <div className="size-6 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900" />
-    </div>
-  );
+  return <BloubLoading />;
 }
 
 export function RequirePlatformAuth({
@@ -63,6 +64,19 @@ export function RequirePlatformAuth({
   const needsSessionRestore =
     isSupabaseConfigured() && !getSessionSnapshot();
   const [restoring, setRestoring] = useState(needsSessionRestore);
+  const [splash, setSplash] = useState(
+    () => postAuthSplashRemainingMs() > 0,
+  );
+
+  useEffect(() => {
+    if (!splash) return;
+    const left = Math.max(0, postAuthSplashRemainingMs());
+    const timer = window.setTimeout(() => {
+      clearPostAuthSplash();
+      setSplash(false);
+    }, left);
+    return () => window.clearTimeout(timer);
+  }, [splash]);
 
   // Restore app session from Supabase if localStorage was cleared but cookies remain.
   useEffect(() => {
@@ -271,7 +285,7 @@ export function RequirePlatformAuth({
     }
   }, [session, role, router, restoring, skipOnboarding, pathname, isIosOrAndroid]);
 
-  if (restoring || !session) {
+  if (restoring || !session || splash) {
     return <LoadingScreen />;
   }
 

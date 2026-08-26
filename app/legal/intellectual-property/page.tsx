@@ -3,7 +3,6 @@ import {
   LegalList,
   LegalSection,
   LegalShell,
-  LegalSubheading,
   LegalToc,
 } from "@/components/legal/legal-shell";
 import {

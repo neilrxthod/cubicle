@@ -115,7 +115,6 @@ export function SignupForm() {
     }
 
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 700));
     router.push(
       `${AUTH_ROUTES.verifyEmail}?email=${encodeURIComponent(email.trim())}`,
     );
@@ -124,7 +123,6 @@ export function SignupForm() {
   async function signInWithAccount(account: DemoAccount) {
     setError("");
     setLoadingRole(account.role);
-    await new Promise((resolve) => setTimeout(resolve, 550));
     const user = authenticate(account.email, account.password);
     if (!user) {
       setError("Could not continue with that account.");

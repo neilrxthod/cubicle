@@ -12,18 +12,16 @@ import { getSupabasePublicKey, getSupabaseUrl } from "@/lib/supabase/env";
  * If the refresh token in cookies is gone/revoked server-side, clear those
  * cookies so we stop retrying every request (AuthApiError spam + stuck UI).
  */
-function passthrough(request: NextRequest) {
-  // Next.js 16 only forwards `{ request: { headers } }` — passing the full
-  // NextRequest object makes App Router miss `route.ts` handlers (404 HTML).
-  return NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
+function passthrough() {
+  // Do not pass `request` / `request.headers`. Next.js 16 copies those into
+  // `x-middleware-override-headers` and then deletes any Node header not in
+  // that list — including internal routing fields. App Router then misses
+  // `route.ts` and serves 404 HTML. Response cookies still attach below.
+  return NextResponse.next();
 }
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = passthrough(request);
+  let supabaseResponse = passthrough();
 
   const url = getSupabaseUrl();
   const publicKey = getSupabasePublicKey();
@@ -49,7 +47,7 @@ export async function updateSession(request: NextRequest) {
         cookiesToSet.forEach(({ name, value }) => {
           request.cookies.set(name, value);
         });
-        supabaseResponse = passthrough(request);
+        supabaseResponse = passthrough();
         cookiesToSet.forEach(({ name, value, options }) => {
           supabaseResponse.cookies.set(name, value, options);
         });
