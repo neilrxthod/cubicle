@@ -3,7 +3,6 @@
 import { Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { addDays, format, parseISO, subDays } from "date-fns";
-import { DashboardFrame } from "@/components/app/dashboard-frame";
 import { PageShell } from "@/components/app/page-shell";
 import { RequirePlatformAuth } from "@/components/app/require-platform-auth";
 import { DailyBoard } from "@/components/daily-board";
@@ -180,8 +179,7 @@ function HomeBoard({ user }: { user: SessionUser }) {
   );
 
   return (
-    <DashboardFrame user={user}>
-      <PageShell>
+    <PageShell>
         <div className="flex flex-col gap-4 sm:gap-5">
           <StatsDisplay
             id="schedule-stats"
@@ -214,7 +212,6 @@ function HomeBoard({ user }: { user: SessionUser }) {
             date={date}
           />
         </div>
-      </PageShell>
-    </DashboardFrame>
+    </PageShell>
   );
 }

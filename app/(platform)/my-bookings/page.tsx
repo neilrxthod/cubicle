@@ -1,7 +1,6 @@
 "use client";
 
 import { format } from "date-fns";
-import { DashboardFrame } from "@/components/app/dashboard-frame";
 import { PageShell } from "@/components/app/page-shell";
 import { RequirePlatformAuth } from "@/components/app/require-platform-auth";
 import { BookingsList } from "@/components/bookings-list";
@@ -29,8 +28,7 @@ function MyBookings({ user }: { user: SessionUser }) {
   const past = mine.filter((booking) => booking.date < today);
 
   return (
-    <DashboardFrame user={user}>
-      <PageShell narrow contentClassName="flex flex-col gap-8">
+    <PageShell narrow contentClassName="flex flex-col gap-8">
         <BookingsList
           title="Upcoming"
           bookings={upcoming}
@@ -48,6 +46,5 @@ function MyBookings({ user }: { user: SessionUser }) {
           viewerId={user.id}
         />
       </PageShell>
-    </DashboardFrame>
   );
 }

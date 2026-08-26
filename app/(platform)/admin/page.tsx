@@ -1,11 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { DashboardFrame } from "@/components/app/dashboard-frame";
 import { PageShell } from "@/components/app/page-shell";
 import { RequirePlatformAuth } from "@/components/app/require-platform-auth";
 import { usePlatformStore } from "@/lib/data/platform-store";
-import type { SessionUser } from "@/lib/types";
 
 const AdminConsole = dynamic(
   () =>
@@ -24,27 +22,25 @@ const AdminConsole = dynamic(
 export default function AdminPage() {
   return (
     <RequirePlatformAuth role="admin">
-      {(user) => <AdminHome user={user} />}
+      {() => <AdminHome />}
     </RequirePlatformAuth>
   );
 }
 
-function AdminHome({ user }: { user: SessionUser }) {
+function AdminHome() {
   const state = usePlatformStore();
 
   return (
-    <DashboardFrame user={user}>
-      <PageShell>
-        <AdminConsole
-          carts={state.carts}
-          bookings={state.bookings}
-          users={state.users}
-          issues={state.issues}
-          slotRestrictions={state.slotRestrictions}
-          bookingPolicy={state.bookingPolicy}
-          swapRequests={state.swapRequests}
-        />
-      </PageShell>
-    </DashboardFrame>
+    <PageShell>
+      <AdminConsole
+        carts={state.carts}
+        bookings={state.bookings}
+        users={state.users}
+        issues={state.issues}
+        slotRestrictions={state.slotRestrictions}
+        bookingPolicy={state.bookingPolicy}
+        swapRequests={state.swapRequests}
+      />
+    </PageShell>
   );
 }

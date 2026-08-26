@@ -26,12 +26,18 @@ export async function finalizeSchoolLogin(
   next: string | null,
   knownUser?: User | null,
 ): Promise<NextResponse> {
-  const supabase = await createClient();
-  const user =
-    knownUser ??
-    (await supabase.auth.getUser()).data.user;
+  // The callback already has the exchanged user. Avoid rebuilding the
+  // cookie-backed client on the successful path; create it only when an
+  // invalid account needs to be signed out.
+  let supabase: Awaited<ReturnType<typeof createClient>> | undefined;
+  let user = knownUser;
+  if (!user) {
+    supabase = await createClient();
+    user = (await supabase.auth.getUser()).data.user;
+  }
 
   if (!user?.email) {
+    supabase ??= await createClient();
     await supabase.auth.signOut();
     return NextResponse.redirect(
       `${origin}/login?error=${encodeURIComponent("no_email")}`,
@@ -50,6 +56,7 @@ export async function finalizeSchoolLogin(
 
   if (!access.ok) {
     const userId = user.id;
+    supabase ??= await createClient();
     await supabase.auth.signOut();
     await deleteUnauthorizedUser(userId);
 

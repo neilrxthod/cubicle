@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
-import { DashboardFrame } from "@/components/app/dashboard-frame";
 import { PageShell } from "@/components/app/page-shell";
 import { RequirePlatformAuth } from "@/components/app/require-platform-auth";
 import { IssueDeleteButton } from "@/components/issue-delete-button";
@@ -56,8 +55,6 @@ function IssuesView({ user }: { user: SessionUser }) {
       if (event.key === UI_PREFS_KEY || event.key === null) sync();
     };
     window.addEventListener("storage", onStorage);
-    window.addEventListener("focus", sync);
-    window.addEventListener(UI_PREFS_CHANGE_EVENT, sync);
     return () => {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("focus", sync);
@@ -154,7 +151,7 @@ function IssuesView({ user }: { user: SessionUser }) {
   ];
 
   return (
-    <DashboardFrame user={user}>
+    <>
       <PageShell narrow contentClassName="space-y-5">
         {/* Toolbar */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -308,7 +305,6 @@ function IssuesView({ user }: { user: SessionUser }) {
             ) : (
               <button
                 type="button"
-                onClick={() => setReportOpen(true)}
                 className="mt-3 text-[13px] font-medium text-neutral-950 underline-offset-4 hover:underline"
               >
                 Report an issue
@@ -400,11 +396,10 @@ function IssuesView({ user }: { user: SessionUser }) {
           </ul>
         )}
       </PageShell>
-
       {reportOpen ? (
         <IssueDialog carts={state.carts} onClose={() => setReportOpen(false)} />
       ) : null}
-    </DashboardFrame>
+    </>
   );
 }
 
