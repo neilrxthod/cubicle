@@ -44,6 +44,7 @@ function AuthBrandPanel({ fullHeight }: { fullHeight: boolean }) {
           size="hero"
           href={null}
           tone="light"
+          bloub={false}
           className="font-extralight tracking-[0.52em] text-white/92 drop-shadow-[0_1px_24px_rgba(255,255,255,0.12)] mr-[-0.52em] text-center"
         />
       </div>
