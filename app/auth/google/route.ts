@@ -1,9 +1,6 @@
 import { type NextRequest } from "next/server";
-import {
-  completeGoogleOAuth,
-  startGoogleOAuth,
-} from "@/lib/auth/google-oauth";
-import { allowRate, clientKey, tooMany } from "@/lib/security/api-guard";
+import { startGoogleOAuth } from "@/lib/auth/google-oauth-start";
+import { allowRate, clientKey, tooMany } from "@/lib/security/rate-limit";
 
 /**
  * Start Google sign-in, or finish it when Google returns a code.
@@ -15,6 +12,7 @@ export async function GET(request: NextRequest) {
   }
   const params = request.nextUrl.searchParams;
   if (params.get("code") || params.get("error") || params.get("state")) {
+    const { completeGoogleOAuth } = await import("@/lib/auth/google-oauth");
     return completeGoogleOAuth(request);
   }
   return startGoogleOAuth(request);
