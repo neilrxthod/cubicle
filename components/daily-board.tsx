@@ -469,7 +469,7 @@ export function DailyBoard({
   slotRestrictions: SlotRestriction[]
   bookingPolicy: BookingPolicy
   date: string
-  /** Phone landscape — one-line chrome, no legend. */
+  /** Phone landscape — one-line chrome. */
   compact?: boolean
 }) {
   const router = useRouter()
@@ -956,9 +956,6 @@ export function DailyBoard({
     "disabled:pointer-events-none disabled:opacity-25",
   )
 
-  const legendItem =
-    "inline-flex items-center gap-1.5 text-[11px] font-normal tracking-[-0.01em] text-neutral-400"
-
   return (
     <section
       className={cn(
@@ -1207,35 +1204,6 @@ export function DailyBoard({
           </AnimatePresence>
           </div>
         </div>
-      </div>
-
-      {/* ── Legend ── */}
-      <div
-        className={cn(
-          "flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--hairline)] px-4 pb-3 sm:px-5",
-          compact && "hidden",
-        )}
-      >
-        <span className={legendItem}>
-          <span className="size-1.5 shrink-0 rounded-full border border-neutral-300 bg-white" />
-          Open
-        </span>
-        <span className={legendItem}>
-          <span className="size-1.5 shrink-0 rounded-full bg-neutral-950" />
-          Yours
-        </span>
-        <span className={legendItem}>
-          <span className="size-1.5 shrink-0 rounded-full bg-neutral-300" />
-          Booked
-        </span>
-        <span className={legendItem}>
-          <Lock className="size-2.5 shrink-0 text-neutral-400" strokeWidth={1.5} />
-          Restricted
-        </span>
-        <span className={legendItem}>
-          <Wrench className="size-2.5 shrink-0 text-neutral-400" strokeWidth={1.5} />
-          Paused
-        </span>
       </div>
 
       {/* ── Period grid ── */}
