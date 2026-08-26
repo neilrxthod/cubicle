@@ -210,10 +210,10 @@ export function BoardBlockDialog({
     return { from: day, to: day }
   })
   const [selectedPeriods, setSelectedPeriods] = useState<Set<Period>>(
-    () => new Set(PERIODS),
+    () => new Set(),
   )
   const [selectedCartIds, setSelectedCartIds] = useState<Set<string>>(
-    () => new Set(activeCarts.map((cart) => cart.id)),
+    () => new Set(),
   )
   const [category, setCategory] = useState<RestrictionCategory>("general")
   const [reason, setReason] = useState("")
@@ -225,8 +225,8 @@ export function BoardBlockDialog({
     const day = parseLocalYmd(ymd)
     setScope("day")
     setDateRange({ from: day, to: day })
-    setSelectedPeriods(new Set(PERIODS))
-    setSelectedCartIds(new Set(activeCarts.map((cart) => cart.id)))
+    setSelectedPeriods(new Set())
+    setSelectedCartIds(new Set())
     setCategory("general")
     setReason("")
     setWeekdaysOnly(true)
