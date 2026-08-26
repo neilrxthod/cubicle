@@ -114,10 +114,10 @@ function Col({
   className?: string
 }) {
   return (
-    <Field className={cn("min-w-0 gap-1.5", className)}>
+    <Field className={cn("min-w-0 gap-2", className)}>
       <FieldLabel
         htmlFor={htmlFor}
-        className="text-[11px] font-medium tracking-[-0.01em] text-neutral-500"
+        className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-400"
       >
         {label}
       </FieldLabel>
@@ -344,9 +344,12 @@ export function BoardBlockDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className={cn(
-          "w-[min(calc(100vw-1.5rem),44rem)] gap-0 overflow-x-hidden overflow-y-auto p-0",
+          category === "other"
+            ? "w-[min(calc(100vw-1.5rem),52rem)] sm:max-h-[min(90dvh,34rem)] sm:max-w-[52rem]"
+            : "w-[min(calc(100vw-1.5rem),44rem)] sm:max-w-[44rem]",
+          "gap-0 overflow-hidden p-0",
           "rounded-xl border border-neutral-200 bg-white",
-          "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_40px_rgba(0,0,0,0.08)] sm:max-w-[44rem]",
+          "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_40px_rgba(0,0,0,0.08)]",
         )}
       >
         <DialogHeader className="gap-1 px-5 pt-5 pr-12 pb-4 text-left">
@@ -361,8 +364,16 @@ export function BoardBlockDialog({
         </DialogHeader>
 
         <div className="border-t border-neutral-200 px-5 py-4">
-          <FieldGroup className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-            <Col label="Date" className="sm:col-span-2">
+          <FieldGroup
+            className={cn(
+              "grid grid-cols-1 gap-x-6 gap-y-5",
+              "sm:grid-cols-2",
+            )}
+          >
+            <Col
+              label="Date"
+              className="sm:order-1"
+            >
               <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <CapsuleSlider
@@ -450,7 +461,10 @@ export function BoardBlockDialog({
               </div>
             </Col>
 
-            <Col label="Periods">
+            <Col
+              label="Periods"
+              className="sm:order-2"
+            >
               <div
                 className="grid w-full grid-cols-5 gap-1.5"
                 role="group"
@@ -499,9 +513,12 @@ export function BoardBlockDialog({
               </div>
             </Col>
 
-            <Col label="Type">
+            <Col
+              label="Type"
+              className="sm:order-1"
+            >
               <div
-                className="flex min-h-[3.75rem] flex-wrap content-start gap-1"
+                className="flex flex-wrap content-start gap-1.5"
                 role="radiogroup"
                 aria-label="Type"
               >
@@ -533,7 +550,10 @@ export function BoardBlockDialog({
               </div>
             </Col>
 
-            <Col label="Carts">
+            <Col
+              label="Carts"
+              className="sm:order-3"
+            >
               {activeCarts.length === 0 ? (
                 <p className="text-[12.5px] text-neutral-400">
                   No active carts
@@ -585,7 +605,7 @@ export function BoardBlockDialog({
                               "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/15",
                               on
                                 ? "border-red-600 bg-red-600 text-white"
-                                : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-950",
+                                : "border-dashed border-neutral-400 bg-transparent text-neutral-500 hover:border-neutral-950",
                             )}
                           >
                             <span
@@ -616,10 +636,13 @@ export function BoardBlockDialog({
               )}
             </Col>
 
-            <Col label="Summary">
+            <Col
+              label="Summary"
+              className="sm:order-3"
+            >
               <div
                 aria-live="polite"
-                className="rounded-lg border border-neutral-200 bg-white px-3 py-2.5"
+                className="w-full max-w-72 rounded-lg border border-neutral-200 bg-white px-3 py-2.5"
               >
                 <p className="text-[13px] font-medium tabular-nums tracking-[-0.02em] text-neutral-950">
                   {dateSummary}
@@ -645,16 +668,21 @@ export function BoardBlockDialog({
             </Col>
 
             {category === "other" ? (
-              <Col label="Note" htmlFor="block-reason" className="sm:col-span-2">
-                <Input
+              <Col
+                label="Note"
+                htmlFor="block-reason"
+                className="sm:order-2"
+              >
+                <textarea
                   id="block-reason"
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
                   placeholder="Describe this lock"
+                  rows={3}
                   className={cn(
-                    "h-8 rounded-md border-neutral-200 bg-white px-2.5 shadow-none",
-                    "text-[13px] tracking-[-0.01em] placeholder:text-neutral-400",
-                    "focus-visible:ring-1 focus-visible:ring-black/15",
+                    "flex h-20 w-full max-w-full resize-none overflow-y-auto rounded-md border border-neutral-200 bg-white px-2.5 py-2 shadow-none outline-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
+                    "text-[13px] leading-relaxed tracking-[-0.01em] placeholder:text-neutral-400",
+                    "focus-visible:border-neutral-400 focus-visible:ring-1 focus-visible:ring-black/15",
                   )}
                 />
               </Col>
@@ -662,7 +690,7 @@ export function BoardBlockDialog({
           </FieldGroup>
         </div>
 
-        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-neutral-200 px-5 py-3.5 sm:space-x-0">
+        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-neutral-200 bg-neutral-50/70 px-5 py-3.5 sm:space-x-0">
           <button
             type="button"
             disabled={!canApply}
