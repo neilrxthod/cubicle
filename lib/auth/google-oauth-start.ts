@@ -5,10 +5,6 @@ import {
   GOOGLE_OAUTH_VERIFIER_COOKIE,
   isGoogleOAuthConfigured,
 } from "@/lib/auth/google-oauth-guard";
-import {
-  isBrowserSafeOAuthRedirect,
-  rewriteGoogleRedirectUri,
-} from "@/lib/auth/oauth-google-url";
 import { SUPABASE_SAME_ORIGIN_PROXY_PREFIX } from "@/lib/auth/oauth-proxy";
 import { isSafeInternalPath } from "@/lib/auth/safe-path";
 import { GOOGLE_HOSTED_DOMAIN } from "@/lib/auth/school-domain";
@@ -97,35 +93,38 @@ async function startSupabaseGoogleOAuth(
   origin: string,
   next: string | null,
 ): Promise<NextResponse> {
-  const { createClient } = await import("@/lib/supabase/server");
-  const supabase = await createClient();
   const redirectTo = new URL("/auth/callback", origin);
   if (isSafeInternalPath(next)) {
     redirectTo.searchParams.set("next", next);
   }
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: redirectTo.toString(),
-      skipBrowserRedirect: true,
-      queryParams: {
-        hd: GOOGLE_HOSTED_DOMAIN,
-        prompt: "select_account",
-      },
-    },
-  });
-  if (error || !data?.url) {
-    return NextResponse.redirect(
-      `${origin}/login?error=${encodeURIComponent("auth_failed")}`,
-    );
-  }
   const project =
     process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "").trim() ?? "";
-  const target = rewriteGoogleRedirectUri(data.url, origin, project);
-  if (!isBrowserSafeOAuthRedirect(target, origin)) {
+  if (!project) {
     return NextResponse.redirect(
       `${origin}/login?error=${encodeURIComponent("auth_failed")}`,
     );
   }
-  return NextResponse.redirect(target);
+
+  const verifier = randomUrlSafe(32);
+  const challenge = await sha256Base64Url(verifier);
+  const authorize = new URL(`${project}/auth/v1/authorize`);
+  authorize.searchParams.set("provider", "google");
+  authorize.searchParams.set("redirect_to", redirectTo.toString());
+  authorize.searchParams.set("code_challenge", challenge);
+  authorize.searchParams.set("code_challenge_method", "S256");
+  authorize.searchParams.set("hd", GOOGLE_HOSTED_DOMAIN);
+  authorize.searchParams.set("prompt", "select_account");
+
+  // Supabase SSR stores PKCE values as base64url-encoded JSON in this cookie.
+  const projectRef = new URL(project).hostname.split(".")[0];
+  const verifierCookie = `sb-${projectRef}-auth-token-code-verifier`;
+  const response = NextResponse.redirect(
+    `${origin}${SUPABASE_SAME_ORIGIN_PROXY_PREFIX}${authorize.pathname}${authorize.search}`,
+  );
+  response.cookies.set(
+    verifierCookie,
+    `base64-${Buffer.from(JSON.stringify(verifier)).toString("base64url")}`,
+    cookieBase(origin.startsWith("https://")),
+  );
+  return response;
 }
