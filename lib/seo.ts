@@ -21,6 +21,7 @@ export const PUBLIC_PATHS = [
   "/about",
   "/legal",
   "/legal/terms",
+  "/legal/intellectual-property",
   "/legal/privacy",
   "/legal/security",
   "/legal/acceptable-use",

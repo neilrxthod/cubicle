@@ -63,6 +63,10 @@ export default function PrivacyPage() {
         <p>
           It should be read together with the{" "}
           <a href="/legal/terms">Terms &amp; Conditions</a>,{" "}
+          <a href="/legal/intellectual-property">
+            Intellectual Property &amp; Licence
+          </a>
+          ,{" "}
           <a href="/legal/acceptable-use">Acceptable Use Policy</a>, and{" "}
           <a href="/legal/security">Security &amp; Data Safety</a> statement.
           Division IT, privacy, and legal contacts should review this policy
@@ -90,7 +94,14 @@ export default function PrivacyPage() {
           division’s behalf to run the application: authentication, database
           hosting, application delivery, email notifications, and related
           technical support. Individual users (teachers and admins) also
-          enter information in the course of their duties.
+          enter information in the course of their duties. Processing school
+          records does not transfer ownership of the Cubicle software to the
+          division. The software remains the Cubicle Owner’s property as
+          described in the{" "}
+          <a href="/legal/intellectual-property">
+            Intellectual Property &amp; Licence
+          </a>{" "}
+          policy.
         </p>
         <p>
           Privacy questions, access requests, and correction requests should
@@ -200,7 +211,9 @@ export default function PrivacyPage() {
         />
         <p>
           We do not use staff operational data to serve third-party advertising,
-          and we do not sell personal information.
+          we do not sell personal information, and we do not use it to train
+          public generative-AI models. You may not export personal or
+          operational data in order to populate a clone of {LEGAL_PRODUCT}.
         </p>
       </LegalSection>
 
@@ -506,6 +519,13 @@ export default function PrivacyPage() {
           Privacy Commissioner. Use the Commissioner’s published process.
           We encourage you to raise the issue with the division first so it
           can be investigated quickly.
+        </p>
+        <p>
+          Intellectual-property questions are not privacy complaints. Use the{" "}
+          <a href="/legal/intellectual-property">
+            Intellectual Property &amp; Licence
+          </a>{" "}
+          policy and mark correspondence “Cubicle Owner — IP”.
         </p>
       </LegalSection>
     </LegalShell>

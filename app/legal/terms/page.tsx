@@ -10,6 +10,7 @@ import {
   LEGAL_CONTACT_EMAIL,
   LEGAL_DOMAIN,
   LEGAL_EFFECTIVE_DATE,
+  LEGAL_OWNER,
   LEGAL_PRODUCT,
   LEGAL_SCHOOL_DOMAIN,
 } from "@/lib/legal/constants";
@@ -28,6 +29,7 @@ const TOC = [
   { href: "#4-eligibility-and-authorized-users", label: "4. Eligibility and authorized users" },
   { href: "#5-accounts-authentication-and-sessions", label: "5. Accounts, authentication, and sessions" },
   { href: "#6-licence-and-intellectual-property", label: "6. Licence and intellectual property" },
+  { href: "#6a-no-copying-cloning-or-similar-products", label: "6A. No copying, cloning, or similar products" },
   { href: "#7-your-responsibilities", label: "7. Your responsibilities" },
   { href: "#8-school-records-and-user-content", label: "8. School records and user content" },
   { href: "#9-bookings-inventory-and-operational-fairness", label: "9. Bookings, inventory, and operational fairness" },
@@ -42,7 +44,9 @@ const TOC = [
   { href: "#18-changes-to-these-terms", label: "18. Changes to these terms" },
   { href: "#19-governing-law-and-disputes", label: "19. Governing law and disputes" },
   { href: "#20-general-provisions", label: "20. General provisions" },
-  { href: "#21-contact", label: "21. Contact" },
+  { href: "#21-assumption-of-risk-releases-and-claims", label: "21. Assumption of risk, releases, and claims" },
+  { href: "#22-injunctive-relief-and-equitable-remedies", label: "22. Injunctive relief and equitable remedies" },
+  { href: "#23-contact", label: "23. Contact" },
 ] as const;
 
 export default function TermsPage() {
@@ -62,6 +66,10 @@ export default function TermsPage() {
           clicking to accept, or otherwise accessing or using {LEGAL_PRODUCT},
           you agree to these Terms, the{" "}
           <a href="/legal/privacy">Privacy Policy</a>, the{" "}
+          <a href="/legal/intellectual-property">
+            Intellectual Property &amp; Licence
+          </a>{" "}
+          policy, the{" "}
           <a href="/legal/security">Security &amp; Data Safety</a> statement,
           and the <a href="/legal/acceptable-use">Acceptable Use Policy</a>{" "}
           (together, the “Policies”). If you do not agree, you must not access
@@ -95,6 +103,8 @@ export default function TermsPage() {
             "“Teacher” means a user whose role is teacher (including substitute, temporary, or permanent instructional staff as classified in the platform).",
             "“Content” means text, names, booking details, issue reports, laptop codes, profile fields, and other information you submit or that is generated about your use of the service.",
             "“School records” means operational records created in the platform, including bookings, cart inventory, restrictions, issues, swap and share requests, and staff directory fields.",
+            `“Owner” means ${LEGAL_OWNER}, the person or entity that created, owns, and operates ${LEGAL_PRODUCT}, including all software, design, and related intellectual property.`,
+            "“Similar product” means any application, site, script, or system that copies, remakes, replaces, or is modelled on Cubicle, including with a different user interface, name, or feature set.",
           ]}
         />
       </LegalSection>
@@ -175,26 +185,55 @@ export default function TermsPage() {
 
       <LegalSection title="6. Licence and intellectual property">
         <p>
-          Subject to these Terms, you receive a limited, non-exclusive,
-          non-transferable, non-sublicensable, revocable right to access and use{" "}
-          {LEGAL_PRODUCT} solely for legitimate school operations during the
-          period you remain an authorized user.
+          Subject to these Terms and the{" "}
+          <a href="/legal/intellectual-property">
+            Intellectual Property &amp; Licence
+          </a>{" "}
+          policy (which is incorporated here in full), you receive a limited,
+          non-exclusive, non-transferable, non-sublicensable, non-assignable,
+          revocable right to access and use the live {LEGAL_PRODUCT} service
+          solely for legitimate school operations while you remain an
+          authorized user. That is a licence to use, not a sale, and not a
+          transfer of any intellectual-property right.
         </p>
         <p>
-          The platform, including its software, visual design, wordmark,
-          documentation, and arrangement of the schedule board, is owned by the
-          operators of {LEGAL_PRODUCT} or their licensors. These Terms do not
-          sell the software to you and do not grant rights except as expressly
-          stated.
+          All software, visual design, wordmark, documentation, workflows,
+          QR and label designs, source, and know-how in {LEGAL_PRODUCT} are
+          owned exclusively by {LEGAL_OWNER}. The participating school
+          division is a licensee only. Use, hosting of school data, feature
+          requests, or internal listing of the tool does not make the
+          division, any staff member, or any vendor an owner or co-author.
         </p>
         <LegalList
           items={[
-            "You may not copy, scrape, reverse engineer, or create a competing service from the platform except to the limited extent that applicable law cannot be waived.",
-            "You may not remove proprietary notices or use the Cubicle name or marks in a way that suggests unauthorized endorsement.",
-            "School records you enter remain school division operational records; the licence above does not transfer ownership of those records to you personally.",
-            "Feedback you provide about the product may be used to improve the service without obligation to you.",
+            "No assignment of Cubicle occurs unless the Owner signs a written instrument that expressly assigns identified rights.",
+            "You may not remove proprietary notices or use the Cubicle name or marks to suggest unauthorized endorsement or that another product is Cubicle.",
+            "School records you enter remain school division operational records; the licence above does not transfer those records to you personally, and it does not transfer the software to the division.",
+            "Feedback is assigned to the Owner as described in the IP Policy. Suggesting a feature does not make you a co-author.",
+            "Moral rights in feedback are waived to the extent permitted by the Copyright Act (Canada) and other applicable law.",
           ]}
         />
+      </LegalSection>
+
+      <LegalSection title="6A. No copying, cloning, or similar products">
+        <p>
+          Without the Owner’s prior explicit written permission, you — and
+          the school division — must not copy, sell, remake, reverse
+          engineer, open-source, or create a Similar product, including one
+          with a different user interface, different features, different
+          name, or different branding.
+        </p>
+        <p>
+          You must not take inspiration from {LEGAL_PRODUCT} to brief a
+          vendor, intern, or staff developer; use screenshots or walkthroughs
+          as a specification; or write an RFP that restates Cubicle in other
+          words. Changing colours or “rewriting it in another stack” is not
+          a defence. Details and remedies are in the{" "}
+          <a href="/legal/intellectual-property">
+            Intellectual Property &amp; Licence
+          </a>{" "}
+          policy. Those rules survive after you stop using the service.
+        </p>
       </LegalSection>
 
       <LegalSection title="7. Your responsibilities">
@@ -280,9 +319,14 @@ export default function TermsPage() {
       <LegalSection title="11. Privacy and related policies">
         <p>
           Processing of personal information is described in the{" "}
-          <a href="/legal/privacy">Privacy Policy</a>. Security practices are
-          described in the <a href="/legal/security">Security &amp; Data Safety</a>{" "}
-          statement. Conduct rules are in the{" "}
+          <a href="/legal/privacy">Privacy Policy</a>. Ownership and
+          copying rules are in the{" "}
+          <a href="/legal/intellectual-property">
+            Intellectual Property &amp; Licence
+          </a>{" "}
+          policy. Security practices are described in the{" "}
+          <a href="/legal/security">Security &amp; Data Safety</a> statement.
+          Conduct rules are in the{" "}
           <a href="/legal/acceptable-use">Acceptable Use Policy</a>. Those
           documents are incorporated into these Terms by reference.
         </p>
@@ -336,12 +380,13 @@ export default function TermsPage() {
         <p>
           {LEGAL_PRODUCT} is provided on an “as is” and “as available” basis
           for school operational use. To the fullest extent permitted by
-          applicable law, the operators of {LEGAL_PRODUCT} disclaim all
-          warranties and conditions, whether express, implied, statutory, or
-          otherwise, including implied warranties of merchantability, merchantable
-          quality, fitness for a particular purpose, title, quiet enjoyment, and
-          non-infringement, and any warranties arising from course of dealing or
-          usage of trade.
+          applicable law, {LEGAL_OWNER} and the operators of {LEGAL_PRODUCT}{" "}
+          disclaim all warranties and conditions, whether express, implied,
+          statutory, or otherwise, including implied warranties of
+          merchantability, merchantable quality, fitness for a particular
+          purpose, title, quiet enjoyment, and non-infringement, and any
+          warranties arising from course of dealing or usage of trade. There
+          is no service-level agreement unless the Owner signs one.
         </p>
         <p>
           Without limiting the foregoing, we do not warrant that:
@@ -376,12 +421,21 @@ export default function TermsPage() {
         </p>
         <p>
           To the fullest extent permitted by law, the aggregate liability of
-          the operators of {LEGAL_PRODUCT} arising out of or related to the
-          service shall not exceed the greater of (a) the amounts (if any)
-          paid specifically for the software in the twelve (12) months before
-          the claim or (b) one hundred Canadian dollars (CAD $100). If the
-          platform is provided without a separate licence fee to the division,
-          clause (b) applies.
+          {LEGAL_OWNER} and of the operators of {LEGAL_PRODUCT} arising out of
+          or related to the service shall not exceed the greater of (a) the
+          amounts (if any) actually paid to the Owner specifically as a
+          software licence fee in the twelve (12) months before the claim or
+          (b) one hundred Canadian dollars (CAD $100). If the platform is
+          provided without a separate licence fee to the division, clause (b)
+          applies. That cap is the total for all claims together, not per
+          incident.
+        </p>
+        <p>
+          Without limiting the foregoing, the Owner is not liable for lost
+          instruction time, failed lessons, missed bookings, substitute-teacher
+          costs, equipment theft, student injury involving devices, FOI/LA FOIP
+          complaints arising from how the division uses the tool, or claims by
+          parents, students, or unions relating to classroom operations.
         </p>
         <p>
           Nothing in these Terms excludes or limits liability that cannot be
@@ -390,29 +444,41 @@ export default function TermsPage() {
           exclusion is prohibited.
         </p>
         <p>
-          Some of these limitations allocate risk between the school division
-          (which controls staff, devices, and classroom operations) and the
-          software operators. You acknowledge that this allocation is a
-          material part of providing the service for school use.
+          These limitations allocate risk between the school division (which
+          controls staff, devices, classrooms, and records practice) and the
+          Owner. You and the division acknowledge that this allocation is a
+          material condition of providing the service, including where no
+          licence fee is charged.
+        </p>
+        <p>
+          Claims against hosting, identity, or email providers are subject to
+          those providers’ terms. The Owner is not their insurer.
         </p>
       </LegalSection>
 
       <LegalSection title="16. Indemnification">
         <p>
           To the extent permitted by law and by your employment relationship
-          with the school division, you will indemnify and hold harmless the
-          operators of {LEGAL_PRODUCT} from and against claims, damages,
-          losses, and reasonable expenses (including legal fees) arising out of
-          your breach of these Terms, your misuse of the service, or Content
-          you submit that is unlawful or infringes the rights of others,
-          except to the extent caused by our gross negligence or wilful
-          misconduct.
+          with the school division, you will indemnify, defend, and hold
+          harmless {LEGAL_OWNER} and the operators of {LEGAL_PRODUCT} from
+          and against claims, damages, losses, and reasonable expenses
+          (including legal fees) arising out of your breach of these Terms or
+          the IP Policy, your misuse of the service, unauthorized copying or
+          commissioning of a Similar product, or Content you submit that is
+          unlawful or infringes the rights of others, except to the extent
+          caused by the Owner’s gross negligence or wilful misconduct.
         </p>
         <p>
-          This section is not intended to shift statutory duties that the
-          school division owes as a public body, and it does not require you
-          to indemnify anyone for the division’s own institutional
-          obligations.
+          The participating school division will indemnify and hold harmless
+          the Owner from claims by staff, students, parents, unions, or
+          third parties arising out of classroom operations, equipment
+          custody, employment decisions, allowlist decisions, or the
+          division’s use of {LEGAL_PRODUCT}, to the extent the division may
+          lawfully give that indemnity as a public body. This is not intended
+          to waive statutory duties the division owes under LA FOIP or
+          education legislation; it is intended to keep product-liability and
+          IP disputes from being shifted onto the Owner for the division’s
+          operational choices.
         </p>
       </LegalSection>
 
@@ -433,9 +499,11 @@ export default function TermsPage() {
           immediately invalidate sessions. School records may be retained or
           deleted according to the Privacy Policy and division records
           practice. Survival: sections concerning intellectual property,
-          school records, disclaimers, limitation of liability,
-          indemnification, governing law, and general provisions survive
-          termination.
+          the IP Policy, confidentiality, school records, disclaimers,
+          limitation of liability, indemnification, assumption of risk,
+          injunctive relief, governing law, and general provisions survive
+          termination. You still may not copy or remake Cubicle after access
+          ends.
         </p>
       </LegalSection>
 
@@ -459,16 +527,25 @@ export default function TermsPage() {
       <LegalSection title="19. Governing law and disputes">
         <p>
           {LEGAL_PRODUCT} is operated for school use in Saskatchewan, Canada.
-          These Terms are governed by the laws of the Province of Saskatchewan
-          and the federal laws of Canada applicable therein, without regard to
-          conflict-of-law rules that would apply another jurisdiction’s laws.
+          These Terms and the Policies are governed by the laws of the
+          Province of Saskatchewan and the federal laws of Canada applicable
+          therein, without regard to conflict-of-law rules that would apply
+          another jurisdiction’s laws.
         </p>
         <p>
           Subject to any mandatory dispute process in employment or board
-          policy, courts of competent jurisdiction in Saskatchewan shall have
-          exclusive jurisdiction over disputes arising out of these Terms,
-          except that we may seek injunctive relief in any forum to protect
-          the service or school data.
+          policy, the courts of Saskatchewan (and, where they have
+          jurisdiction, the Federal Court of Canada for intellectual-property
+          matters) have exclusive jurisdiction over disputes arising out of
+          these Terms, except that the Owner may seek injunctive or other
+          equitable relief in any forum to protect {LEGAL_PRODUCT},
+          confidential information, or school data.
+        </p>
+        <p>
+          You waive, to the extent permitted, any right to participate in a
+          class, collective, or representative proceeding against the Owner
+          relating to the service. Each claim must be brought in an
+          individual capacity.
         </p>
         <p>
           Use is also subject to applicable school division policies,
@@ -484,20 +561,68 @@ export default function TermsPage() {
       <LegalSection title="20. General provisions">
         <LegalList
           items={[
-            "Entire agreement. These Terms and the other Policies constitute the entire agreement between you and the operators of Cubicle regarding the service, and supersede prior informal descriptions of the product.",
-            "Severability. If a provision is held unenforceable, it will be modified to the minimum extent necessary, and the remaining provisions will continue in effect.",
-            "Waiver. Failure to enforce a provision is not a waiver of that provision or of the right to enforce it later.",
-            "Assignment. You may not assign these Terms. We may assign them in connection with operating the service for the school division.",
-            "No third-party beneficiaries. These Terms do not create rights in students, parents, or other third parties except as mandatory law requires.",
-            "Relationship. These Terms do not create a partnership, joint venture, or employment relationship with the software operators beyond any separate written engagement the division may have.",
+            "Entire agreement. These Terms and the other Policies constitute the entire agreement between you (and, where applicable, the school division) and the Owner regarding the service, and supersede prior informal descriptions of the product. No purchase order, RFP response, or vendor form amends them unless the Owner signs that amendment.",
+            "Severability. If a provision is held unenforceable, it will be modified to the minimum extent necessary to make it enforceable, and the remaining provisions will continue in effect. The Owner’s intent is the maximum lawful protection of Cubicle.",
+            "Waiver. Failure to enforce a provision is not a waiver. Waiver requires a written instrument signed by the Owner that identifies the specific right waived.",
+            "Assignment. You may not assign these Terms. The Owner may assign them in connection with operating or transferring the service.",
+            "No third-party beneficiaries. These Terms do not create rights in students, parents, unions, or other third parties except as mandatory law requires. The Owner may enforce the IP Policy against anyone bound by it.",
+            "Relationship. These Terms do not create a partnership, joint venture, employment, or fiduciary relationship with the Owner. Providing Cubicle is not an admission that the Owner is a school official for all purposes, except as privacy law may require for processing school records.",
+            "Force majeure. The Owner is not liable for delay or failure caused by events beyond reasonable control, including outages of Google, hosting, or email providers, labour disputes, network failure, or emergency school closures.",
+            "Export and misuse of screenshots. You may not export, photograph, or record the service for the purpose of rebuilding it.",
             "Headings. Headings are for convenience only and do not affect interpretation.",
             "Language. These Terms are prepared in English. If a translation is provided, the English version controls to the extent permitted by law.",
-            "Electronic acceptance. Checking a consent box, signing in, or continuing to use the service after notice of the Terms is an electronic signature and acceptance.",
+            "Electronic acceptance. Checking a consent box, signing in, or continuing to use the service after notice of the Terms is an electronic signature and acceptance under applicable electronic-commerce law.",
           ]}
         />
       </LegalSection>
 
-      <LegalSection title="21. Contact">
+      <LegalSection title="21. Assumption of risk, releases, and claims">
+        <p>
+          You understand that cart scheduling, device use, and classroom
+          supervision involve operational risk that the software cannot
+          eliminate. You assume the risk of relying on the board, of
+          equipment that is booked but physically unavailable or unsafe, and
+          of service interruptions. You release {LEGAL_OWNER} from claims
+          that the service should have prevented a classroom, employment, or
+          equipment incident, to the fullest extent permitted by law.
+        </p>
+        <p>
+          To the extent permitted, you will not sue the Owner for:
+        </p>
+        <LegalList
+          items={[
+            "Ordinary negligence in providing a free or internally licensed school tool, except where the law forbids that release.",
+            "Decisions made by administrators (allowlist, cancellations, maintenance, role changes).",
+            "Content another staff member entered.",
+            "Acts of third-party providers.",
+            "Your own failure to keep an alternative lesson plan.",
+          ]}
+        />
+        <p>
+          If you or the division intend to bring a claim against the Owner,
+          you must send written notice to{" "}
+          <a href={`mailto:${LEGAL_CONTACT_EMAIL}`}>{LEGAL_CONTACT_EMAIL}</a>{" "}
+          describing the claim in reasonable detail at least thirty (30) days
+          before filing, and must bring any permitted claim within one (1)
+          year after you first knew or reasonably should have known of it,
+          and in any event within two (2) years after the event, unless a
+          longer period is mandatory and cannot be shortened. This does not
+          limit the Owner’s time to sue for infringement or breach of the IP
+          Policy.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="22. Injunctive relief and equitable remedies">
+        <p>
+          Breach of the licence, confidentiality, or IP Policy would cause
+          irreparable harm. The Owner may seek an injunction, specific
+          performance, delivery-up or destruction of infringing copies, and
+          other equitable relief without limiting damages. To the extent a
+          court will allow, the Owner need not post a bond.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="23. Contact">
         <p>
           Questions about these Terms and Conditions, requests for a copy, or
           notices relating to the service should be directed to school
@@ -507,9 +632,16 @@ export default function TermsPage() {
           <a href={`mailto:${LEGAL_CONTACT_EMAIL}`}>{LEGAL_CONTACT_EMAIL}</a>
         </p>
         <p>
+          Intellectual-property notices and permission requests: same address,
+          subject “Cubicle Owner — IP”.
+        </p>
+        <p>
           Product documents:{" "}
           <a href="/legal">Legal overview</a>,{" "}
-          <a href="/legal/privacy">Privacy Policy</a>,{" "}
+          <a href="/legal/intellectual-property">
+            Intellectual Property &amp; Licence
+          </a>
+          , <a href="/legal/privacy">Privacy Policy</a>,{" "}
           <a href="/legal/acceptable-use">Acceptable Use Policy</a>,{" "}
           <a href="/legal/security">Security &amp; Data Safety</a>.
         </p>

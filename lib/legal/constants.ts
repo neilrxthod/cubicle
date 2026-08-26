@@ -5,7 +5,9 @@ export const LEGAL_PRODUCT = "Cubicle";
 export const LEGAL_DOMAIN = SITE_DOMAIN;
 export const LEGAL_SCHOOL_DOMAIN = "rbe.sk.ca";
 export const LEGAL_CONTACT_EMAIL = "it-support@rbe.sk.ca";
-export const LEGAL_EFFECTIVE_DATE = "August 20, 2026";
+/** The person or entity that created, owns, and operates Cubicle. */
+export const LEGAL_OWNER = "the Cubicle Owner";
+export const LEGAL_EFFECTIVE_DATE = "August 25, 2026";
 
 export const LEGAL_LINKS = [
   {
@@ -14,6 +16,13 @@ export const LEGAL_LINKS = [
     shortLabel: "Terms & Conditions",
     description:
       "Binding terms and conditions for authorized school staff using Cubicle.",
+  },
+  {
+    href: "/legal/intellectual-property",
+    label: "Intellectual Property & Licence",
+    shortLabel: "Intellectual Property",
+    description:
+      "Cubicle is licensed, not sold. Copying, remaking, selling, or building a similar product is forbidden without written permission.",
   },
   {
     href: "/legal/privacy",

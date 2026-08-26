@@ -10,8 +10,9 @@ It is not a public consumer product. Students do not have accounts. Access is li
 
 - [Sign in](https://mycubicle.app/login): Google sign-in for allowlisted @rbe.sk.ca staff
 - [About Cubicle](https://mycubicle.app/about): What the product is, who can use it, and how booking works
-- [Legal](https://mycubicle.app/legal): Terms & Conditions, privacy, security, acceptable use
+- [Legal](https://mycubicle.app/legal): Terms & Conditions, IP licence, privacy, security, acceptable use
 - [Terms & Conditions](https://mycubicle.app/legal/terms)
+- [Intellectual Property & Licence](https://mycubicle.app/legal/intellectual-property)
 - [Privacy Policy](https://mycubicle.app/legal/privacy)
 - [Security](https://mycubicle.app/legal/security)
 - [Acceptable Use](https://mycubicle.app/legal/acceptable-use)
@@ -35,6 +36,7 @@ It is not a public consumer product. Students do not have accounts. Access is li
 - A public laptop rental or consumer booking marketplace
 - A student-facing classroom app
 - Open sign-up software for any school without an allowlist
+- Software the school owns, may resell, remake, or clone with a different UI
 
 ## Optional
 

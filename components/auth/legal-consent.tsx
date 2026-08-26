@@ -42,6 +42,14 @@ export function LegalConsent({
           Terms &amp; Conditions
         </Link>
         ,{" "}
+        <Link
+          href="/legal/intellectual-property"
+          className={linkClass}
+          onClick={(e) => e.stopPropagation()}
+        >
+          IP Licence
+        </Link>
+        ,{" "}
         <Link href="/legal/privacy" className={linkClass} onClick={(e) => e.stopPropagation()}>
           Privacy
         </Link>

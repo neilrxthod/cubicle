@@ -36,6 +36,7 @@ const TOC = [
   { href: "#14-enforcement", label: "14. Enforcement" },
   { href: "#15-reporting", label: "15. Reporting" },
   { href: "#16-relationship-to-other-policies", label: "16. Relationship to other policies" },
+  { href: "#17-no-copying-cloning-or-resale", label: "17. No copying, cloning, or resale" },
 ] as const;
 
 export default function AcceptableUsePage() {
@@ -186,6 +187,8 @@ export default function AcceptableUsePage() {
             "Accessing or attempting to access another user’s account, tokens, or email.",
             "Exfiltrating bulk school records for use outside assigned duties.",
             `Introducing malware, ransomware, or unauthorized remote-access software via any ${LEGAL_PRODUCT} field or related workflow.`,
+            "Scraping, recording, or systematically screenshotting the interface in order to rebuild, clone, or “take inspiration” for another product.",
+            "Sharing Cubicle screens, workflows, or operator knowledge with a vendor, intern, or developer as a specification for a similar tool.",
           ]}
         />
         <p>
@@ -262,6 +265,7 @@ export default function AcceptableUsePage() {
             "Referral to school administration, human resources, or professional-conduct processes.",
             "Referral to law enforcement where conduct may be criminal (unauthorized access, harassment, theft of equipment, etc.).",
             "Restoration costs or other employment consequences as policy allows.",
+            "Intellectual-property claims by the Cubicle Owner (injunction, damages, destruction of copies) for cloning or unauthorized reuse.",
           ]}
         />
         <p>
@@ -292,16 +296,36 @@ export default function AcceptableUsePage() {
       <LegalSection title="16. Relationship to other policies">
         <p>
           This AUP is part of the{" "}
-          <a href="/legal/terms">Terms &amp; Conditions</a>. Privacy handling
-          is described in the <a href="/legal/privacy">Privacy Policy</a>.
-          Technical safeguards and incident reporting are in{" "}
+          <a href="/legal/terms">Terms &amp; Conditions</a>. Ownership and
+          copying rules are in the{" "}
+          <a href="/legal/intellectual-property">
+            Intellectual Property &amp; Licence
+          </a>{" "}
+          policy. Privacy handling is described in the{" "}
+          <a href="/legal/privacy">Privacy Policy</a>. Technical safeguards
+          and incident reporting are in{" "}
           <a href="/legal/security">Security &amp; Data Safety</a>.
         </p>
         <p>
           Division board policy, collective agreements, and professional
           codes continue to apply. Where this AUP is more specific to{" "}
           {LEGAL_PRODUCT}, follow this AUP as well. Where mandatory law or
-          board policy is stricter, the stricter rule prevails.
+          board policy is stricter, the stricter rule prevails. Board policy
+          does not authorize copying Cubicle.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="17. No copying, cloning, or resale">
+        <p>
+          {LEGAL_PRODUCT} is licensed, not sold. You must not copy, sell,
+          remake, or build a similar application — including with a different
+          UI or feature list — without the Cubicle Owner’s explicit written
+          permission. You must not use the live service as a template for a
+          vendor, intern, or staff rebuild. See the{" "}
+          <a href="/legal/intellectual-property">
+            Intellectual Property &amp; Licence
+          </a>{" "}
+          policy. That duty continues after you leave the school.
         </p>
       </LegalSection>
     </LegalShell>

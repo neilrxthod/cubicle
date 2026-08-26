@@ -56,9 +56,13 @@ export default function SecurityPage() {
           This statement describes the security model of {LEGAL_PRODUCT} in
           language staff, administrators, and division IT can use. It is not
           a penetration-test report, not a SOC 2 attestation, and not a
-          guarantee that the service cannot be abused. It complements the{" "}
+          guarantee that the service cannot be abused or that the Owner is
+          liable if someone circumvents controls. It complements the{" "}
           <a href="/legal/terms">Terms &amp; Conditions</a>,{" "}
-          <a href="/legal/privacy">Privacy Policy</a>, and{" "}
+          <a href="/legal/intellectual-property">
+            Intellectual Property &amp; Licence
+          </a>
+          , <a href="/legal/privacy">Privacy Policy</a>, and{" "}
           <a href="/legal/acceptable-use">Acceptable Use Policy</a>.
         </p>
         <p>
@@ -355,6 +359,7 @@ export default function SecurityPage() {
             "Cubicle does not claim zero downtime, perfect realtime delivery, or that a booked slot guarantees physically working hardware.",
             "Managed providers’ own certifications apply to those providers, not automatically to every school workflow built on top of them.",
             "A website TLS certificate proves the browser is talking to our host; it is not an email BIMI identity certificate and not a substitute for staff verification of phishing.",
+            "This statement is not a warranty and not an admission of a duty of care beyond the Terms. Security architecture is confidential; it must not be used as a blueprint for an attack or for a competing system.",
           ]}
         />
       </LegalSection>
@@ -369,7 +374,10 @@ export default function SecurityPage() {
         <p>
           Related documents:{" "}
           <a href="/legal/terms">Terms &amp; Conditions</a>,{" "}
-          <a href="/legal/privacy">Privacy Policy</a>,{" "}
+          <a href="/legal/intellectual-property">
+            Intellectual Property &amp; Licence
+          </a>
+          , <a href="/legal/privacy">Privacy Policy</a>,{" "}
           <a href="/legal/acceptable-use">Acceptable Use Policy</a>.
         </p>
       </LegalSection>
