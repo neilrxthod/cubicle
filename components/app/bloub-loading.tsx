@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-const GIF_SRC = "/icons/bloub-default-cycle.gif";
+const GIF_SRC = "/bloub-loading.gif";
 const SIZE = 80;
 
 /** Minimum time the post-auth Bloub beat stays on screen. */
@@ -72,7 +72,7 @@ export function BloubLoading({
       aria-live="polite"
       aria-label={label}
       className={cn(
-        "flex min-h-dvh w-full items-center justify-center bg-[#f6f6f7]",
+        "flex min-h-dvh w-full items-center justify-center bg-white",
         className,
       )}
     >
