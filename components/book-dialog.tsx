@@ -275,16 +275,18 @@ export function BookDialog({
               </span>
             ))}
             {selectedPartner ? (
-              <span className="inline-flex min-w-0 items-center">
+                <span className="inline-flex min-w-0 items-center">
                 <ChevronRight
                   aria-hidden
                   className="mx-0.5 size-3.5 shrink-0 text-neutral-300"
                   strokeWidth={1.75}
                 />
-                <span className="mr-1.5 size-5 shrink-0 overflow-hidden rounded-full bg-neutral-100 ring-1 ring-black/[0.06]">
-                  <ShareFace user={selectedPartner} />
+                <span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-neutral-950 py-0.5 pl-0.5 pr-2 text-white">
+                  <span className="size-5 shrink-0 overflow-hidden rounded-full bg-white">
+                    <ShareFace user={selectedPartner} />
+                  </span>
+                  <span className="min-w-0 truncate">with {partnerFirst}</span>
                 </span>
-                <span className="truncate">with {partnerFirst}</span>
               </span>
             ) : null}
           </DialogDescription>
@@ -362,7 +364,7 @@ export function BookDialog({
               <p className="shrink-0 text-[11px] font-medium tracking-[0.08em] text-neutral-400 uppercase">
                 Share
               </p>
-              <div className="mt-2.5 min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <div className="mt-2.5 min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 <ShareColleagueGrid
                   query={shareQuery}
                   onQueryChange={setShareQuery}
@@ -516,10 +518,10 @@ function ShareColleagueGrid({
             <button
               type="button"
               onClick={() => onQueryChange("")}
-              className="absolute right-2 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-neutral-400 hover:text-neutral-700"
+              className="absolute right-2 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded-full bg-neutral-300 text-white transition-colors hover:bg-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20"
               aria-label="Clear search"
             >
-              <X className="size-3.5" strokeWidth={2} />
+              <X className="size-2.5" strokeWidth={2.5} />
             </button>
           ) : null}
         </div>
