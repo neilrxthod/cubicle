@@ -5,8 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 
 /** Full hydrate after a burst of writes. Patches apply immediately (0ms). */
 const DEBOUNCE_MS = 200;
-const RECONNECT_BASE_MS = 400;
-const RECONNECT_MAX_MS = 5_000;
+const RECONNECT_BASE_MS = 200;
+const RECONNECT_MAX_MS = 1_000;
 const PLATFORM_TOPIC = "cubicle-platform";
 
 /**
