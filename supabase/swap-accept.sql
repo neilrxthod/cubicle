@@ -219,6 +219,16 @@ begin
         class_name = v_source.class_name,
         subject = v_source.subject,
         notes = v_source.notes,
+        shared_with_id = null,
+        shared_with_name = null,
+        shared_with_avatar_url = null,
+        share_pending_id = null,
+        share_pending_name = null,
+        share_pending_avatar_url = null,
+        share_declined_by_id = null,
+        share_declined_by_name = null,
+        share_declined_by_avatar_url = null,
+        share_declined_at = null,
         last_edited_by_id = v_editor_id,
         last_edited_by_name = v_editor_name,
         last_edited_by_avatar_url = v_editor_avatar,
@@ -231,6 +241,16 @@ begin
         class_name = v_target.class_name,
         subject = v_target.subject,
         notes = v_target.notes,
+        shared_with_id = null,
+        shared_with_name = null,
+        shared_with_avatar_url = null,
+        share_pending_id = null,
+        share_pending_name = null,
+        share_pending_avatar_url = null,
+        share_declined_by_id = null,
+        share_declined_by_name = null,
+        share_declined_by_avatar_url = null,
+        share_declined_at = null,
         last_edited_by_id = v_editor_id,
         last_edited_by_name = v_editor_name,
         last_edited_by_avatar_url = v_editor_avatar,
@@ -242,7 +262,17 @@ begin
         teacher_name = v_source.teacher_name,
         class_name = v_source.class_name,
         subject = v_source.subject,
-        notes = v_source.notes
+        notes = v_source.notes,
+        shared_with_id = null,
+        shared_with_name = null,
+        shared_with_avatar_url = null,
+        share_pending_id = null,
+        share_pending_name = null,
+        share_pending_avatar_url = null,
+        share_declined_by_id = null,
+        share_declined_by_name = null,
+        share_declined_by_avatar_url = null,
+        share_declined_at = null
       where id = v_target.id;
 
       update public.bookings set
@@ -250,7 +280,17 @@ begin
         teacher_name = v_target.teacher_name,
         class_name = v_target.class_name,
         subject = v_target.subject,
-        notes = v_target.notes
+        notes = v_target.notes,
+        shared_with_id = null,
+        shared_with_name = null,
+        shared_with_avatar_url = null,
+        share_pending_id = null,
+        share_pending_name = null,
+        share_pending_avatar_url = null,
+        share_declined_by_id = null,
+        share_declined_by_name = null,
+        share_declined_by_avatar_url = null,
+        share_declined_at = null
       where id = v_source.id;
     end if;
   else
@@ -259,6 +299,16 @@ begin
       update public.bookings set
         teacher_id = v_req.requester_id,
         teacher_name = v_req.requester_name,
+        shared_with_id = null,
+        shared_with_name = null,
+        shared_with_avatar_url = null,
+        share_pending_id = null,
+        share_pending_name = null,
+        share_pending_avatar_url = null,
+        share_declined_by_id = null,
+        share_declined_by_name = null,
+        share_declined_by_avatar_url = null,
+        share_declined_at = null,
         last_edited_by_id = v_editor_id,
         last_edited_by_name = v_editor_name,
         last_edited_by_avatar_url = v_editor_avatar,
@@ -267,7 +317,17 @@ begin
     else
       update public.bookings set
         teacher_id = v_req.requester_id,
-        teacher_name = v_req.requester_name
+        teacher_name = v_req.requester_name,
+        shared_with_id = null,
+        shared_with_name = null,
+        shared_with_avatar_url = null,
+        share_pending_id = null,
+        share_pending_name = null,
+        share_pending_avatar_url = null,
+        share_declined_by_id = null,
+        share_declined_by_name = null,
+        share_declined_by_avatar_url = null,
+        share_declined_at = null
       where id = v_target.id;
     end if;
   end if;

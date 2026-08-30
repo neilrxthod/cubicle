@@ -1548,6 +1548,19 @@ export async function acceptSwap(requestId: string): Promise<Result> {
       target.className = source.className;
       target.subject = source.subject;
       target.notes = source.notes;
+      // A share belongs to the original reservation, not the cart slot. Once
+      // ownership changes, keeping it would show the previous pair on the
+      // new owner's single-person cart.
+      target.sharedWithId = undefined;
+      target.sharedWithName = undefined;
+      target.sharedWithAvatarUrl = undefined;
+      target.sharePendingId = undefined;
+      target.sharePendingName = undefined;
+      target.sharePendingAvatarUrl = undefined;
+      target.shareDeclinedById = undefined;
+      target.shareDeclinedByName = undefined;
+      target.shareDeclinedByAvatarUrl = undefined;
+      target.shareDeclinedAt = undefined;
       Object.assign(target, stamp);
 
       source.teacherId = targetSnap.teacherId;
@@ -1555,11 +1568,31 @@ export async function acceptSwap(requestId: string): Promise<Result> {
       source.className = targetSnap.className;
       source.subject = targetSnap.subject;
       source.notes = targetSnap.notes;
+      source.sharedWithId = undefined;
+      source.sharedWithName = undefined;
+      source.sharedWithAvatarUrl = undefined;
+      source.sharePendingId = undefined;
+      source.sharePendingName = undefined;
+      source.sharePendingAvatarUrl = undefined;
+      source.shareDeclinedById = undefined;
+      source.shareDeclinedByName = undefined;
+      source.shareDeclinedByAvatarUrl = undefined;
+      source.shareDeclinedAt = undefined;
       Object.assign(source, stamp);
     } else {
       // Handoff: requester has no cart this period.
       target.teacherId = swap.requesterId;
       target.teacherName = swap.requesterName;
+      target.sharedWithId = undefined;
+      target.sharedWithName = undefined;
+      target.sharedWithAvatarUrl = undefined;
+      target.sharePendingId = undefined;
+      target.sharePendingName = undefined;
+      target.sharePendingAvatarUrl = undefined;
+      target.shareDeclinedById = undefined;
+      target.shareDeclinedByName = undefined;
+      target.shareDeclinedByAvatarUrl = undefined;
+      target.shareDeclinedAt = undefined;
       Object.assign(target, stamp);
     }
 

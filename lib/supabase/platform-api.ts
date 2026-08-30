@@ -820,6 +820,16 @@ export async function dbAcceptSwap(
     class_name: options.originalOwner.className ?? null,
     subject: options.originalOwner.subject ?? null,
     notes: options.originalOwner.notes ?? null,
+    shared_with_id: null,
+    shared_with_name: null,
+    shared_with_avatar_url: null,
+    share_pending_id: null,
+    share_pending_name: null,
+    share_pending_avatar_url: null,
+    share_declined_by_id: null,
+    share_declined_by_name: null,
+    share_declined_by_avatar_url: null,
+    share_declined_at: null,
   };
   const requesterPatch = {
     teacher_id: request.requesterId,
@@ -827,6 +837,16 @@ export async function dbAcceptSwap(
     class_name: options.requesterSlot?.className ?? null,
     subject: options.requesterSlot?.subject ?? null,
     notes: options.requesterSlot?.notes ?? null,
+    shared_with_id: null,
+    shared_with_name: null,
+    shared_with_avatar_url: null,
+    share_pending_id: null,
+    share_pending_name: null,
+    share_pending_avatar_url: null,
+    share_declined_by_id: null,
+    share_declined_by_name: null,
+    share_declined_by_avatar_url: null,
+    share_declined_at: null,
   };
 
   const stamp = editor
@@ -888,6 +908,16 @@ export async function dbAcceptSwap(
     const oneWay = {
       teacher_id: request.requesterId,
       teacher_name: request.requesterName,
+      shared_with_id: null,
+      shared_with_name: null,
+      shared_with_avatar_url: null,
+      share_pending_id: null,
+      share_pending_name: null,
+      share_pending_avatar_url: null,
+      share_declined_by_id: null,
+      share_declined_by_name: null,
+      share_declined_by_avatar_url: null,
+      share_declined_at: null,
       ...stamp,
     };
     let { error: bookingError } = await supabase
